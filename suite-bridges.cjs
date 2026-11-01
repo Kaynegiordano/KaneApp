@@ -88,7 +88,7 @@ module.exports = function installSuiteBridge(kind) {
     }
     window.fetch = async (input, init) => {
       const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url, location.href);
-      const route = /^\/p\/([^/]+)\/(super|animer|video|sam)$/.exec(url.pathname);
+      const route = /^\/p\/([^/]+)\/(super|animer|video|sam|ia)$/.exec(url.pathname);
       if (url.origin !== location.origin || !route || (init?.method || input.method || 'GET').toUpperCase() !== 'POST') return fetchOriginal(input, init);
       let body;
       try { body = JSON.parse(init?.body || (input instanceof Request ? await input.clone().text() : '{}')); }
@@ -101,7 +101,7 @@ module.exports = function installSuiteBridge(kind) {
       });
       if (!response.ok) {
         if (typeof statut === 'function') statut(response.error);
-        for (const name of ['animer', 'superBtn', 'videoBtn']) { const button = document.getElementById(name); if (button) button.disabled = false; }
+        for (const name of ['animer', 'superBtn', 'videoBtn', 'iaBtn']) { const button = document.getElementById(name); if (button) button.disabled = false; }
       }
       return new Response(JSON.stringify(response.ok ? response.value : { lance: false, error: response.error }), { status: response.ok ? 200 : 409, headers: { 'Content-Type': 'application/json' } });
     };
