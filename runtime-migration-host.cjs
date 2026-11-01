@@ -12,7 +12,7 @@ module.exports = function migrationHost({ getWin, directories, managed, idle, re
     return { running, progress, error, destination: target(), active: managed.read().active, report, deletionAllowed: false };
   };
   const emit = () => { const w = getWin(); if (w && !w.isDestroyed()) w.webContents.send('runtime-migration', state()); };
-  const main = event => { const w = getWin(); if (!w || event.sender !== w.webContents || event.senderFrame !== w.webContents.mainFrame) throw new Error('Commande réservée à Kane App'); };
+  const main = event => { const w = getWin(); if (!w || event.sender !== w.webContents || event.senderFrame !== w.webContents.mainFrame) throw new Error('Commande réservée à KaneApp'); };
   ipcMain.handle('runtime-migration-state', event => { main(event); return state(); });
   ipcMain.handle('runtime-migration-run', async (event, action) => {
     main(event);
@@ -41,5 +41,5 @@ module.exports = function migrationHost({ getWin, directories, managed, idle, re
       return { ok: true, value: state() };
     } catch (e) { error = e.message; emit(); return { ok: false, error }; }
   });
-  app.on('before-quit', event => { if (running) { event.preventDefault(); const w = getWin(); if (w) w.webContents.send('runtime-migration', { ...state(), error: 'La copie continue. Attendez sa fin avant de quitter Kane App.' }); } });
+  app.on('before-quit', event => { if (running) { event.preventDefault(); const w = getWin(); if (w) w.webContents.send('runtime-migration', { ...state(), error: 'La copie continue. Attendez sa fin avant de quitter KaneApp.' }); } });
 };

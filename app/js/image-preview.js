@@ -22,7 +22,7 @@
     preview.area.addEventListener('click', e => { if (e.target === preview.area && !e.defaultPrevented && settled()) modal.close(); });
     preview.area.focus();
     return modal;
-  }, mount(host, media, { identity = media, width, height, paint = false, fullscreen = true, clickOpen = false } = {}) {
+  }, mount(host, media, { identity = media, width, height, paint = false, fullscreen = true, clickOpen = false, menu = null } = {}) {
     const h = KS.h;
     let state = states.get(identity); if (!state) { state = { scale: 1, x: 0, y: 0, fit: true }; states.set(identity, state); }
     host.classList.add('iv-host');
@@ -82,6 +82,11 @@
       if (dragged) { e.preventDefault(); e.stopPropagation(); dragged = false; }
       else if (fullscreen && clickOpen && e.button === 0) { e.preventDefault(); e.stopPropagation(); KS.preview.open(media, size().w, size().h); }
     });
+    // clic droit : copier l'image (presse-papiers Windows, PNG en pleine résolution), plus les actions propres à l'appelant
+    if (!paint) area.addEventListener('contextmenu', e => {
+      e.preventDefault(); e.stopPropagation();
+      KS.ui.menu([{ label: 'Copier l’image', icon: 'copy', action: () => KS.preview.copy(media, size().w, size().h) }, ...((menu && menu()) || [])], e.clientX, e.clientY);
+    });
     area.addEventListener('keydown', e => {
       if (e.key === '+' || e.key === '=') { e.preventDefault(); e.stopPropagation(); zoom(state.scale * 1.25); }
       else if (e.key === '-') { e.preventDefault(); e.stopPropagation(); zoom(state.scale / 1.25); }
@@ -90,5 +95,17 @@
     const observer = new ResizeObserver(render); observer.observe(area); instances.add({ host, observer });
     media.addEventListener('load', render); requestAnimationFrame(render);
     return { area, fit() { state.fit = true; render(); }, zoom, state };
+  }, async copy(media, width, height) {
+    try {
+      let c = media;
+      if (!(media instanceof HTMLCanvasElement)) {
+        if (media.decode) await media.decode().catch(() => {});
+        c = document.createElement('canvas'); c.width = width || media.naturalWidth || media.width; c.height = height || media.naturalHeight || media.height;
+        c.getContext('2d').drawImage(media, 0, 0, c.width, c.height);
+      }
+      const blob = await new Promise((ok, ko) => c.toBlob(b => b ? ok(b) : ko(new Error('Image illisible')), 'image/png'));
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      KS.toast('Image copiée', 'ok', 1100);
+    } catch (e) { KS.toast('Copie impossible : ' + e.message, 'err'); }
   } };
 })();

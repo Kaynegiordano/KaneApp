@@ -50,7 +50,7 @@ async function scenario() {
   click('Fermer');
 
   const S = KS.suite, WX = KS.ws;
-  check(S.project.name === 'Kane App', 'Le projet par défaut Mon atelier devient Kane App');
+  check(S.project.name === 'KaneApp', 'Le projet par défaut Mon atelier devient KaneApp');
   const creating = S.newProject(); await wait(() => !!document.querySelector('.modal input'));
   document.querySelector('.modal input').value = 'Illustration de test'; click('Enregistrer'); await creating;
   check(document.body.classList.contains('suite-home') && !!document.querySelector('#suite-toolbar'), 'Accueil Projet et navigation commune');

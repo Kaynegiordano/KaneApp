@@ -1,4 +1,4 @@
-"""Moteur Web interactif de Kane App, appliqué aux calques déjà calculés."""
+"""Moteur Web interactif de KaneApp, appliqué aux calques déjà calculés."""
 import html
 import json
 import re
@@ -12,7 +12,7 @@ def configure(directory):
     # build.py ajoute les chemins et profondeurs Web dans la page assemblée.
     # Préserver ces métadonnées, absentes de l'anim.json intermédiaire.
     assembled = re.search(r'^const ANIM = (.+);$', (folder / 'index.html').read_text(encoding='utf-8'), re.MULTILINE)
-    if not assembled: raise RuntimeError('Ce projet ne contient pas le moteur d’illustration Web de Kane App.')
+    if not assembled: raise RuntimeError('Ce projet ne contient pas le moteur d’illustration Web de KaneApp.')
     anim = json.loads(assembled.group(1))
     paint = folder / 'peinture' / 'peinture.json'
     settings = json.loads(paint.read_text(encoding='utf-8')).get('reglages', {}) if paint.is_file() else {}

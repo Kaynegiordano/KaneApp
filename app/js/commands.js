@@ -258,6 +258,7 @@
   C.autoTone = pixelCmd('Ton automatique', 'levels', x => KS.Adjust.autoTone(x));
   C.autoContrast = pixelCmd('Contraste automatique', 'brightness', x => KS.Adjust.autoContrast(x));
   C.autoColor = pixelCmd('Couleur automatique', 'balance', x => KS.Adjust.autoColor(x));
+  C.quickEnhance = pixelCmd('Amélioration rapide', 'sparkles', x => KS.Adjust.quickEnhance(x));
   C.desaturate = pixelCmd('Désaturation', 'bw', x => KS.Adjust.desaturate(x));
   C.equalize = pixelCmd('Égaliser', 'histogram', x => KS.Adjust.equalize(x));
   C.invert = withDoc(d => C.adjust('invert'));

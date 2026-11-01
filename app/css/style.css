@@ -1107,7 +1107,7 @@ body.pf-hide-ws-comfyui .ws-btn[data-v="comfyui"], body.pf-hide-ws-video .ws-btn
 body.pf-reduce-motion *, body.pf-reduce-motion *::before, body.pf-reduce-motion *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
 body.pf-home-empty .suite-home-scroll::before { content: "Tout est masqué sur cet écran. Rétablissez-le dans Préférences › Affichage (Ctrl+K)."; display: block; margin: 80px auto; max-width: 420px; text-align: center; color: var(--muted); }
 
-/* ------------------------------------------------------------ panneau vertical Kane App (bouton K) */
+/* ------------------------------------------------------------ panneau vertical KaneApp (bouton K) */
 .brand.kn-brand { cursor: pointer; border-radius: 8px; }
 .brand.kn-brand:hover .brand-mark { filter: brightness(1.15); }
 .brand.kn-brand.kn-on .brand-mark { outline: 2px solid var(--accent-2); outline-offset: 2px; }

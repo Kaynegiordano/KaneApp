@@ -23,7 +23,7 @@
     E.sec = h('section.wx-ws', { 'data-ws': id }, E.bar, E.frameBox); host.append(E.sec);
     renderBar(id); renderFrame(id); return E;
   }
-  /* Montage : les menus de KaneClip vivent dans la barre de menus du haut de Kane App, pas dans une seconde barre. */
+  /* Montage : les menus de KaneClip vivent dans la barre de menus du haut de KaneApp, pas dans une seconde barre. */
   const convertMenu = nodes => nodes.map(n => n.sep ? { sep: true } : n.sub ? { label: n.label, sub: convertMenu(n.sub) }
     : { label: n.label, kb: n.kb, checked: n.checked, disabled: n.disabled, action: () => WX.request('video', 'menu-run', { path: n.path }).catch(e => KS.toast(e.message, 'err')) });
   const videoMenu = {
@@ -32,7 +32,7 @@
       const menu = (await WX.request('video', 'menu-tree')).find(m => m.label === label);
       const items = convertMenu(menu ? menu.items : []);
       if (label !== 'Fichier') return items;
-      return [{ label: 'Ajouter le document Kane App', disabled: !KS.state.doc, action: () => KS.suite.run('Ajout au montage', () => C.toVideo()).catch(() => {}) },
+      return [{ label: 'Ajouter le document KaneApp', disabled: !KS.state.doc, action: () => KS.suite.run('Ajout au montage', () => C.toVideo()).catch(() => {}) },
         { label: 'Bibliothèque du projet', action: () => KS.suite.library() }, { sep: true }, ...items];
     },
   };
@@ -232,7 +232,7 @@
     sync();
   }, 0));
   KS.beforeClose = async () => {
-    try { if ((await N.runtimeMigrationState?.())?.running) { KS.toast('La migration continue. Attendez sa fin avant de quitter Kane App.', 'info', 5000); return false; } } catch { /* version sans migration */ }
+    try { if ((await N.runtimeMigrationState?.())?.running) { KS.toast('La migration continue. Attendez sa fin avant de quitter KaneApp.', 'info', 5000); return false; } } catch { /* version sans migration */ }
     if (WX.el.video?.ready) { try { await WX.request('video', 'save'); } catch (e) { KS.toast(e.message, 'err'); return false; } }
     if (WX.el.wallpaper?.ready) { try { await WX.request('wallpaper', 'flush'); } catch (e) { KS.toast(e.message, 'err'); return false; } }
     // Le dialogue natif de KaneClip reste disponible pour un montage non rattaché au projet.

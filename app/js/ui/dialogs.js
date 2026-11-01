@@ -62,7 +62,7 @@
     }
   }, true);
 
-  KS.confirm = (message, { title = 'Kane App', ok = 'OK', cancel = 'Annuler', third = null, danger = false } = {}) => new Promise(res => {
+  KS.confirm = (message, { title = 'KaneApp', ok = 'OK', cancel = 'Annuler', third = null, danger = false } = {}) => new Promise(res => {
     const buttons = [];
     if (third) buttons.push({ label: third, value: 'third' });
     buttons.push({ label: cancel, value: false });
@@ -524,8 +524,8 @@
     if (!N?.engineConfig) return KS.toast('Disponible dans l’application de bureau.', 'info');
     if (KS.studioApi?.isBusy()) return KS.toast('Attendez la fin de la génération avant de changer le moteur.', 'info');
     const config = await N.engineConfig();
-    if (config.managed) return KS.modal({ title: 'Moteurs gérés par Kane App', width: 640,
-      body: h('div.form-col', h('p', { text: 'Le Studio utilise sa copie vérifiée dans les données de Kane App.' }), h('div.note', { text: config.runtime }),
+    if (config.managed) return KS.modal({ title: 'Moteurs gérés par KaneApp', width: 640,
+      body: h('div.form-col', h('p', { text: 'Le Studio utilise sa copie vérifiée dans les données de KaneApp.' }), h('div.note', { text: config.runtime }),
         h('p.note', { text: 'Les modèles communs restent dans ' + config.models + '. Les anciennes installations sont conservées.' })),
       buttons: [{ label: 'Fermer' }, { label: 'Gérer la migration…', primary: true, action: () => D.runtimeMigration() }] });
     let directory = config.runtime, models = config.models, shareExternal = config.shareExternal;
@@ -563,7 +563,7 @@
       const components = Object.entries(value.report?.components || {});
       const copied = components.length === 4 && components.every(([, c]) => ['verified', 'probed'].includes(c.phase));
       const tested = copied && components.every(([, c]) => c.phase === 'probed') && value.report.integrityCheckedAt && value.report.media?.phase === 'probed';
-      status.textContent = value.error || (value.running ? 'Opération en cours… ' + (labels[value.progress?.component] || '') + (value.progress?.files ? ' · ' + value.progress.files + ' fichiers' : '') : value.active ? 'Kane App utilise ses copies des moteurs.' : 'Les installations actuelles sont encore utilisées.');
+      status.textContent = value.error || (value.running ? 'Opération en cours… ' + (labels[value.progress?.component] || '') + (value.progress?.files ? ' · ' + value.progress.files + ' fichiers' : '') : value.active ? 'KaneApp utilise ses copies des moteurs.' : 'Les installations actuelles sont encore utilisées.');
       rows.replaceChildren(h('div.note', { text: value.destination }), ...components.map(([id, c]) => h('div.note', { text: labels[id] + ' · ' + (phases[c.phase] || c.phase) + ' · ' + (c.bytes / 2 ** 30).toFixed(1) + ' Go' })));
       if (value.report?.media) rows.append(h('div.note', { text: 'Montage · FFmpeg · ' + (phases[value.report.media.phase] || value.report.media.phase) }));
       buttons.copy.disabled = value.running || value.active;
@@ -571,15 +571,15 @@
       buttons.probe.disabled = value.running || !copied || !value.report?.integrityCheckedAt;
       buttons.activate.disabled = value.running || value.active || !tested;
       buttons.rollback.disabled = value.running || !value.active || !!value.report?.cleanup?.startedAt;
-      if (value.report?.cleanup?.startedAt) status.textContent = value.error || 'Migration définitive : les moteurs et projets sont gérés par Kane App. Les anciennes installations sont retirées.';
+      if (value.report?.cleanup?.startedAt) status.textContent = value.error || 'Migration définitive : les moteurs et projets sont gérés par KaneApp. Les anciennes installations sont retirées.';
     };
     const body = h('div.form-col', { style: { gap: '12px' } },
-      h('p', { text: 'Les moteurs, extensions, environnements Python et projets sont copiés dans les données de Kane App. Les modèles communs restent partagés dans leur dossier actuel.' }),
+      h('p', { text: 'Les moteurs, extensions, environnements Python et projets sont copiés dans les données de KaneApp. Les modèles communs restent partagés dans leur dossier actuel.' }),
       status, rows,
       h('div.form-row', action('copy', '1. Copier les moteurs'), action('verify', '2. Vérifier les fichiers'), action('probe', '3. Tester les environnements')),
       h('div.form-row', action('activate', 'Activer les copies vérifiées'), action('rollback', 'Revenir aux installations précédentes')),
-      h('p.note', { text: 'Le retrait des anciennes installations est une opération distincte, après validation de vos usages et vérification des données. Après ce retrait, les moteurs restent gérés par Kane App et le retour aux anciennes installations est désactivé.' }));
-    KS.modal({ title: 'Migration des applications vers Kane App', body, width: 760, buttons: [{ label: 'Fermer', primary: true }], onClose: () => { migrationView = null; } });
+      h('p.note', { text: 'Le retrait des anciennes installations est une opération distincte, après validation de vos usages et vérification des données. Après ce retrait, les moteurs restent gérés par KaneApp et le retour aux anciennes installations est désactivé.' }));
+    KS.modal({ title: 'Migration des applications vers KaneApp', body, width: 760, buttons: [{ label: 'Fermer', primary: true }], onClose: () => { migrationView = null; } });
     migrationView = update; update(await N.runtimeMigrationState());
   };
 
@@ -601,7 +601,7 @@
   D.about = () => {
     const body = h('div', { style: { display: 'flex', gap: '18px', alignItems: 'center', width: '460px' } },
       h('span.brand-mark.xl'),
-      h('div', h('div', { text: 'Kane App', style: { fontSize: '22px', fontWeight: '600' } }), h('div.note', { text: 'Version ' + (KS.updates ? KS.updates.version : '1.0.0') + ' — création d’images, animation et montage.' }),
+      h('div', h('div', { text: 'KaneApp', style: { fontSize: '22px', fontWeight: '600' } }), h('div.note', { text: 'Version ' + (KS.updates ? KS.updates.version : '1.0.0') + ' — création d’images, animation et montage.' }),
         h('div.note', { style: { marginTop: '8px' }, text: 'Lecture et écriture PSD par ag-psd (MIT). Police Outfit (OFL). Tout reste sur votre machine.' })));
     KS.modal({ title: 'À propos', body, buttons: [{ label: 'Fermer', primary: true }] });
   };

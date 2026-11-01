@@ -101,7 +101,7 @@
     if (!ask) return false;
     const id = await ai.downloadDialog([m], {
       title: 'Traduire les invites en anglais',
-      text: 'Forge et son modèle ne comprennent que l\'anglais : une invite en français donne des images sans rapport (souvent une fille). Kanevas peut la traduire sur votre PC avec Opus-MT (licence CC-BY 4.0, 113 Mo, téléchargé une fois depuis Hugging Face).',
+      text: 'Forge et son modèle ne comprennent que l\'anglais : une invite en français donne des images sans rapport (souvent une fille). KaneApp peut la traduire sur votre PC avec Opus-MT (licence CC-BY 4.0, 113 Mo, téléchargé une fois depuis Hugging Face).',
     });
     return (mtOk = !!id);
   };

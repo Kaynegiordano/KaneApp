@@ -41,7 +41,7 @@
     const r = await N.vramRelease();
     const parts = [r.studio === 'freed' && 'Studio', r.comfy === 'freed' && 'ComfyUI'].filter(Boolean);
     if (!parts.length) {
-      KS.toast(r.studio === 'busy' || r.comfy === 'busy' ? 'Une génération est en cours : ses modèles restent chargés.' : r.studio === 'external' ? 'Le moteur utilisé est le Forge de Kane OS : arrêtez-le depuis Kane OS pour libérer sa mémoire.' : 'Aucun modèle de Kane App n’occupait la mémoire graphique.', 'info', 5000);
+      KS.toast(r.studio === 'busy' || r.comfy === 'busy' ? 'Une génération est en cours : ses modèles restent chargés.' : r.studio === 'external' ? 'Le moteur utilisé est le Forge de Kane OS : arrêtez-le depuis Kane OS pour libérer sa mémoire.' : 'Aucun modèle de KaneApp n’occupait la mémoire graphique.', 'info', 5000);
       return;
     }
     await new Promise(res => setTimeout(res, 3500));          // relevé suivant du pilote

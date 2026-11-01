@@ -5,4 +5,4 @@ for /f %%v in ('node -p "require('./package.json').version"') do set VER=%%v
 echo Version %VER%
 call npm run dist || exit /b 1
 set GH="C:\Program Files\GitHub CLI\gh.exe"
-%GH% release create v%VER% "dist\Kanevas-Setup-%VER%.exe" "dist\Kanevas-Setup-%VER%.exe.blockmap" "dist\latest.yml" --repo Kaynegiordano/Kanevas --title "Kanevas %VER%" --notes-file RELEASE_NOTES.md
+%GH% release create v%VER% "dist\Kanevas-Setup-%VER%.exe" "dist\Kanevas-Setup-%VER%.exe.blockmap" "dist\latest.yml" --repo Kaynegiordano/Kanevas --title "KaneApp %VER%" --notes-file RELEASE_NOTES.md

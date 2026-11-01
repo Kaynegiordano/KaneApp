@@ -1,7 +1,7 @@
 {
   "name": "kanevas",
-  "productName": "Kanevas",
-  "version": "1.16.1",
+  "productName": "KaneApp",
+  "version": "1.17.0",
   "description": "Kanevas — éditeur d'images inspiré de Photoshop",
   "main": "main.js",
   "private": true,
@@ -28,7 +28,8 @@
   "license": "UNLICENSED",
   "build": {
     "appId": "com.kane.kanevas",
-    "productName": "Kanevas",
+    "productName": "KaneApp",
+    "executableName": "Kanevas",
     "copyright": "Kane",
     "directories": {
       "output": "dist",
@@ -100,7 +101,7 @@
       "perMachine": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Kanevas",
+      "shortcutName": "KaneApp",
       "deleteAppDataOnUninstall": false,
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",

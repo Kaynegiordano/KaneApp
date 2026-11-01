@@ -135,6 +135,27 @@ async function scenario() {
   await new Promise(r => setTimeout(r, 500));
   await window.realClick(Math.round(outsideRect.left + 4), Math.round(outsideRect.top + 4));
   assert(!KS.modalOpen(), 'Cliquer autour de l’image ferme le plein écran');
+  {
+    // clic droit sur le résultat : menu avec « Copier l’image », qui met un PNG dans le presse-papiers
+    const vp = document.querySelector('.fx-view .iv-viewport'), r = vp.getBoundingClientRect();
+    vp.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 20, clientY: r.top + 20 }));
+    const items = [...document.querySelectorAll('.menu .menu-item, .menu button, .menu [role="menuitem"], .menu > div')].map(x => x.textContent.trim());
+    assert(items.some(t => t.startsWith('Copier l’image')) && items.some(t => t.startsWith('Ouvrir dans Retouche')), 'Le clic droit sur le résultat propose Copier l’image : ' + items.join(' | '));
+    KS.ui.closeMenus();
+    let copied = null; const realWrite = navigator.clipboard.write.bind(navigator.clipboard);
+    navigator.clipboard.write = async list => { copied = await list[0].getType('image/png'); };
+    await KS.preview.copy(document.querySelector('.fx-view .iv-media'));
+    navigator.clipboard.write = realWrite;
+    assert(copied && copied.size > 0 && copied.type === 'image/png', 'Copier l’image met un PNG dans le presse-papiers');
+    // Amélioration rapide : corrections automatiques à 20 % (image terne, dominante bleue)
+    const W = 64, H = 32, im = new ImageData(W, H);
+    for (let i = 0; i < W * H; i++) { const v = 90 + (i % W); im.data.set([v, v + 4, v + 25, 255], i * 4); }
+    const before = new Uint8ClampedArray(im.data); KS.Adjust.quickEnhance(im);
+    let diff = 0, maxd = 0; for (let i = 0; i < before.length; i++) if (i % 4 !== 3) { const e = Math.abs(im.data[i] - before[i]); diff += e; maxd = Math.max(maxd, e); }
+    diff /= W * H * 3;
+    assert(diff > 2 && maxd < 80, 'Amélioration rapide : visible mais modérée (écart moyen ' + diff.toFixed(1) + ', max ' + maxd + ')');
+    assert(typeof KS.cmd.quickEnhance === 'function' && !!document.querySelector('#workspace-actions .ws-enhance'), 'Bouton Amélioration rapide présent');
+  }
   await click('⛶', document.querySelector('.fx-source'));
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   assert(!KS.modalOpen() && +sourceZoom.dataset.scale === 1, 'Échap ferme le plein écran sans changer le zoom de la source');

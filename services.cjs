@@ -89,7 +89,7 @@ module.exports = function services({ getWin, root, engine, managed = () => ({ ac
   async function start(id) {
     const S = st[id], D = SV[id];
     if (S.state === 'ready' || S.state === 'external' || S.state === 'starting') return status(id);
-    if (await ping(id)) { S.state = adoptable(id) ? 'external' : 'error'; S.error = S.state === 'error' ? 'Une ancienne installation occupe le port. Arrêtez-la dans KaneOS avant d’ouvrir cette copie Kane App.' : ''; S.ours = false; emit(id); return status(id); }
+    if (await ping(id)) { S.state = adoptable(id) ? 'external' : 'error'; S.error = S.state === 'error' ? 'Une ancienne installation occupe le port. Arrêtez-la dans KaneOS avant d’ouvrir cette copie KaneApp.' : ''; S.ours = false; emit(id); return status(id); }
     const d = D.dir();
     if (!D.check(d)) { S.state = 'error'; S.error = D.name + ' introuvable ou incomplet : ' + d; emit(id); return status(id); }
     if (id === 'wallpaper') startRelay();
@@ -141,7 +141,7 @@ module.exports = function services({ getWin, root, engine, managed = () => ({ ac
       try {
         if (u === '/api/health') return out(200, { application: 'Kane OS', relais: 'Kanevas' });
         if (u === '/api/status') { const s = engine.state(); return out(200, { webui: { status: s === 'ready' || s === 'external' ? 'running' : s === 'starting' ? 'starting' : 'stopped' } }); }
-        if (u === '/api/webui/profiles') return out(200, [{ id: 'kanevas', name: 'Moteur IA de Kane App', args: '--api' }]);
+        if (u === '/api/webui/profiles') return out(200, [{ id: 'kanevas', name: 'Moteur IA de KaneApp', args: '--api' }]);
         if (u === '/api/webui/start' && req.method === 'POST') { engine.start(); return out(200, { ok: true }); }
         if (u === '/api/comfyui/start' && req.method === 'POST') { start('comfyui'); return out(200, { ok: true }); }   // Geste IA de Wallpaper
         out(404, { error: 'introuvable' });
@@ -184,7 +184,7 @@ module.exports = function services({ getWin, root, engine, managed = () => ({ ac
     release: () => engine.release(), status: animationStatus,
     changed: value => { engine.animationBusy?.(value.busy); const w = getWin(); if (w && !w.isDestroyed()) w.webContents.send('animation-gpu', value); },
   });
-  const mainOnly = event => { const w = getWin(); if (!w || event.sender !== w.webContents || event.senderFrame !== w.webContents.mainFrame) throw new Error('Commande réservée à Kane App'); };
+  const mainOnly = event => { const w = getWin(); if (!w || event.sender !== w.webContents || event.senderFrame !== w.webContents.mainFrame) throw new Error('Commande réservée à KaneApp'); };
   ipcMain.handle('animation-gpu-state', event => { mainOnly(event); return gpu.state(); });
   ipcMain.handle('animation-run', async (event, dossier, operation, body) => {
     mainOnly(event);

@@ -4,7 +4,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 module.exports = function setupSuite(getWin) {
   const store = require('./suite-store.cjs')(path.join(app.getPath('userData'), 'projects'));
-  const main = event => { const win = getWin(); if (!win || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame) throw new Error('Projet réservé à Kane App'); };
+  const main = event => { const win = getWin(); if (!win || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame) throw new Error('Projet réservé à KaneApp'); };
   ipcMain.handle('suite-call', async (event, op, args) => {
     main(event);
     try { return { ok: true, value: await store.call(op, args) }; }

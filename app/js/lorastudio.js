@@ -70,7 +70,7 @@
           stopPoll();
           KS.toast(st.state === 'done' ? 'Entraînement LoRA terminé' : 'Entraînement LoRA arrêté (' + st.state + ')', st.state === 'done' ? 'ok' : 'info', 6000);
           if (S.power && !st.stopped && st.state !== 'stopped') {
-            const r = await N.loraShutdown(true, `Kanevas : entraînement LoRA ${st.state === 'done' ? 'terminé' : 'terminé avec une erreur'}. Le PC s'éteint dans 2 minutes. Pour annuler : bouton « Annuler l'extinction » de Kanevas, ou shutdown /a.`);
+            const r = await N.loraShutdown(true, `KaneApp : entraînement LoRA ${st.state === 'done' ? 'terminé' : 'terminé avec une erreur'}. Le PC s'éteint dans 2 minutes. Pour annuler : bouton « Annuler l'extinction » de KaneApp, ou shutdown /a.`);
             msg('power', r.ok ? '⏻ Extinction programmée dans 2 minutes.' : 'Extinction impossible : ' + r.error);
           }
           S.power = false;
@@ -102,7 +102,7 @@
       if (r.ok) n++;
     }
     await openProject(S.cur);
-    msg('project', `${n} image(s) ajoutée(s) depuis Kane App.`);
+    msg('project', `${n} image(s) ajoutée(s) depuis KaneApp.`);
   }
   async function applyPreset() {
     if (!S.cur) return msg('preset', 'Select a project first.');
@@ -161,7 +161,7 @@
       S.msgs.train = `Started (pid ${r.pid}). ${r.count} image(s) x ${f.repeats} repeats${r.resolutions.length > 1 ? ` x ${r.resolutions.length} resolutions` : ''} = ${r.per_epoch} per epoch, `
         + `${+f.epochs > 0 ? f.epochs + ' epochs' : f.steps + ' steps set directly'} = ${r.total} steps total at ${r.resolutions.map(x => x + 'px').join(' x ')}, dim/alpha ${f.dim}, `
         + `${f.optimizer === 'prodigy' ? 'lr adaptive' : 'lr ' + (+f.learning_rate).toPrecision(2)}.\n\nBudget roughly **${hh}h${String(mm).padStart(2, '0')}**. The result lands in \`${r.output}\`.\n\n`
-        + 'Kane App attendra la fin de cet entraînement pour les nouvelles générations.' + note;
+        + 'KaneApp attendra la fin de cet entraînement pour les nouvelles générations.' + note;
       S.run = { run: r.run, project: S.cur, running: true, state: 'running', pct: 0, text: S.msgs.train, checkpoints: [], samples: [] };
       startPoll(); render();
     } catch (e) { msg('train', '⚠️ ' + e.message); }
@@ -310,7 +310,7 @@
         tbtn('Import images', () => { if (!folder.value.trim()) return msg('project', 'Give a folder path, or drop some images.'); importFrom({ folder: folder.value.trim() }).catch(() => {}); }, '.primary')),
       h('div.fx-info', { text: 'Pour de gros lots haute résolution : indiquez le dossier puis Import images. Copie locale ; qualité originale conservée.' }),
       drop,
-      h('div.fx-outbtns', h('span.fx-info', { text: 'Depuis Kane App :' }), tbtn('Image du document', () => addFromKanevas('doc')), tbtn('Sélection', () => addFromKanevas('sel')), tbtn('Documents ouverts', () => addFromKanevas('all'))),
+      h('div.fx-outbtns', h('span.fx-info', { text: 'Depuis KaneApp :' }), tbtn('Image du document', () => addFromKanevas('doc')), tbtn('Sélection', () => addFromKanevas('sel')), tbtn('Documents ouverts', () => addFromKanevas('all'))),
       msgBox('project'), on ? gallery : null);
     // carte Preset
     const kinds = Object.entries(I.presets);
@@ -377,7 +377,7 @@
         tbtn('Free VRAM now', async () => { try { msg('vram', await freeVram()); } catch (e) { msg('vram', '⚠️ ' + e.message); } })),
       msgBox('vram'),
       h('div.lt-row.lt-go', tbtn(running ? 'Training…' : 'Start training', () => start(), '.primary.lt-start'), tbtn('Stop', () => stop()), tbtn('Actualiser', () => refreshAll())),
-      h('div.lt-row', check('Éteindre le PC quand l\'entraînement est terminé', power, 'v', '2 min après la fin, réussi ou en échec ; pas si vous l\'arrêtez vous-même. Kanevas doit rester ouvert.', v => { S.power = v; msg('power', v ? '⏻ Le PC s\'éteindra 2 minutes après la fin de l\'entraînement (réussi ou en échec). Pas d\'extinction si vous l\'arrêtez vous-même.' : 'Le PC restera allumé à la fin de l\'entraînement.'); }),
+      h('div.lt-row', check('Éteindre le PC quand l\'entraînement est terminé', power, 'v', '2 min après la fin, réussi ou en échec ; pas si vous l\'arrêtez vous-même. KaneApp doit rester ouvert.', v => { S.power = v; msg('power', v ? '⏻ Le PC s\'éteindra 2 minutes après la fin de l\'entraînement (réussi ou en échec). Pas d\'extinction si vous l\'arrêtez vous-même.' : 'Le PC restera allumé à la fin de l\'entraînement.'); }),
         tbtn('Annuler l\'extinction', async () => { S.power = false; await N.loraShutdown(false); msg('power', 'Extinction annulée : le PC restera allumé.'); render(); })),
       msgBox('power'),
       h('div.lt-bar', h('i', { style: { width: (run ? run.pct || 0 : 0) + '%' } })),

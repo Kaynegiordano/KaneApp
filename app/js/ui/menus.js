@@ -129,6 +129,7 @@
       label: 'Image', items: [
         { label: 'Réglages', icon: 'adjust', sub: adjItems, disabled: noDoc },
         { sep: true },
+        { label: 'Amélioration rapide', kb: 'Ctrl+Maj+Q', icon: 'sparkles', action: C.quickEnhance, disabled: noDoc },
         { label: 'Ton automatique', kb: 'Ctrl+Maj+L', action: C.autoTone, disabled: noDoc },
         { label: 'Contraste automatique', kb: 'Ctrl+Alt+Maj+L', action: C.autoContrast, disabled: noDoc },
         { label: 'Couleur automatique', kb: 'Ctrl+Maj+B', action: C.autoColor, disabled: noDoc },
@@ -308,7 +309,7 @@
       label: 'Aide', items: [
         { label: 'Raccourcis clavier', kb: 'F1', icon: 'keyboard', action: KS.dialogs.shortcuts },
         { label: 'Rechercher des mises à jour…', icon: 'history', action: () => C.checkUpdates(), hidden: !KS.native },
-        { label: 'À propos de Kane App', icon: 'info', action: KS.dialogs.about },
+        { label: 'À propos de KaneApp', icon: 'info', action: KS.dialogs.about },
         { sep: true },
         { label: 'Outils de développement', kb: 'Ctrl+Maj+F12', action: () => KS.native && KS.native.toggleDevTools(), hidden: !KS.native },
       ],

@@ -1397,7 +1397,12 @@
     const o = OUT[key], it = o.items[o.sel];
     const view = h('div.fx-view');
     if (BUSY && BUSY.k === key) { const p = progressBox(); view.classList.add('live'); els.progView = view; view.append(p.box, p.img); peekLastDone(view, key); }
-    else if (it) { const im = h('img', { src: it.url, alt: '' }); KS.preview.mount(view, im, { identity: it, width: it.canvas.width, height: it.canvas.height, clickOpen: true }); }
+    else if (it) { const im = h('img', { src: it.url, alt: '' }); KS.preview.mount(view, im, { identity: it, width: it.canvas.width, height: it.canvas.height, clickOpen: true, menu: () => [
+      { label: 'Enregistrer…', icon: 'save', action: () => saveItem(it) },
+      { label: 'Ouvrir dans Retouche', icon: 'file-plus', action: () => sendTo('edit', it) },
+      { label: 'Ajouter en calque', icon: 'layers', action: () => addAsLayer(it), disabled: !D() },
+      { label: 'Envoyer vers Img2Img', icon: 'image', action: () => sendTo('img2img', it) },
+      { label: 'Envoyer vers Inpaint', icon: 'brush', action: () => sendTo('inpaint', it) }] }); }
     else view.append(h('div.fx-ph', key === 'i2i' ? { text: 'Les résultats apparaîtront ici' } : { html: KS.icon('image') }));
     const thumbs = o.items.length > 1 ? h('div.fx-thumbs', ...o.items.map((x, i) => { const t = h('img' + (i === o.sel ? '.on' : ''), { src: x.url, alt: '', title: x.from ? 'Venue de l\'Édition : ' + x.from : '' }); t.addEventListener('click', () => { o.sel = i; renderOut(key); }); return t; })) : null;
     fillEl(box, key === 'i2i' ? h('div.fx-h', { text: 'Résultat' }) : null, view, thumbs, outButtons(key, it), it ? h('div.fx-outinfo', { text: (it.from ? 'Venue de l\'Édition : ' + it.from + '\n\n' : '') + (it.info || '(sans paramètres de génération)') + (o.time && !it.from ? `\n\nTime taken: ${o.time}` : '') }) : null);
@@ -1740,7 +1745,7 @@
     const pane = (title, ...kids) => h('div.fx-panel', h('div.fx-h', { text: title }), ...kids);
     return h('div.fx-settings',
       pane('Moteur du Studio IA',
-        h('div.fx-info', { text: !E ? 'Indisponible dans cette version.' : E.ready() ? (E.state === 'external' ? 'Forge de Kane OS (déjà lancé) : Kanevas l\'utilise.' : 'Moteur démarré par Kane App, profil ' + (E.profile || 'Kane OS') + '. Il s\'arrête quand vous quittez Kanevas.') : E.state === 'starting' ? 'Démarrage…' : E.state === 'error' ? 'Erreur : ' + E.error : 'Arrêté.' }),
+        h('div.fx-info', { text: !E ? 'Indisponible dans cette version.' : E.ready() ? (E.state === 'external' ? 'Forge de Kane OS (déjà lancé) : KaneApp l\'utilise.' : 'Moteur démarré par KaneApp, profil ' + (E.profile || 'Kane OS') + '. Il s\'arrête quand vous quittez KaneApp.') : E.state === 'starting' ? 'Démarrage…' : E.state === 'error' ? 'Erreur : ' + E.error : 'Arrêté.' }),
         E ? h('div.fx-outbtns', tbtn('Démarrer', () => E.ensure().then(ok => ok && loadCat()), '.primary'), tbtn('Arrêter', () => E.stop(true)), tbtn('Journal…', () => E.showLog && E.showLog()), tbtn('Profil…', () => E.pickProfile && E.pickProfile()), tbtn('Configurer le moteur…', () => KS.dialogs.enginePrefs())) : null,
         check('Démarrer le moteur automatiquement quand il le faut', { v: KS.prefs.engineAuto !== false }, 'v', '', v => { KS.prefs.engineAuto = v; KS.prefs.save(); })),
       pane('Génération',
@@ -1765,17 +1770,18 @@
     const grid = h('div.ga-grid');
     for (const it of SD.gallery) {
       const cell = h('button.ga-cell', h('img', { src: it.thumb, alt: '', title: (it.info || '').split('\n')[0].slice(0, 160) }), h('span.ga-k', { text: it.kind }));
-      cell.addEventListener('click', () => {
-        const r = cell.getBoundingClientRect();
+      const openMenu = (x, y) => {
         ui.menu([
           { label: 'Ouvrir dans Retouche', icon: 'file-plus', action: () => sendTo('edit', it) },
           { label: 'Ajouter comme calque', icon: 'layers', action: () => addAsLayer(it), disabled: !D() },
           { label: 'Envoyer vers Img2Img', icon: 'image', action: () => sendTo('img2img', it) },
           { label: 'Envoyer vers Inpaint', icon: 'brush', action: () => sendTo('inpaint', it) },
           { label: 'Réutiliser ces réglages (txt2img)', icon: 'history', action: () => sendTo('txt2img', it), disabled: !it.info },
-          { label: 'Copier', icon: 'copy', action: async () => { try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': await U.blobFromCanvas(it.canvas) })]); KS.toast('Copié', 'ok', 900); } catch (er) { KS.toast(er.message, 'err'); } } },
-        ], r.left, r.bottom + 4);
-      });
+          { label: 'Copier l’image', icon: 'copy', action: () => KS.preview.copy(it.canvas) },
+        ], x, y);
+      };
+      cell.addEventListener('click', () => { const r = cell.getBoundingClientRect(); openMenu(r.left, r.bottom + 4); });
+      cell.addEventListener('contextmenu', e => { e.preventDefault(); openMenu(e.clientX, e.clientY); });
       grid.appendChild(cell);
     }
     galleryRoot.append(head, grid);

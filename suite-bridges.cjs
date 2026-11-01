@@ -18,7 +18,7 @@ module.exports = function installSuiteBridge(kind) {
       window.parent.postMessage({kv:'suite-native-request',op,id,...args}, '*');
     });
     // Le prompt() de la page autonome n'est pas pris en charge dans Electron.
-    // Le sélecteur et le dépôt passent par le même import que le bouton Kane App.
+    // Le sélecteur et le dépôt passent par le même import que le bouton KaneApp.
     window.creer = async file => {
       try {
         if (!file || file.size > 100 * 1024 * 1024) throw new Error('Choisissez une image de moins de 100 Mo');

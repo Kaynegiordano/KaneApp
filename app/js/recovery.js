@@ -88,7 +88,7 @@
       const entries = result.entries.filter(e => !ids.has(e.id));
       if (!entries.length) { if (result.unreadable) KS.toast('Certaines copies de secours sont illisibles. Elles ont été conservées sur disque.', 'err', 6000); return; }
       const h = KS.h, ui = KS.ui, selected = new Set(entries.map(e => e.id));
-      const body = h('div', h('p', { text: 'Kane App a retrouvé des documents non enregistrés. Choisissez ceux à récupérer.' }));
+      const body = h('div', h('p', { text: 'KaneApp a retrouvé des documents non enregistrés. Choisissez ceux à récupérer.' }));
       for (const e of entries) {
         body.appendChild(h('div', { style: { padding: '10px 0', borderBottom: '1px solid var(--border)' } },
           ui.check(e.name + ' — ' + new Date(e.savedAt).toLocaleString('fr-FR'), true, v => v ? selected.add(e.id) : selected.delete(e.id)),

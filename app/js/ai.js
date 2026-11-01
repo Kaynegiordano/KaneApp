@@ -126,7 +126,7 @@
       ...list.map(m => h('div.form-row', h('span', { text: m.name, style: { flex: '1' } }), h('span.note', { text: Math.round(m.size / 1048576) + ' Mo' }),
         m.installed && m.kind !== 'segment' ? h('span.note', { text: 'Installé' }) : m.installed ? ui.btn(KS.prefs.aiModel === m.id ? 'Utilisé' : 'Utiliser', () => { KS.prefs.aiModel = m.id; KS.prefs.save(); KS.toast('Modèle : ' + m.name, 'ok'); }, '.small' + (KS.prefs.aiModel === m.id ? '.primary' : ''))
           : ui.btn('Télécharger…', async () => { md.close(); if (m.kind === 'inpaint') await ai.ensureInpaint(true); else if (m.kind === 'translate') await KS.gen.mtReady(true); else await ai.downloadDialog([m]); }, '.small'))),
-      h('div.note', { text: 'Les modèles sont rangés dans le dossier de données de Kanevas. Calcul local, rien n\'est envoyé en ligne.' }));
+      h('div.note', { text: 'Les modèles sont rangés dans le dossier de données de KaneApp. Calcul local, rien n\'est envoyé en ligne.' }));
     const md = KS.modal({ title: 'Modèles d\'IA', body, buttons: [{ label: 'Fermer', primary: true }] });
   };
 

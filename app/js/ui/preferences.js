@@ -36,13 +36,13 @@
   const spaceColor = () => KS.appearance.controls();
 
   // Général
-  add({ tab: 'general', group: 'Démarrage', key: 'startPage', def: 'project', label: 'Écran au lancement', desc: 'Ce que Kane App affiche à l’ouverture, quand aucun document n’est repris.', type: 'seg', opts: [['project', 'Projet'], ['edit', 'Retouche']] });
+  add({ tab: 'general', group: 'Démarrage', key: 'startPage', def: 'project', label: 'Écran au lancement', desc: 'Ce que KaneApp affiche à l’ouverture, quand aucun document n’est repris.', type: 'seg', opts: [['project', 'Projet'], ['edit', 'Retouche']] });
   on('general', 'Protection du travail', 'autoRecovery', 'Sauvegardes de secours automatiques', 'Copies locales séparées du projet, après 5 secondes d’inactivité puis à intervalle régulier. La récupération est proposée au lancement.', true, { after: () => KS.recovery?.configure() });
   add({ tab: 'general', group: 'Protection du travail', key: 'recoveryInterval', def: 30, label: 'Intervalle de secours', type: 'seg', num: true, opts: [['15', '15 s'], ['30', '30 s'], ['60', '1 min'], ['120', '2 min']], after: () => KS.recovery?.configure() });
   add({ tab: 'general', group: 'Retouche', key: 'historySize', def: 60, label: 'États d’historique', desc: 'Nombre d’étapes que l’on peut annuler. Plus il est élevé, plus la mémoire est sollicitée.', type: 'scrub', min: 5, max: 300 });
   on('general', 'Retouche', 'editableAdjustments', 'Créer des réglages modifiables', 'Les réglages d’image sont conservés dans des calques. Double-cliquez sur leur vignette pour les reprendre.', true);
   on('general', 'Retouche', 'keepGenInfo', 'Conserver les paramètres de génération dans les PNG', 'Ajoute le prompt et les réglages IA aux fichiers PNG exportés.', true);
-  add({ tab: 'general', group: 'Mises à jour', label: 'Mises à jour de Kane App', desc: 'Vérifie les nouvelles versions publiées sur GitHub.', kw: 'version télécharger', type: 'btns', hidden: () => !KS.updates?.available,
+  add({ tab: 'general', group: 'Mises à jour', label: 'Mises à jour de KaneApp', desc: 'Vérifie les nouvelles versions publiées sur GitHub.', kw: 'version télécharger', type: 'btns', hidden: () => !KS.updates?.available,
     btns: () => [['Rechercher maintenant', () => C.checkUpdates()], P.skipUpdate ? ['Réafficher la version ignorée', e => { delete P.skipUpdate; P.save(); e.currentTarget.remove(); KS.toast('Les mises à jour seront de nouveau proposées', 'ok'); }] : null] });
 
   // Affichage : tout ce que l’on peut masquer
@@ -53,19 +53,19 @@
   on('display', 'Écran Retouche', 'showRecent', 'Projets récents', 'La liste des derniers fichiers ouverts. Un bouton Masquer / Afficher est aussi présent sur l’écran.', true, { kw: 'récents derniers fichiers' });
   on('display', 'Écran Retouche', 'showQuickStart', 'Démarrer rapidement', 'Les formats prêts à l’emploi.', true, { kw: 'préréglages formats' });
   on('display', 'Écran Retouche', 'showDropHint', 'Indication de dépôt de fichiers', null, true);
-  for (const [id, name] of SPACES) add({ tab: 'display', group: 'Espaces du panneau Kane App', label: name, desc: id === 'studio' ? 'Décochez un espace pour le retirer du panneau. Il reste accessible par le parcours du projet.' : null, type: 'check', kw: 'onglet espace atelier',
+  for (const [id, name] of SPACES) add({ tab: 'display', group: 'Espaces du panneau KaneApp', label: name, desc: id === 'studio' ? 'Décochez un espace pour le retirer du panneau. Il reste accessible par le parcours du projet.' : null, type: 'check', kw: 'onglet espace atelier',
     get: () => !P.hiddenSpaces?.[id], set: v => { P.hiddenSpaces = { ...(P.hiddenSpaces || {}), [id]: !v }; } });
-  on('display', 'Panneau Kane App', 'navPinned', 'Garder le panneau ouvert', 'Le panneau vertical s’ouvre avec le bouton K en haut à gauche. Épinglé, il reste affiché et réserve sa place ; sinon il se referme après chaque choix.', false, { kw: 'navigation espaces menu latéral barre verticale k', apply: false });
-  on('display', 'Panneau Kane App', 'showCapture', 'Bouton Capturer', 'Dans le panneau Kane App.', true);
-  on('display', 'Panneau Kane App', 'showLibraryButton', 'Bouton Bibliothèque', null, true);
-  on('display', 'Panneau Kane App', 'showActivity', 'Bouton Activité', null, true);
+  on('display', 'Panneau KaneApp', 'navPinned', 'Garder le panneau ouvert', 'Le panneau vertical s’ouvre avec le bouton K en haut à gauche. Épinglé, il reste affiché et réserve sa place ; sinon il se referme après chaque choix.', false, { kw: 'navigation espaces menu latéral barre verticale k', apply: false });
+  on('display', 'Panneau KaneApp', 'showCapture', 'Bouton Capturer', 'Dans le panneau KaneApp.', true);
+  on('display', 'Panneau KaneApp', 'showLibraryButton', 'Bouton Bibliothèque', null, true);
+  on('display', 'Panneau KaneApp', 'showActivity', 'Bouton Activité', null, true);
   on('display', 'Fenêtre', 'ctxBar', 'Barre des tâches contextuelle', 'La barre flottante d’actions rapides sous l’image.', true, { after: () => KS.taskbar?.render() });
   on('display', 'Fenêtre', 'showStatusbar', 'Barre d’état de l’édition', 'Zoom, taille, position du curseur et couleur.', true);
   on('display', 'Fenêtre', 'showGpu', 'Mémoire graphique (VRAM)', 'La jauge en bas de la fenêtre.', true, { kw: 'gpu jauge' });
 
   // Apparence
   add({ tab: 'look', group: 'Thème', key: 'theme', def: 'light', label: 'Thème', type: 'seg', apply: true, opts: [['dark', 'Sombre'], ['graphite', 'Graphite'], ['light', 'Givre']] });
-  add({ tab: 'look', group: 'Thème', key: 'accent', def: '#2f6fdb', label: 'Accent de Kane App', type: 'accent', apply: true, kw: 'couleur' });
+  add({ tab: 'look', group: 'Thème', key: 'accent', def: '#2f6fdb', label: 'Accent de KaneApp', type: 'accent', apply: true, kw: 'couleur' });
   add({ tab: 'look', group: 'Thème', label: 'Couleurs des espaces', desc: 'Une teinte par espace de travail.', type: 'node', kw: 'accent onglets', build: spaceColor });
   add({ tab: 'look', group: 'Interface', key: 'uiScale', def: undefined, label: 'Taille de l’interface', type: 'seg', num: true, apply: true, opts: [['0.9', '90 %'], ['1', '100 %'], ['1.15', '115 %'], ['1.25', '125 %'], ['1.5', '150 %']] });
   on('look', 'Interface', 'reduceMotion', 'Réduire les animations', 'Supprime les transitions et les effets de glissement.', false, { kw: 'mouvement accessibilité' });
@@ -94,7 +94,7 @@
   add({ tab: 'advanced', group: 'Disposition', label: 'Panneaux', desc: 'Remet les panneaux latéraux à leur place d’origine.', type: 'btns', btns: () => [['Rétablir la disposition des panneaux', () => { C.resetWorkspace(); KS.toast('Disposition rétablie', 'ok'); }]] });
   add({ tab: 'advanced', group: 'Disposition', label: 'Raccourcis clavier', type: 'btns', btns: () => [['Afficher les raccourcis…', () => KS.dialogs.shortcuts()]] });
   add({ tab: 'advanced', group: 'Données', label: 'Liste des fichiers récents', desc: 'Efface la liste. Les fichiers ne sont pas supprimés.', type: 'btns', btns: () => [['Vider la liste', () => { P.recent = []; P.save(); KS.emit('recent'); KS.toast('Liste vidée', 'ok'); }]] });
-  add({ tab: 'advanced', group: 'Données', label: 'Applications intégrées', desc: 'Migration des moteurs vers Kane App.', type: 'btns', hidden: () => !N, btns: () => [['Migration vers Kane App…', () => KS.dialogs.runtimeMigration()]] });
+  add({ tab: 'advanced', group: 'Données', label: 'Applications intégrées', desc: 'Migration des moteurs vers KaneApp.', type: 'btns', hidden: () => !N, btns: () => [['Migration vers KaneApp…', () => KS.dialogs.runtimeMigration()]] });
 
   const get = s => s.get ? s.get() : (P[s.key] === undefined ? s.def : P[s.key]);
   const commit = (s, v) => {

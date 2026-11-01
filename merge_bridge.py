@@ -1,4 +1,4 @@
-"""Fusion de modèles pour l'onglet Merge du Studio IA (Kane App).
+"""Fusion de modèles pour l'onglet Merge du Studio IA (KaneApp).
 
 Lancé avec le Python du Studio (torch + safetensors) : `merge_bridge.py <commande>`, JSON sur stdin.
 Chaque ligne de stdout est un objet JSON : {"progress": 0..100, "text": "..."} pendant le travail, puis une dernière

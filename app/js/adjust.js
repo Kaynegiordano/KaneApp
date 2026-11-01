@@ -444,6 +444,18 @@
       if (n) { const m = (R + G + B) / 3 / n; const kr = m / (R / n), kg = m / (G / n), kb = m / (B / n); applyLUT(d, lut(i => i * kr), lut(i => i * kg), lut(i => i * kb)); }
       KS.Adjust.autoContrast(d);
     },
+    // Amélioration rapide : 20 % de chacune des corrections automatiques (ton, contraste, couleur), calculées sur l'image
+    // d'origine puis additionnées, et une touche de présence (vibrance, clarté, texture). Un seul passage, jamais excessif.
+    quickEnhance(d, k = 0.2) {
+      const src = new Uint8ClampedArray(d.data), acc = new Float32Array(src.length);
+      for (const fn of ['autoTone', 'autoContrast', 'autoColor']) {
+        const tmp = new ImageData(new Uint8ClampedArray(src), d.width, d.height); KS.Adjust[fn](tmp);
+        const t = tmp.data; for (let i = 0; i < t.length; i++) acc[i] += (t[i] - src[i]) * k;
+      }
+      const px = d.data;
+      for (let i = 0; i < px.length; i += 4) { px[i] = C(src[i] + acc[i]); px[i + 1] = C(src[i + 1] + acc[i + 1]); px[i + 2] = C(src[i + 2] + acc[i + 2]); }
+      defs.cameraRaw.apply(d, { ...KS.Adjust.defaults('cameraRaw'), vibrance: 12, clarity: 10, texture: 8 });
+    },
     equalize(d) {
       const h = hist(d).l; let total = 0; for (let i = 0; i < 256; i++) total += h[i];
       const cdf = new Float32Array(256); let acc = 0; for (let i = 0; i < 256; i++) { acc += h[i]; cdf[i] = acc / total; }

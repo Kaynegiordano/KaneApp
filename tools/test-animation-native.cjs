@@ -1,4 +1,4 @@
-// Vraie fenêtre Kane App, vrai moteur Animation migré et vrai pont d'ouverture de fichier.
+// Vraie fenêtre KaneApp, vrai moteur Animation migré et vrai pont d'ouverture de fichier.
 const {app,dialog,nativeImage}=require('electron');
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict'),{spawn,execFileSync}=require('node:child_process');
 const occupied=execFileSync('netstat',['-ano','-p','TCP'],{encoding:'utf8',windowsHide:true}).split(/\r?\n/).map(l=>l.trim().split(/\s+/)).some(c=>c[0]==='TCP' && c[1]?.endsWith(':8780') && c[3]==='LISTENING');

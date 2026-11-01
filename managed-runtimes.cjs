@@ -61,7 +61,7 @@ module.exports = function managedRuntimes(profile) {
     },
     activate(reportFile) {
       const report = inspect(reportFile);
-      if (read().active) throw new Error('Les moteurs Kane App sont déjà actifs');
+      if (read().active) throw new Error('Les moteurs KaneApp sont déjà actifs');
       const previous = {};
       for (const name of ['forge-dirs.json', 'studio-runtime.json']) { const p = path.join(profile, name); previous[name] = fs.existsSync(p) ? fs.readFileSync(p).toString('base64') : null; }
       const value = { active: true, activatedAt: Date.now(), root: report.destination, report: reportFile, components: report.components,
@@ -72,7 +72,7 @@ module.exports = function managedRuntimes(profile) {
       const value = read();
       if (!value.active) return value;
       let report = {}; try { report = JSON.parse(fs.readFileSync(value.report, 'utf8')); } catch { /* contrôle des sources ci-dessous */ }
-      if (value.cleanup?.startedAt || report.cleanup?.startedAt || Object.values(value.components || {}).some(c => !fs.existsSync(c.source))) throw new Error('Les anciennes installations ont été retirées. Kane App conserve la gestion des moteurs intégrés.');
+      if (value.cleanup?.startedAt || report.cleanup?.startedAt || Object.values(value.components || {}).some(c => !fs.existsSync(c.source))) throw new Error('Les anciennes installations ont été retirées. KaneApp conserve la gestion des moteurs intégrés.');
       for (const [name, bytes] of Object.entries(value.previous || {})) {
         if (!['forge-dirs.json', 'studio-runtime.json'].includes(name)) continue;
         const p = path.join(profile, name);

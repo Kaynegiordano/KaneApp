@@ -3,7 +3,7 @@
 (() => {
   const A = KS.appearance = {
     active: 'project',
-    labels: { project: 'Projet · Kane App', edit: 'Retouche', studio: 'Studio IA', wallpaper: 'Animation', comfyui: 'Animation Vidéo', video: 'Montage' },
+    labels: { project: 'Projet · KaneApp', edit: 'Retouche', studio: 'Studio IA', wallpaper: 'Animation', comfyui: 'Animation Vidéo', video: 'Montage' },
     defaults: { project: '#647e9d', edit: '#5b83ad', studio: '#8975b3', wallpaper: '#52958a', comfyui: '#b08a62', video: '#71839f' },
   };
   A.color = id => /^#[\da-f]{6}$/i.test(KS.prefs.spaceColors?.[id] || '') ? KS.prefs.spaceColors[id] : id === 'project' ? KS.prefs.accent || A.defaults.project : A.defaults[id] || KS.prefs.accent;

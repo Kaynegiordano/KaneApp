@@ -12,7 +12,7 @@
     if (chip) {
       chip.dataset.state = s.state;
       chip.querySelector('.eg-l').textContent = LABEL[s.state] || s.state;
-      chip.title = s.state === 'error' ? s.error : s.state === 'ready' ? 'Moteur de Forge démarré par Kane App (' + E.profile + ')' : s.state === 'external' ? 'Moteur de Forge lancé par Kane OS' : 'Cliquer pour démarrer ou arrêter le moteur IA';
+      chip.title = s.state === 'error' ? s.error : s.state === 'ready' ? 'Moteur de Forge démarré par KaneApp (' + E.profile + ')' : s.state === 'external' ? 'Moteur de Forge lancé par Kane OS' : 'Cliquer pour démarrer ou arrêter le moteur IA';
     }
     if (s.state === 'ready' || s.state === 'external' || s.state === 'error' || s.state === 'off') { const w = waiters; waiters = []; w.forEach(f => f(s)); }
     KS.emit('engine', E);

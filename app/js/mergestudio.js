@@ -179,7 +179,7 @@
     if (r.rank) lines.push(`Rang du LoRA obtenu : ${r.rank} · ${r.modules} modules.`);
     if (r.embedded && r.embedded.length) lines.push('Intégrés au fichier : ' + r.embedded.join(', ') + ' — laissez « VAE / Text Encoder » vide dans le Studio.');
     for (const x of r.report || []) lines.push(`${x.name} : ${x.applied} / ${x.modules} modules appliqués` + (x.unmatched && x.unmatched.length ? ` (non appliqués, ex. ${x.unmatched[0]})` : '') + (x.unsupported ? ` · ${x.unsupported} tenseurs LoHa/LoKr ignorés` : '') + '.');
-    lines.push(r.id.startsWith('ckpt:') ? 'Dossier : **Kane App / output / merge** (listé par Forge dans Stable-diffusion / KaneApp).' : 'Dossier : **Kane App / output / lora** (listé par Forge dans Lora / KaneApp).');
+    lines.push(r.id.startsWith('ckpt:') ? 'Dossier : **KaneApp / output / merge** (listé par Forge dans Stable-diffusion / KaneApp).' : 'Dossier : **KaneApp / output / lora** (listé par Forge dans Lora / KaneApp).');
     return h('div.mg-result', h('div.fx-md', { html: F().md(lines.join('\n')) }), F().tbtn(r.id.startsWith('ckpt:') ? 'Utiliser dans le Studio' : 'Actualiser les LoRA du Studio', () => useResult(), '.primary'));
   }
 

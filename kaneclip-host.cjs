@@ -153,7 +153,7 @@ function setup(getWin, { output } = {}) {
   }));
   /* fenêtre : c'est celle de Kanevas */
   H('app-version', () => app.getVersion());
-  H('update-state', () => ({ state: 'none', note: 'Mis à jour avec Kane App' }));
+  H('update-state', () => ({ state: 'none', note: 'Mis à jour avec KaneApp' }));
   H('update-check', () => ({ state: 'none' }));
   H('update-download', () => ({ state: 'none' }));
   O('show-in-folder', (_e, p) => shell.showItemInFolder(p));
@@ -178,7 +178,7 @@ function setup(getWin, { output } = {}) {
   });
   ipcMain.handle('kc-url', () => appUrl + '/index.html');
   ipcMain.handle('kc-stop', event => {
-    if (event.senderFrame !== getWin()?.webContents.mainFrame) throw new Error('Réservé à Kane App');
+    if (event.senderFrame !== getWin()?.webContents.mainFrame) throw new Error('Réservé à KaneApp');
     tools.cancelAll(); ai.cancelAll(); return { ok: true };
   });
 }

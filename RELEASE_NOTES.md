@@ -1,3 +1,9 @@
+# 1.17.0 — KaneApp, copie au clic droit, Amélioration rapide
+
+- L'application s'appelle **KaneApp** partout : fenêtre, menus, raccourcis, liste des applications de Windows, Kane OS. Vos préférences, modèles et projets ne bougent pas.
+- **Studio IA** : clic droit sur l'image (résultat, plein écran, galerie) → **Copier l'image** (PNG en pleine résolution, prêt à coller ailleurs), Enregistrer, Ouvrir dans Retouche, etc.
+- **Retouche** : bouton **Amélioration rapide** (baguette en haut, menu Image, Ctrl+Maj+Q). Il applique 20 % de chaque correction automatique (ton, contraste, couleur) avec un peu de vibrance, de clarté et de netteté, en une seule étape (Ctrl+Z pour revenir).
+
 # 1.16.1 — Angle : le même prompt que l'image
 
 - L'invite ET l'invite négative de l'image sont reprises et envoyées telles quelles à Forge (plus de préfixe ni de négatif ajoutés). Elles restent modifiables.

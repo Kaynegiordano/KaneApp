@@ -336,7 +336,7 @@
     if (started) return; started = true;
     home = h('section#suite-home'); KS.$('#main').append(home);
     drawer = h('aside#suite-library-drawer', { hidden: true, 'aria-label': 'Bibliothèque du projet' }); document.body.append(drawer);
-    projectButton = ui.btn('Kane App', () => S.chooseProject(), '.suite-project-button', 'folder-open');
+    projectButton = ui.btn('KaneApp', () => S.chooseProject(), '.suite-project-button', 'folder-open');
     taskButton = ui.btn('Activité', () => S.showTasks(), '.small.sb-activity');
     const sw = document.querySelector('.ws-switch');
     const projectTab = h('button.ws-btn', { 'data-v': 'project', text: 'Projet' }); projectTab.addEventListener('click', () => S.home()); sw.prepend(projectTab);
@@ -347,10 +347,10 @@
         { label: 'Sélection seule', disabled: !KS.state.doc?.selection.bounds, action: () => S.run('Capture de la sélection', () => S.capture('selection')).catch(() => {}) },
       ], r.left, r.bottom + 4);
     }, '.small.sb-capture');
-    // Navigation Kane App : panneau vertical ouvert par le bouton K de la barre de titre (à la place de l'ancienne barre horizontale).
+    // Navigation KaneApp : panneau vertical ouvert par le bouton K de la barre de titre (à la place de l'ancienne barre horizontale).
     const pinButton = ui.btn('', () => { KS.prefs.navPinned = !KS.prefs.navPinned; KS.prefs.save(); KS.emit('prefs'); }, '.small.kn-pin');
     const brand = KS.$('#titlebar .brand');
-    nav = h('aside#kane-nav', { hidden: true, 'aria-label': 'Navigation Kane App' },
+    nav = h('aside#kane-nav', { hidden: true, 'aria-label': 'Navigation KaneApp' },
       h('div.kn-head', projectButton, pinButton),
       h('div.kn-title', { text: 'Espaces' }), sw,
       h('div.kn-title', { text: 'Projet' }),
@@ -368,7 +368,7 @@
     };
     const setNav = open => { nav.hidden = !open; layoutNav(); };
     KS.nav = { open: () => setNav(true), close: () => setNav(false), toggle: () => setNav(nav.hidden) };
-    if (brand) { brand.classList.add('kn-brand'); brand.setAttribute('role', 'button'); brand.tabIndex = 0; brand.title = 'Kane App : espaces et navigation';
+    if (brand) { brand.classList.add('kn-brand'); brand.setAttribute('role', 'button'); brand.tabIndex = 0; brand.title = 'KaneApp : espaces et navigation';
       brand.addEventListener('click', () => KS.nav.toggle());
       brand.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); KS.nav.toggle(); } }); }
     // Le panneau se ferme tout de suite (avant le travail lourd d'un espace qui se charge), puis la commande choisie est lancée à l'image suivante.
@@ -397,8 +397,8 @@
     drawer.addEventListener('keydown', e => { if (e.target.matches('input,select')) e.stopPropagation(); });
     try {
       const projects = await call('list'); const current = projects.find(p => p.id === KS.prefs.suiteProject) || projects[0];
-      S.project = current ? await call('get', { project: current.id }) : await call('create', { name: 'Kane App' });
-      if (S.project.name === 'Mon atelier') S.project = await call('rename', { name: 'Kane App' });
+      S.project = current ? await call('get', { project: current.id }) : await call('create', { name: 'KaneApp' });
+      if (S.project.name === 'Mon atelier') S.project = await call('rename', { name: 'KaneApp' });
       KS.prefs.suiteProject = S.project.id; KS.prefs.save(); S.selected = S.project.items[0]?.id;
       render(); resolveReady();
       if (!KS.state.doc && !KS.prefs.studio && KS.prefs.startPage !== 'edit') await S.home();

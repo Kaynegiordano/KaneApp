@@ -1,4 +1,4 @@
-/* Kane App : surfaces plates et accents propres à chaque activité. */
+/* KaneApp : surfaces plates et accents propres à chaque activité. */
 :root { --radius:4px; --radius-lg:5px; --ui:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif; }
 .brand-mark { background:transparent url(../icon.png) center / contain no-repeat; box-shadow:none; border-radius:0; }
 .btn,.fx-btn2,.ws-btn,.fx-ebtn,.fx-tab,.suite-step,.suite-library,.suite-media,.fx-panel,.fx-view,.fx-dropzone,.fx-output-actions,.fx-acc,.fx-card,.modal,.menu { border-radius:4px; box-shadow:none; }

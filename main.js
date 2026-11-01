@@ -1,4 +1,4 @@
-﻿// Kanevas — processus principal Electron : la fenêtre, les boîtes de dialogue
+﻿// KaneApp (Kanevas) — processus principal Electron : la fenêtre, les boîtes de dialogue
 // de fichiers et l'accès disque. Toute l'application vit dans app/ (renderer).
 const { app, BrowserWindow, ipcMain, dialog, Menu, shell, nativeImage } = require('electron');
 const path = require('path');
@@ -9,11 +9,13 @@ ipcMain.handle('gpu-memory', () => gpuMemory());
 app.on('will-quit', () => gpuMemory.stop());
 
 // Réutiliser les données existantes (préférences et modèles IA) après le changement de nom.
+// Le nom affiché est « KaneApp » (1.17) ; le dossier de données garde son nom technique (KaneShop ou Kanevas) : sinon le
+// changement de nom du produit aurait ouvert un dossier vide, sans préférences ni modèles.
 const legacyData = ['KaneShop', 'kaneshop'].map(n => path.join(app.getPath('appData'), n)).find(p => fs.existsSync(p));
 // KANEVAS_PROFILE : dossier de données séparé (essais automatisés à côté de l'application ouverte)
 if (process.env.KANEVAS_PROFILE) app.setPath('userData', process.env.KANEVAS_PROFILE);
-else if (legacyData) app.setPath('userData', legacyData);
-app.setName('Kanevas');
+else app.setPath('userData', legacyData || path.join(app.getPath('appData'), 'Kanevas'));
+app.setName('KaneApp');
 if (process.platform === 'win32') app.setAppUserModelId('com.kane.kanevas');
 
 // Espace « Vidéo » (KaneClip intégré) : son protocole média doit être déclaré avant que l'application soit prête
@@ -89,7 +91,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1600, height: 980, minWidth: 1024, minHeight: 640,
     backgroundColor: chrome.color,
-    title: 'Kane App',
+    title: 'KaneApp',
     icon: process.platform === 'win32' ? windowsIcon : path.join(__dirname, 'app', 'icon.png'),
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: chrome.color, symbolColor: chrome.symbolColor, height: 40 },
@@ -112,7 +114,7 @@ function createWindow() {
       appIconPath: windowsIcon,
       appIconIndex: 0,
       relaunchCommand: app.isPackaged ? `"${process.execPath}"` : `"${process.execPath}" "${__dirname}"`,
-      relaunchDisplayName: 'Kanevas',
+      relaunchDisplayName: 'KaneApp',
     });
   }
   Menu.setApplicationMenu(null);
@@ -544,7 +546,7 @@ ipcMain.handle('lora-call', async (_e, cmd, args = {}) => {
   try {
     // dossiers mémorisés au dernier contact avec Forge : l'atelier marche aussi Forge éteint (carte graphique libre)
     loadDirs();
-    if (!forgeDirs || !forgeDirs.data) throw new Error('Démarrez Forge une fois depuis Kane OS : Kane App y lit ses dossiers (entraîneur, modèles)');
+    if (!forgeDirs || !forgeDirs.data) throw new Error('Démarrez Forge une fois depuis Kane OS : KaneApp y lit ses dossiers (entraîneur, modèles)');
     const py = path.join(forgeDirs.data, 'venv', 'Scripts', 'python.exe');
     if (!fs.existsSync(py)) throw new Error('Python de Forge introuvable : ' + py);
     if (!/^[a-z_]+$/.test(cmd)) throw new Error('Commande invalide');
@@ -569,7 +571,7 @@ const mergeBridgePath = () => path.join(__dirname.replace('app.asar', 'app.asar.
 let mergeChild = null, mergeOut = '';
 const mergeRoots = () => {
   loadDirs();
-  if (!forgeDirs || !forgeDirs.models) throw new Error('Démarrez Forge une fois depuis Kane OS : Kane App y lit ses dossiers de modèles');
+  if (!forgeDirs || !forgeDirs.models) throw new Error('Démarrez Forge une fois depuis Kane OS : KaneApp y lit ses dossiers de modèles');
   return { ckpt: path.join(forgeDirs.models, 'Stable-diffusion'), lora: forgeDirs.lora || path.join(forgeDirs.models, 'Lora'), vae: path.join(forgeDirs.models, 'VAE'), te: path.join(forgeDirs.models, 'text_encoder') };
 };
 const mergeResolve = id => {
@@ -788,7 +790,7 @@ ipcMain.handle('lora-meta-write', async (_e, name, meta, preview) => {
 });
 // « Éteindre le PC quand l'entraînement est terminé » (comme l'onglet Train LoRA de Forge) : shutdown /s différé, annulable
 ipcMain.handle('lora-shutdown', async (_e, on, message) => {
-  const args = on ? ['/s', '/t', '120', '/c', String(message || 'Kanevas : entraînement LoRA terminé. Le PC s\'éteint dans 2 minutes (shutdown /a pour annuler).').slice(0, 500)] : ['/a'];
+  const args = on ? ['/s', '/t', '120', '/c', String(message || 'KaneApp : entraînement LoRA terminé. Le PC s\'éteint dans 2 minutes (shutdown /a pour annuler).').slice(0, 500)] : ['/a'];
   return new Promise(res => require('child_process').execFile('shutdown', args, { windowsHide: true }, err => res({ ok: !err || !on, error: err ? String(err.message) : '' })));
 });
 ipcMain.handle('pick-folder', async (_e, title) => {
@@ -859,7 +861,7 @@ function engineDirs() {
 ipcMain.handle('engine-config', () => engineDirs());
 ipcMain.handle('engine-config-save', async (_e, options) => {
   try {
-    if (managedRuntime.read().active) throw new Error('Les moteurs sont gérés par Kane App. Utilisez Migration vers Kane App pour revenir à la configuration précédente.');
+    if (managedRuntime.read().active) throw new Error('Les moteurs sont gérés par KaneApp. Utilisez Migration vers KaneApp pour revenir à la configuration précédente.');
     if (engine.ours && ['ready', 'starting'].includes(engine.state) || await ping('http://127.0.0.1:' + ENGINE_PORT, 800)) throw new Error('Arrêtez le Studio avant de changer son moteur');
     const value = studioRuntime.save(options, engineDirs());
     if (engine.state === 'external') { engine.state = 'off'; engine.url = ''; engineEmit(); }
@@ -881,7 +883,7 @@ async function engineStart(profileId) {
   if (await ping('http://127.0.0.1:' + ENGINE_PORT, 1200)) {
     if (d.managed) {
       try { require('./local-process.cjs').identify({ port: ENGINE_PORT, script: path.join(d.runtime, 'launch.py'), python: d.python }); }
-      catch { engine.state = 'error'; engine.error = 'L’ancien moteur Studio occupe le port. Arrêtez-le avant d’ouvrir la copie Kane App.'; engineEmit(); return engineStatus(); }
+      catch { engine.state = 'error'; engine.error = 'L’ancien moteur Studio occupe le port. Arrêtez-le avant d’ouvrir la copie KaneApp.'; engineEmit(); return engineStatus(); }
     }
     engine.state = 'ready'; engine.url = 'http://127.0.0.1:' + ENGINE_PORT; engine.ours = true; engine.pid = pidOnPort(ENGINE_PORT); engineEmit(); return engineStatus();
   }

@@ -118,7 +118,7 @@
         const L = layout(src.width, src.height, o), R = render(src, L, o, Math.round(o.width));
         if (R.pw * L.cols * R.ph * L.rows > 60e6) { KS.toast('Sortie trop grande : réduisez la largeur', 'err'); return false; }
         const mime = o.file === 'png' ? 'image/png' : 'image/jpeg', ext = o.file === 'png' ? 'png' : 'jpg';
-        const base = d.name.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]/g, '') || 'Kanevas';
+        const base = d.name.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]/g, '') || 'KaneApp';
         const files = [];
         for (let i = 0; i < R.panels.length; i++) {
           const blob = await U.blobFromCanvas(R.panels[i], mime, 0.92);

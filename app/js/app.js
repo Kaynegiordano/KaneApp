@@ -83,7 +83,7 @@
   KS.renderTabs = renderTabs;
   function updateTitle() {
     const d = KS.state.doc;
-    const t = d ? `${d.name}${d.dirty ? ' •' : ''} — Kane App` : 'Kane App';
+    const t = d ? `${d.name}${d.dirty ? ' •' : ''} — KaneApp` : 'KaneApp';
     document.title = t;
     if (KS.native) KS.native.setTitle(t);
     KS.$('#doc-title').textContent = d ? `${d.name} @ ${Math.round(V.zoom * 100)} % (${d.active ? d.active.name : '—'}, RVB/8)${d.dirty ? ' •' : ''}` : '';
@@ -97,7 +97,7 @@
     home.hidden = !!KS.state.doc;
     home.innerHTML = '';
     const inner = h('div.home-inner');
-    inner.appendChild(h('div.home-hero', h('span.brand-mark'), h('div', h('h1', { text: 'Kane App' }), h('p', { text: 'Retouche, peinture, montage : tout est prêt. Glissez une image ici pour commencer.' }))));
+    inner.appendChild(h('div.home-hero', h('span.brand-mark'), h('div', h('h1', { text: 'KaneApp' }), h('p', { text: 'Retouche, peinture, montage : tout est prêt. Glissez une image ici pour commencer.' }))));
     inner.appendChild(h('div.home-actions',
       ui.btn('Nouveau fichier', () => KS.cmd.newDoc(), '.primary.big', 'file-plus'),
       ui.btn('Ouvrir…', () => KS.cmd.open(), '.big', 'folder-open'),
@@ -198,7 +198,9 @@
       KS.prefs.theme = KS.prefs.theme === 'light' ? 'dark' : 'light'; KS.prefs.save(); KS.applyPrefs();
       theme.innerHTML = KS.icon(KS.prefs.theme === 'light' ? 'moon' : 'sun');
     }, '.sm');
-    box.append(
+    const enhance = ui.iconBtn('sparkles', 'Amélioration rapide (Ctrl+Maj+Q) : 20 % de ton, contraste et couleur automatiques, plus un peu de vibrance, de clarté et de netteté', () => KS.cmd.quickEnhance(), '.sm');
+    enhance.classList.add('ws-enhance');
+    box.append(enhance,
       ui.iconBtn('undo', 'Annuler (Ctrl+Z)', () => KS.cmd.undo(), '.sm'), ui.iconBtn('redo', 'Rétablir (Ctrl+Maj+Z)', () => KS.cmd.redo(), '.sm'),
       ui.iconBtn('keyboard', 'Raccourcis clavier (F1)', () => KS.dialogs.shortcuts(), '.sm'), theme,
       ui.iconBtn('settings', 'Préférences (Ctrl+K)', () => KS.dialogs.prefs(), '.sm'));

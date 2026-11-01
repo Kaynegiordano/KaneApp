@@ -9,7 +9,7 @@
   const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', jfif: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', bmp: 'image/bmp', svg: 'image/svg+xml', ico: 'image/x-icon', avif: 'image/avif' };
   io.OPEN_FILTERS = [
     { name: 'Tous les fichiers pris en charge', extensions: ['ksp', 'psd', ...IMG_EXT] },
-    { name: 'Document Kane App', extensions: ['ksp'] }, { name: 'Photoshop', extensions: ['psd'] },
+    { name: 'Document KaneApp', extensions: ['ksp'] }, { name: 'Photoshop', extensions: ['psd'] },
     { name: 'Images', extensions: IMG_EXT }, { name: 'Tous les fichiers', extensions: ['*'] },
   ];
 
@@ -326,7 +326,7 @@
 
   /* ---------------------------------------------------------------- enregistrer */
   io.SAVE_FILTERS = [
-    { name: 'Document Kane App (.ksp)', extensions: ['ksp'] }, { name: 'Photoshop (.psd)', extensions: ['psd'] },
+    { name: 'Document KaneApp (.ksp)', extensions: ['ksp'] }, { name: 'Photoshop (.psd)', extensions: ['psd'] },
     { name: 'PNG', extensions: ['png'] }, { name: 'JPEG', extensions: ['jpg'] }, { name: 'WebP', extensions: ['webp'] },
   ];
   io.exportCanvas = (doc, scale = 1, bg = null) => {

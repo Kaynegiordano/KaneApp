@@ -27,7 +27,7 @@
     else for (const m of KS.menus.defs()) walk(m.items, [m.label]);
     for (const [id, name] of Object.entries(KS.appearance?.labels || {})) {
       const open = KS.ws?.contextMenu?.(id)?.find(it => it.label === 'Ouvrir');
-      if (open) push({ kind: 'space', label: name.replace(/ · Kane App$/, ''), where: 'Espace', icon: 'grid', run: open.action });
+      if (open) push({ kind: 'space', label: name.replace(/ · KaneApp$/, ''), where: 'Espace', icon: 'grid', run: open.action });
     }
     for (const t of T.list) if (!t.hidden && t.name) push({ kind: 'tool', label: t.name, where: 'Outil', kb: t.shortcut, icon: t.icon, run: async () => { await toEdition(); T.select(t.id); } });
     for (const r of KS.prefs.recent || []) push({ kind: 'file', label: r.name, where: 'Fichier récent · ' + r.path, icon: 'image', run: () => KS.io.openPath(r.path) });
