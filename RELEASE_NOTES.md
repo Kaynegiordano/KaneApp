@@ -1,3 +1,11 @@
+# 1.18.0 — Kane Detailer
+
+- **Studio IA : volet Kane Detailer**, à côté d'ADetailer, pensé pour l'illustration et la peinture numérique. Après la génération, chaque partie choisie est détectée puis repeinte de près : vêtements, cheveux, mains, visage, yeux. Le corps entier, les pieds et les bijoux sont disponibles en option.
+- Chaque partie a sa propre recette. L'invite ne garde que ce qui décrit la partie (couleur des yeux, des cheveux…), avec le style et les LoRA. Les deux yeux sont repeints ensemble, et le visage n'est pas repeint par la passe des cheveux. Le résultat garde la teinte et la lumière d'origine.
+- Préréglages Portrait, Corps entier et Tout. Réglages : intensité, part de couleurs d'origine gardée, résolution de travail.
+- **Détailler (Kane Detailer)** : bouton ou clic droit sur un résultat déjà fait.
+- Il faut que Kane OS soit à jour (extension dans le moteur du Studio, nouveaux détecteurs dans models/adetailer).
+
 # 1.17.0 — KaneApp, copie au clic droit, Amélioration rapide
 
 - L'application s'appelle **KaneApp** partout : fenêtre, menus, raccourcis, liste des applications de Windows, Kane OS. Vos préférences, modèles et projets ne bougent pas.

@@ -395,6 +395,15 @@ ipcMain.handle('forge-img2img', forgeHandler(async (base, payload, init, mask) =
   const r = await forgeCall(base, '/sdapi/v1/img2img', { ...payload, init_images: [b64(init)], mask: mask ? b64(mask) : undefined });
   return { images: ((r && r.images) || []).map(unb64), info: r && r.info };
 }));
+// Kane Detailer sur une image existante : chaque partie choisie est repeinte de près, couleurs d'origine gardées
+ipcMain.handle('forge-kane-detail', forgeHandler(async (base, payload, png) => {
+  const r = await forgeCall(base, '/kane-detailer/v1/detail', { ...payload, image: b64(png) }, 30 * 60000);
+  return { image: unb64(r.image), info: r.info, seed: r.seed };
+}));
+ipcMain.handle('forge-kane-detect', forgeHandler(async (base, payload, png) => {
+  const r = await forgeCall(base, '/kane-detailer/v1/detect', { ...payload, image: b64(png) }, 120000);
+  return { regions: r.regions, preview: unb64(r.preview) };
+}));
 ipcMain.handle('forge-upscale', forgeHandler(async (base, payload, png) => {
   const r = await forgeCall(base, '/sdapi/v1/extra-single-image', { ...payload, image: b64(png) });
   if (!r || !r.image) throw new Error('Forge n\'a renvoyé aucune image');
@@ -458,6 +467,8 @@ const catalogHandler = forgeHandler(async base => {
   try { if (flags && flags.data_dir) presets = JSON.parse(fs.readFileSync(path.join(flags.data_dir, 'style_presets.json'), 'utf8')); } catch { /* aucun */ }
   let adModels = [];
   try { const r = await forgeCall(base, '/adetailer/v1/ad_model', null, 8000); adModels = (r && r.ad_model) || []; } catch { /* ADetailer absent */ }
+  let kdInfo = null;   // Kane Detailer (extension du Forge du Studio) : parties et détecteurs présents
+  try { kdInfo = await forgeCall(base, '/kane-detailer/v1/info', null, 8000); } catch { /* extension absente */ }
   let upscalers = [];
   try { upscalers = ((await forgeCall(base, '/sdapi/v1/upscalers', null, 8000)) || []).map(u => u.name).filter(n => n && n !== 'None'); } catch { /* rien */ }
   const thumb = file => {
@@ -492,7 +503,7 @@ const catalogHandler = forgeHandler(async base => {
     : { data: flags.data_dir || '', models: flags.model_ref || '', lora: flags.lora_dir || '' };
   if (dirs.data) { forgeDirs = dirs; try { fs.writeFileSync(path.join(app.getPath('userData'), 'forge-dirs.json'), JSON.stringify(dirs)); } catch { /* rien */ } }
   return {
-    adModels, upscalers, dirs,
+    adModels, kdInfo, upscalers, dirs,
     models: (models || []).map(m => ({ title: m.title, name: m.model_name, file: m.filename, preview: thumb(m.filename) })),
     styles: (styles || []).map(x => ({ name: x.name, prompt: x.prompt || '', negative: x.negative_prompt || '' })),
     scripts, latent: (latent || []).map(x => x.name).filter(Boolean), defaults,

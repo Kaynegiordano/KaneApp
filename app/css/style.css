@@ -838,6 +838,8 @@ body.fx-i2i .fx-left { overflow: auto; padding-right: 4px; }
 .fx-acc-b { display: flex; flex-direction: column; gap: 10px; padding: 2px 12px 12px; }
 .fx-acc-b .fx-acc { background: var(--panel); }
 .fx-check { display: flex; align-items: center; gap: 7px; font-size: 12.5px; cursor: pointer; }
+.kd-parts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; margin: 8px 0; }
+.kd-parts .fx-check:has(input:disabled) { opacity: .45; cursor: default; }
 .fx-radio { display: flex; flex-wrap: wrap; gap: 6px; }
 .fx-ropt { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--field); cursor: pointer; font-size: 12.5px; }
 .fx-ropt input { pointer-events: none; margin: 0; }

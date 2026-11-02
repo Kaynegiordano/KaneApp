@@ -34,7 +34,11 @@ window.ksNative = {
   forgeCatalog: async () => ({ ok: true, models: [{ title: 'Studio-model', name: 'Studio-model' }],
     loras: [{ name: 'test', alias: 'Illustration', weight: 0.7, trigger: 'painted', negative: 'bad lines', rel: 'Art', mtime: 1 }],
     modules: [], current: { model: 'Studio-model', modules: [] },
-    dtype: 'Automatic', samplers: ['Euler'], schedulers: ['Automatic'], scripts: [], styles: [], presets: {}, upscalers: ['Lanczos'] }),
+    dtype: 'Automatic', samplers: ['Euler'], schedulers: ['Automatic'], scripts: [], styles: [], presets: {}, upscalers: ['Lanczos'],
+    kdInfo: { version: 1, parts: [{ key: 'cheveux', label: 'Cheveux', denoise: 0.3, model: 'anzhc_headhair_seg_y8n.pt' }, { key: 'pieds', label: 'Pieds', denoise: 0.38, model: null },
+      { key: 'visage', label: 'Visage', denoise: 0.35, model: 'anzhc_face_seg_640_v4_y11n.pt' }, { key: 'yeux', label: 'Yeux', denoise: 0.3, model: 'anzhc_eyes_seg_hd.pt' }],
+      presets: { Portrait: ['cheveux', 'visage', 'yeux'], 'Corps entier': ['cheveux', 'visage', 'yeux'] } } }),
+  forgeKaneDetail: async (url, payload, png) => { (window.kdCalls = window.kdCalls || []).push(payload); return { ok: true, image: png, info: 'Kane Detailer : Visage x1 (0.35)' }; },
   forgeImg2img: async (url, payload, init, mask) => {
     window.calls.push({ url, payload, init, mask });
     if (window.holdGeneration) await new Promise(resolve => { window.releaseGeneration = resolve; });
@@ -155,6 +159,22 @@ async function scenario() {
     diff /= W * H * 3;
     assert(diff > 2 && maxd < 80, 'Amélioration rapide : visible mais modérée (écart moyen ' + diff.toFixed(1) + ', max ' + maxd + ')');
     assert(typeof KS.cmd.quickEnhance === 'function' && !!document.querySelector('#workspace-actions .ws-enhance'), 'Bouton Amélioration rapide présent');
+    // Kane Detailer : action « Détailler » sur le résultat, invite reprise de l'image, parties du volet
+    const shown = document.querySelectorAll('.fx-view .iv-media').length;
+    const vp2 = document.querySelector('.fx-view .iv-viewport'), r2 = vp2.getBoundingClientRect();
+    vp2.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r2.left + 20, clientY: r2.top + 20 }));
+    const det = [...document.querySelectorAll('.menu *')].find(x => x.children.length < 3 && /^Détailler \(Kane Detailer\)/.test(x.textContent.trim()));
+    assert(det, 'Le clic droit propose Détailler (Kane Detailer)');
+    det.click();
+    await wait(() => (window.kdCalls || []).length === 1);
+    const kd = window.kdCalls[0];
+    assert(kd.parts.join() === 'vetements,cheveux,mains,visage,yeux' && kd.keep === 0.8 && kd.resolution === 1024 && kd.prompt && !/Steps:/.test(kd.prompt), 'Détailler envoie les parties du volet et l’invite de l’image : ' + JSON.stringify(kd).slice(0, 200));
+    await wait(() => /Kane Detailer/.test(document.querySelector('.fx-outinfo')?.textContent || ''));
+    assert(shown >= 1, 'Le résultat détaillé s’affiche');
+  }
+  {
+    const titles = [...document.querySelectorAll('.fx-acc-t')].map(x => x.textContent);
+    assert(titles.includes('Kane Detailer'), 'Volet Kane Detailer présent : ' + titles.join(', '));
   }
   await click('⛶', document.querySelector('.fx-source'));
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));

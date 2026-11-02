@@ -26,6 +26,7 @@
     prompt: '', negative_prompt: '', styles: [], sampler_name: 'SEEDS 3', scheduler: 'Beta57', steps: 22, width: 1024, height: 1024, n_iter: 1, batch_size: 1,
     cfg_scale: 4, distilled_cfg_scale: 3, seed: -1, seedExtra: false, subseed: -1, subseed_strength: 0, seed_resize_from_w: 0, seed_resize_from_h: 0,
     ad: { enabled: false, skip: false, tab: 0, units: [{ ...AD_UNIT(), ad_model: 'face_yolov8n.pt' }, AD_UNIT(), AD_UNIT(), AD_UNIT()] },
+    kd: { enabled: false, parts: ['vetements', 'cheveux', 'mains', 'visage', 'yeux'], strength: 1, keep: 0.8, resolution: 1024 },
     noom: { unet: false, vae: false }, script: 'None', scriptArgs: {}, open: {},
   });
   const DEF = {
@@ -885,6 +886,31 @@
       return out;
     }, { on: [st.ad, 'enabled'] });
   }
+  // Kane Detailer (extension du Forge du Studio) : chaque partie repeinte de près, couleurs d'origine gardées
+  function kdAcc(st) {
+    return acc('Kane Detailer', st, 'kd', () => {
+      const info = cat && cat.kdInfo;
+      if (!info) return [h('div.note', { text: 'Kane Detailer n’est pas dans ce moteur : mettez Kane OS à jour puis redémarrez le moteur du Studio.' })];
+      const presets = Object.entries(info.presets || {});
+      const same = list => list.length === st.kd.parts.length && list.every(k => st.kd.parts.includes(k));
+      const bar = h('div.fx-tabs.fx-subtabs');
+      for (const [name, list] of presets) {
+        const b = h('button' + (same(list) ? '.on' : ''), { text: name });
+        b.addEventListener('click', () => { st.kd.parts = list.slice(); save(); rp(); }); bar.appendChild(b);
+      }
+      const grid = h('div.kd-parts');
+      for (const part of info.parts) {
+        const i = h('input', { type: 'checkbox', checked: st.kd.parts.includes(part.key), disabled: !part.model });
+        i.addEventListener('change', () => { const set = new Set(st.kd.parts); i.checked ? set.add(part.key) : set.delete(part.key); st.kd.parts = info.parts.map(x => x.key).filter(k => set.has(k)); save(); rp(); });
+        grid.appendChild(h('label.fx-check', { title: part.model ? 'Détecteur : ' + part.model + ' · force ' + part.denoise : 'Détecteur absent du dossier models/adetailer' }, i, h('span', { text: part.label })));
+      }
+      return [bar, grid,
+        row2(slider('Intensité', st.kd, 'strength', 0.3, 1.8, 0.05, 'Multiplie la force de repeint de chaque partie (1 = recette de base)'),
+          slider('Garder les couleurs d’origine', st.kd, 'keep', 0, 1, 0.05, '1 : seul le détail est repris, teintes et lumière inchangées · 0 : le repeint tel quel')),
+        slider('Résolution de travail', st.kd, 'resolution', 768, 1536, 64, 'Chaque zone est repeinte à cette taille (1024 pour ANIMA), au plus 4 fois agrandie'),
+        h('div.note', { text: 'Passe du plus large au plus fin (vêtements → cheveux → mains → visage → yeux). Clic droit sur un résultat : « Détailler » sur une image déjà faite.' })];
+    }, { on: [st.kd, 'enabled'], tip: 'Détaille chaque partie du corps après la génération (détecteurs pour l’illustration)' });
+  }
   const noomAcc = st => acc('Never OOM Integrated', st, 'noom', () => [
     check('Enabled for UNet (always offload)', st.noom, 'unet', 'Décharge le modèle à chaque passe : plus lent, mais pas de manque de mémoire'),
     check('Enabled for VAE (always tiled)', st.noom, 'vae', 'VAE par tuiles : indispensable pour les très grandes images')], { active: st.noom.unet || st.noom.vae });
@@ -950,7 +976,7 @@
         h('div.fx-col', slider('Batch Count', st, 'n_iter', 1, 128, 1, 'Nombre de lots à la suite'), slider('Batch Size', st, 'batch_size', 1, 8, 1, 'Images par lot (en même temps)'))),
       formatRow(st),
       row2(slider('Shift', st, 'distilled_cfg_scale', 1, 24, 0.5, 'Shift des modèles à flux (anima) : Distilled CFG Scale de l\'API'), slider('CFG Scale', st, 'cfg_scale', 1, 24, 0.5)),
-      ...seedRows(st, 't2i'), adAcc(st, 't2i'), noomAcc(st), ...scriptBlock(st, 't2i'));
+      ...seedRows(st, 't2i'), adAcc(st, 't2i'), kdAcc(st), noomAcc(st), ...scriptBlock(st, 't2i'));
   }
   const INPAINT_MODES = ['inpaint', 'inpaint_sketch', 'inpaint_upload'];
   // Taille de génération la plus fidèle aux proportions de la source (multiples de 8, côté long <= 2048) :
@@ -1004,7 +1030,7 @@
       st.sizeTab === 'to' ? formatRow(st) : null,
       row2(slider('Shift', st, 'distilled_cfg_scale', 0, 24, 0.5), slider('CFG Scale', st, 'cfg_scale', 1, 24, 0.5)),
       slider('Denoising Strength', st, 'denoising_strength', 0, 1, 0.01, 'Écart à l\'image de départ : bas = proche, haut = très différent'),
-      ...seedRows(st, 'i2i'), adAcc(st, 'i2i'),
+      ...seedRows(st, 'i2i'), adAcc(st, 'i2i'), kdAcc(st),
       acc('MultiDiffusion Integrated', st, 'md', () => [select('Method', ['MultiDiffusion', 'Mixture of Diffusers'], st.md, 'method'),
         row2(slider('Tile Width', st.md, 'tw', 256, 2048, 64), slider('Tile Height', st.md, 'th', 256, 2048, 64)),
         row2(slider('Tile Overlap', st.md, 'overlap', 0, 1024, 16), slider('Tile Batch Size', st.md, 'batch', 1, 8, 1))], { on: [st.md, 'enabled'] }),
@@ -1352,6 +1378,31 @@
     applyInfoTo(k, it.info, { size: k === 't2i' }); render();
     KS.toast('Paramètres repris', 'ok', 1500);
   }
+  // « Détailler » : Kane Detailer sur un résultat déjà fait (invite et réglages repris de l'image quand ils y sont)
+  let detailing = false;
+  async function detailItem(key, it) {
+    if (!it) return;
+    if (!N || !N.forgeKaneDetail || !(cat && cat.kdInfo)) return KS.toast('Kane Detailer n’est pas dans ce moteur : mettez Kane OS à jour puis redémarrez le moteur du Studio.', 'err', 5000);
+    if (BUSY || PREPARING || detailing) return KS.toast('Attendez la fin de la génération en cours.', 'info', 2500);
+    const st = FX[key === 'i2i' ? 'i2i' : 't2i'];
+    const parts = st.kd.parts.length ? st.kd.parts : (cat.kdInfo.presets['Corps entier'] || []);
+    const info = it.info || '', neg = info.indexOf('\nNegative prompt:'), steps = info.indexOf('\nSteps:');
+    const prompt = info ? info.slice(0, neg >= 0 ? neg : steps >= 0 ? steps : info.length).trim() : await english(st.prompt);
+    const negative = info && neg >= 0 ? info.slice(neg + 17, steps > neg ? steps : info.length).trim() : await english(st.negative_prompt);
+    const payload = { parts, strength: +st.kd.strength, keep: +st.kd.keep, resolution: +st.kd.resolution, prompt, negative_prompt: negative, seed: -1,
+      sampler_name: st.sampler_name, scheduler: st.scheduler, steps: +st.steps, cfg_scale: +st.cfg_scale, distilled_cfg_scale: +st.distilled_cfg_scale };
+    detailing = true;
+    KS.toast('Kane Detailer : ' + parts.length + ' partie(s) en cours…', 'info', 4000);
+    try {
+      const r = await N.forgeKaneDetail(url(), payload, it.bytes || await pngBytes(it.canvas));
+      if (!r.ok) throw new Error(r.error);
+      const canvas = await fromPng(r.image);
+      const item = { canvas, bytes: r.image, url: URL.createObjectURL(new Blob([r.image], { type: 'image/png' })), info: (info ? info + '\n' : '') + r.info, kind: it.kind || 'txt2img', from: 'Kane Detailer' };
+      const o = OUT[key] || OUT.t2i; o.items.unshift(item); o.sel = 0; pushGallery([item]); renderOut(key in OUT ? key : 't2i');
+      KS.toast(r.info, 'ok', 4000);
+    } catch (e) { KS.toast('Kane Detailer : ' + e.message, 'err', 6000); }
+    finally { detailing = false; }
+  }
   function outButtons(key, it) {
     const sub = key === 'i2i' ? 'img2img-images' : key === 'ex' ? 'extras-images' : 'txt2img-images';
     const items = OUT[key].items;
@@ -1362,7 +1413,8 @@
         action('Ouvrir le résultat dans Retouche', () => sendTo('edit', it), { primary: true, tip: 'Créer un nouveau document avec ce résultat' }),
         action('Ajouter en calque', () => addAsLayer(it), { enabled: !!it && !!D(), tip: D() ? 'Ajouter au document « ' + D().name + ' »' : 'Ouvrez d’abord un document' })),
       group('transform', 'Transformer',
-        action('Envoyer vers Img2Img', () => sendTo('img2img', it)), action('Envoyer vers Inpaint', () => sendTo('inpaint', it))),
+        action('Envoyer vers Img2Img', () => sendTo('img2img', it)), action('Envoyer vers Inpaint', () => sendTo('inpaint', it)),
+        action('Détailler (Kane Detailer)', () => detailItem(key, it), { tip: 'Repeint de près chaque partie choisie dans le volet Kane Detailer, couleurs d’origine gardées' })),
       key !== 'ex' ? group('upscale', 'Agrandir',
         action('Agrandir dans Extras', () => sendTo('extras', it)),
         key === 't2i' ? action('Agrandir avec Hires', () => upscaleHires(it), { tip: 'Agrandir cette image avec le hires fix (réglages de « Hires. fix »)' }) : action('Agrandir avec Hires', () => C.sendToStudioItem(it))) : null,
@@ -1402,7 +1454,8 @@
       { label: 'Ouvrir dans Retouche', icon: 'file-plus', action: () => sendTo('edit', it) },
       { label: 'Ajouter en calque', icon: 'layers', action: () => addAsLayer(it), disabled: !D() },
       { label: 'Envoyer vers Img2Img', icon: 'image', action: () => sendTo('img2img', it) },
-      { label: 'Envoyer vers Inpaint', icon: 'brush', action: () => sendTo('inpaint', it) }] }); }
+      { label: 'Envoyer vers Inpaint', icon: 'brush', action: () => sendTo('inpaint', it) },
+      { label: 'Détailler (Kane Detailer)', icon: 'sparkles', action: () => detailItem(key, it) }] }); }
     else view.append(h('div.fx-ph', key === 'i2i' ? { text: 'Les résultats apparaîtront ici' } : { html: KS.icon('image') }));
     const thumbs = o.items.length > 1 ? h('div.fx-thumbs', ...o.items.map((x, i) => { const t = h('img' + (i === o.sel ? '.on' : ''), { src: x.url, alt: '', title: x.from ? 'Venue de l\'Édition : ' + x.from : '' }); t.addEventListener('click', () => { o.sel = i; renderOut(key); }); return t; })) : null;
     fillEl(box, key === 'i2i' ? h('div.fx-h', { text: 'Résultat' }) : null, view, thumbs, outButtons(key, it), it ? h('div.fx-outinfo', { text: (it.from ? 'Venue de l\'Édition : ' + it.from + '\n\n' : '') + (it.info || '(sans paramètres de génération)') + (o.time && !it.from ? `\n\nTime taken: ${o.time}` : '') }) : null);
@@ -1489,6 +1542,7 @@
       for (const u of st.ad.units) if (u.ad_tab_enable && u.ad_model && u.ad_model !== 'None') units.push({ ...u, ad_prompt: await english(u.ad_prompt), ad_negative_prompt: await english(u.ad_negative_prompt) });
       if (units.length) p.alwayson_scripts.ADetailer = { args: [true, k === 'i2i' && !!st.ad.skip, ...units] };
     }
+    if (st.kd.enabled && st.kd.parts.length && cat && cat.kdInfo) p.alwayson_scripts['Kane Detailer'] = { args: [{ enabled: true, parts: st.kd.parts, strength: +st.kd.strength, keep: +st.kd.keep, resolution: +st.kd.resolution }] };
     if (st.noom.unet || st.noom.vae) p.alwayson_scripts['Never OOM Integrated'] = { args: [!!st.noom.unet, !!st.noom.vae] };
     if (k === 'i2i') {
       if (st.md.enabled) p.alwayson_scripts['MultiDiffusion Integrated'] = { args: [true, st.md.method, +st.md.tw, +st.md.th, +st.md.overlap, +st.md.batch] };
