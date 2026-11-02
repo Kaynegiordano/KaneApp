@@ -342,7 +342,8 @@
       x.setTransform(k, 0, 0, k, -R.x * k, -R.y * k);
       return { t, x };
     }
-    _level(ctx, items, kids, R = this.rect) {
+    // under : il y a déjà des calques dessous dans ctx (sinon un mode de fusion agit sur le calque lui-même)
+    _level(ctx, items, kids, R = this.rect, under = false) {
       for (let i = 0; i < items.length; i++) {
         const L = items[i];
         if (L.clip && i > 0) continue;               // dessiné avec sa base
@@ -350,7 +351,9 @@
         for (let j = i + 1; j < items.length && items[j].clip; j++) clipped.push(items[j]);
         if (!L.visible) continue;
         if (L.kind === 'adjust') { this.applyAdjustLayer(ctx, L, R); continue; }
-        if (L.kind === 'group') { this._group(ctx, L, kids.get(L.id) || [], kids, R); continue; }
+        const alone = !under;
+        under = true;   // décidé sur la structure, pas sur la zone R : même rendu d'une tuile à l'autre
+        if (L.kind === 'group') { this._group(ctx, L, kids.get(L.id) || [], kids, R, !alone); continue; }
         // en aperçu basse résolution, chaque calque fournit sa copie réduite (mise en cache)
         const k1 = this._k || 1, imgOf = Lx => k1 < 1 ? Lx.imageScaled(k1) : Lx.image();
         let img = imgOf(L);
@@ -378,8 +381,10 @@
           }
           img = { canvas: t, x: R.x, y: R.y, w: R.w, h: R.h };
         }
+        const self = alone && KS.blendOp(L.blend) !== 'source-over';
+        if (self) img = selfBlend(L, img, !vis.length && !L.override);
         ctx.globalAlpha = L.opacity;
-        ctx.globalCompositeOperation = KS.blendOp(L.blend);
+        ctx.globalCompositeOperation = self ? 'source-over' : KS.blendOp(L.blend);
         put(ctx, img);
         ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = 'source-over';
@@ -395,14 +400,14 @@
       mx.drawImage(m.alpha, m.x, m.y);
       return mk;
     }
-    _group(ctx, G, children, kids, R = this.rect) {
+    _group(ctx, G, children, kids, R = this.rect, under = false) {
       const mask = this._groupMask(G, R);
       if (G.blend === 'pass') {
-        if (G.opacity >= 1 && !mask) { this._level(ctx, children, kids, R); return; }
+        if (G.opacity >= 1 && !mask) { this._level(ctx, children, kids, R, under); return; }
         // passage : composer sur une copie du fond, puis fondre selon opacité et masque
         const { t, x: tx } = this._scratch(R), p = this._pixelRect(ctx, R);
         if (p) tx.drawImage(ctx.canvas, p.x, p.y, p.w, p.h, p.dx, p.dy, p.dw, p.dh);
-        this._level(tx, children, kids, R);
+        this._level(tx, children, kids, R, under);
         if (mask) { tx.globalCompositeOperation = 'destination-in'; tx.drawImage(mask, R.x, R.y, R.w, R.h); }
         ctx.globalAlpha = G.opacity; ctx.drawImage(t, R.x, R.y, R.w, R.h); ctx.globalAlpha = 1;
         return;
@@ -502,6 +507,37 @@
 
   // Dessine une image de calque { canvas, x, y, w?, h? } (w, h : taille en coordonnées document)
   function put(ctx, im) { ctx.drawImage(im.canvas, im.x, im.y, im.w || im.canvas.width, im.h || im.canvas.height); }
+
+  // Mode de fusion d'un calque sans rien dessous : il se fond avec lui-même (ce que donnerait une copie dessous),
+  // ou, pour les modes sans effet sur une copie identique, avec une variante de lui-même :
+  // Obscurcir/Éclaircir/Différence/Exclusion/Teinte avec sa version floutée (ombres ou lumières qui s'étalent,
+  // contours, couleurs harmonisées), Saturation/Couleur avec sa version plus saturée, Luminosité plus contrastée.
+  const SELF_TOP = {
+    darken: 'blur', lighten: 'blur', difference: 'blur', exclusion: 'blur', hue: 'blur',
+    saturation: 'saturate(1.6)', color: 'saturate(1.35)', luminosity: 'contrast(1.25)',
+  };
+  function selfBlend(L, img, cacheable) {
+    const op = KS.blendOp(L.blend), k = img.w ? img.canvas.width / img.w : 1;
+    if (cacheable && L._self && L._self.src === img.canvas && L._self.v === L.version && L._self.op === op) return L._self.r;
+    const W = img.canvas.width, H = img.canvas.height;
+    const c = U.canvas(W, H), x = c.getContext('2d');
+    x.drawImage(img.canvas, 0, 0);
+    let top = img.canvas, f = SELF_TOP[L.blend];
+    if (f) {
+      const t = U.canvas(W, H), tx = t.getContext('2d');
+      if (f === 'blur') f = `blur(${Math.max(1.5, 0.012 * Math.min(W, H)).toFixed(1)}px)`;
+      tx.filter = f; tx.drawImage(img.canvas, 0, 0); tx.filter = 'none';
+      // bords du flou : on garde l'image d'origine là où le flou devient transparent
+      tx.globalCompositeOperation = 'destination-over'; tx.drawImage(img.canvas, 0, 0);
+      tx.globalCompositeOperation = 'destination-in'; tx.drawImage(img.canvas, 0, 0);
+      top = t;
+    }
+    x.globalCompositeOperation = op; x.drawImage(top, 0, 0);
+    x.globalCompositeOperation = 'destination-in'; x.drawImage(img.canvas, 0, 0);   // forme du calque gardée
+    const r = { canvas: c, x: img.x, y: img.y, w: img.w || W / k, h: img.h || H / k };
+    if (cacheable) L._self = { src: img.canvas, v: L.version, op, r };
+    return r;
+  }
   Doc.TILE = 512;                  // côté des tuiles de composition (px)
   Doc.SYNC_MS = 35;                // au-delà (estimé), l'affichage passe par l'aperçu basse résolution
   Doc.PROXY_PX = 1e6;              // taille de l'aperçu (pixels)

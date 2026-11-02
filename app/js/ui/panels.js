@@ -254,7 +254,6 @@
       el.appendChild(sec('Apparence',
         h('div.form-col',
           KS.blendSelect(L.blend, v => KS.Hist.structure(doc, 'Mode de fusion', () => { L.blend = v; }, 'layers')),
-          KS.blendNote(doc, L),
           ui.scrub({ label: 'Opacité', value: Math.round(L.opacity * 100), min: 0, max: 100, unit: '%', onChange: v => KS.Hist.structure(doc, 'Opacité', () => { L.opacity = v / 100; }, 'layers') }),
           ui.btn('Style de calque…', () => KS.cmd.layerStyle(), '.small', 'fx'))));
       if (L.mask) {

@@ -1,3 +1,13 @@
+# 1.21.0 — Retouche : les modes de fusion agissent sur un calque seul
+
+- Sur un calque sans rien dessous (une image IA seule, par exemple), le mode de fusion agit maintenant **directement sur l'image**, sans copie de calque :
+  - Produit assombrit, Superposition éclaircit, Incrustation et les Lumières renforcent le contraste ;
+  - Obscurcir étale les ombres, Éclaircir donne un halo lumineux ;
+  - Saturation et Couleur ravivent les couleurs, Luminosité renforce le contraste sans toucher aux teintes, Teinte harmonise les couleurs ;
+  - Différence et Exclusion font ressortir les contours.
+- L'opacité du calque dose l'effet. Dès qu'un calque est placé dessous, le mode retrouve son fonctionnement habituel.
+- L'indication et le bouton de copie de la 1.20.1 sont retirés.
+
 # 1.20.1 — Retouche : modes de fusion sur un calque seul
 
 - Un mode de fusion (Obscurcir, Produit, Incrustation…) mélange le calque avec ce qui est **en dessous**. Sur un calque seul, il n'y a rien à mélanger, donc l'image ne change pas (comme dans Photoshop). KaneApp l'indique maintenant sous le menu du mode, dans Propriétés et dans Calques.

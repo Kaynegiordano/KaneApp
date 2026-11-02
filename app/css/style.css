@@ -845,9 +845,6 @@ body.fx-i2i .fx-left { overflow: auto; padding-right: 4px; }
 .kd-row .fx-slider { margin: 0; }
 .kd-row .fx-sh { justify-content: flex-end; }
 .kd-reset { background: none; border: 0; color: var(--fx-accent); cursor: pointer; font-size: 14px; padding: 0; }
-.blend-note { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 2px; padding: 7px 9px; border-radius: 7px; background: color-mix(in srgb, var(--accent, #2f6fdb) 12%, transparent); font-size: 12px; line-height: 1.35; }
-.blend-note-slot:empty { display: none; }
-.blend-note-slot { padding: 0 8px; }
 .kd-help { font-size: 12px; opacity: .8; margin: 6px 0 2px; line-height: 1.4; }
 .fx-radio { display: flex; flex-wrap: wrap; gap: 6px; }
 .fx-ropt { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--field); cursor: pointer; font-size: 12.5px; }

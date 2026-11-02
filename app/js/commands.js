@@ -390,34 +390,6 @@
     out.forEach((c, i) => { const p = src[i].parent; c.parent = map.has(p) ? map.get(p).id : (p ?? null); });
     return out;
   };
-  // Mode de fusion sans rien dessous : un mode melange le calque avec ce qui est SOUS lui ; seul (ou sur la transparence),
-  // « Obscurcir », « Produit »... ne changent rien. blendAlone le detecte ; duplicateWithBlend fait le geste habituel :
-  // copie au-dessus avec le mode choisi, original remis en Normal.
-  C.blendAlone = (d, L) => {
-    if (!d || !L || L.kind === 'group') return false;
-    const i = d.layers.indexOf(L);
-    return !d.layers.slice(0, i).some(o => o.kind !== 'group' && d.shown(o) && !d.isDescendant(L, o));
-  };
-  C.duplicateWithBlend = withDoc(d => {
-    const L = d.active; if (!L || L.kind === 'group') return;
-    const mode = L.blend;
-    KS.Hist.structure(d, 'Dupliquer avec le mode de fusion', () => {
-      const blk = C.cloneBlock(d, L), top = blk[blk.length - 1];
-      d.layers.splice(d.layers.indexOf(L) + 1, 0, ...blk);
-      L.blend = 'normal'; top.blend = mode;
-      d.activeId = top.id; d.selectedIds = new Set([top.id]); d.changed();
-    }, 'duplicate');
-  });
-  // modes qui changent l'image meme sur une copie identique d'elle-meme (Obscurcir, Eclaircir, Teinte... ne changent rien)
-  const SELF_BLEND = new Set(['multiply', 'color-burn', 'screen', 'color-dodge', 'lighter', 'overlay', 'soft-light', 'hard-light', 'difference', 'exclusion']);
-  KS.blendNote = (d, L) => {
-    if (!L || !L.blend || L.blend === 'normal' || L.blend === 'pass' || !C.blendAlone(d, L)) return null;
-    const self = SELF_BLEND.has(L.blend);
-    return KS.h('div.blend-note',
-      KS.h('span', { text: 'Rien sous ce calque : un mode de fusion mélange le calque avec ce qui est en dessous, donc l’image ne change pas. '
-        + (self ? 'Pour l’effet sur l’image elle-même, appliquez le mode à une copie.' : 'Ce mode ne change rien non plus sur une copie identique : ajoutez dessous une autre image, une texture ou une couleur.') }),
-      self ? KS.ui.btn('Dupliquer et appliquer le mode à la copie', () => C.duplicateWithBlend(), '.small', 'duplicate') : null);
-  };
   C.duplicateLayer = withDoc(d => {
     const list = d.selected; if (!list.length) return;
     KS.Hist.structure(d, list.length > 1 ? 'Dupliquer les calques' : 'Dupliquer le calque', () => {
