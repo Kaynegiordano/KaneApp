@@ -93,6 +93,7 @@ contextBridge.exposeInMainWorld('ksNative', {
   forgeUpscale: (base, payload, png) => ipcRenderer.invoke('forge-upscale', base, payload, png),
   forgeKaneDetail: (base, payload, png) => ipcRenderer.invoke('forge-kane-detail', base, payload, png),
   forgeKaneDetect: (base, payload, png) => ipcRenderer.invoke('forge-kane-detect', base, payload, png),
+  forgeKaneZones: (base, seed) => ipcRenderer.invoke('forge-kane-zones', base, seed),
   forgeTxt2img: (base, payload, firstpass) => ipcRenderer.invoke('forge-txt2img', base, payload, firstpass),
   forgeSetOptions: (base, o) => ipcRenderer.invoke('forge-set-options', base, o),
   forgeMemory: base => ipcRenderer.invoke('forge-memory', base),

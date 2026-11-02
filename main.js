@@ -398,7 +398,12 @@ ipcMain.handle('forge-img2img', forgeHandler(async (base, payload, init, mask) =
 // Kane Detailer sur une image existante : chaque partie choisie est repeinte de près, couleurs d'origine gardées
 ipcMain.handle('forge-kane-detail', forgeHandler(async (base, payload, png) => {
   const r = await forgeCall(base, '/kane-detailer/v1/detail', { ...payload, image: b64(png) }, 30 * 60000);
-  return { image: unb64(r.image), info: r.info, seed: r.seed };
+  return { image: unb64(r.image), info: r.info, seed: r.seed, zones: r.zones ? unb64(r.zones) : null };
+}));
+// zones vraiment repeintes lors d'une génération (gardées par l'extension, par graine)
+ipcMain.handle('forge-kane-zones', forgeHandler(async (base, seed) => {
+  const r = await forgeCall(base, '/kane-detailer/v1/zones/' + encodeURIComponent(String(seed)), null, 20000);
+  return { zones: unb64(r.zones) };
 }));
 ipcMain.handle('forge-kane-detect', forgeHandler(async (base, payload, png) => {
   const r = await forgeCall(base, '/kane-detailer/v1/detect', { ...payload, image: b64(png) }, 120000);

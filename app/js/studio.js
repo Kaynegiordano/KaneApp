@@ -26,7 +26,7 @@
     prompt: '', negative_prompt: '', styles: [], sampler_name: 'SEEDS 3', scheduler: 'Beta57', steps: 22, width: 1024, height: 1024, n_iter: 1, batch_size: 1,
     cfg_scale: 4, distilled_cfg_scale: 3, seed: -1, seedExtra: false, subseed: -1, subseed_strength: 0, seed_resize_from_w: 0, seed_resize_from_h: 0,
     ad: { enabled: false, skip: false, tab: 0, units: [{ ...AD_UNIT(), ad_model: 'face_yolov8n.pt' }, AD_UNIT(), AD_UNIT(), AD_UNIT()] },
-    kd: { enabled: false, skip: false, parts: ['vetements', 'cheveux', 'mains', 'visage', 'yeux'], forces: {}, keep: 0.8, resolution: 1024 },
+    kd: { enabled: false, skip: false, parts: ['vetements', 'poitrine', 'cheveux', 'mains', 'visage', 'yeux'], forces: {}, keep: 0.8, resolution: 1024, detail: 0, upscale: 1, showZones: true },
     noom: { unet: false, vae: false }, script: 'None', scriptArgs: {}, open: {},
   });
   const DEF = {
@@ -919,8 +919,11 @@
           h('label.fx-check', i, h('span', { text: part.label })), sl, reset));
       }
       out.push(h('div.kd-help', { text: 'Force = part de la zone qui est redessinée. ' + (info.force_help || '') }), rows,
+        row2(slider('Détail en plus', st.kd, 'detail', 0, 1, 0.05, 'Ajoute du détail dans les zones : bruit un peu plus fort, invite de détail, contours renforcés (0 = non)'),
+          radio('Agrandir avant de détailler', [[1, '×1'], [1.5, '×1,5'], [2, '×2']], st.kd, 'upscale', 'L’image est agrandie (upscaler de Forge) avant le détail : le détail ajouté reste visible même sur un petit visage. L’image finale est plus grande.')),
         row2(slider('Garder les couleurs d’origine', st.kd, 'keep', 0, 1, 0.05, '1 : seul le détail est repris, teintes et lumière inchangées · 0 : le repeint tel quel'),
           slider('Résolution de travail', st.kd, 'resolution', 768, 1536, 64, 'Chaque zone est repeinte à cette taille (1024 pour ANIMA), au plus 3 à 4 fois agrandie')),
+        check('Montrer les zones repeintes après la génération', st.kd, 'showZones', 'Ajoute à côté du résultat l’image des zones vraiment repeintes (masque et zone de travail)'),
         h('div.note', { text: 'Passe du plus large au plus fin. Clic droit sur un résultat : « Voir les zones » (ce qui sera repeint) ou « Détailler » sur une image déjà faite.' }));
       return out;
     }, { on: [st.kd, 'enabled'], tip: 'Détaille chaque partie du corps après la génération (détecteurs pour l’illustration)' });
@@ -1261,6 +1264,16 @@
       items.push({ canvas, bytes, url: URL.createObjectURL(new Blob([bytes], { type: 'image/png' })), info: infos[i] || infos[infos.length - 1] || '', kind, grid: i < grids && count > 1 });
     }
     if (info.seed != null) lastSeed[kind === 'img2img' ? 'i2i' : 't2i'] = info.seed;
+    // Kane Detailer : l'image des zones vraiment repeintes, gardée par l'extension pour chaque graine
+    const kdArgs = p && p.alwayson_scripts && p.alwayson_scripts['Kane Detailer'];
+    if (kdArgs && N && N.forgeKaneZones) {
+      const seeds = info.all_seeds || (info.seed != null ? [info.seed] : []);
+      for (let i = grids; i < items.length; i++) {
+        const seed = seeds[i - grids] ?? seeds[0];
+        if (seed == null) continue;
+        try { const z = await N.forgeKaneZones(url(), seed); if (z.ok) items[i].kdZones = z.zones; } catch { /* pas de zones */ }
+      }
+    }
     return items;
   }
   const releaseItems = o => { for (const it of o.items || []) if (it.url) URL.revokeObjectURL(it.url); };
@@ -1403,7 +1416,7 @@
     const info = it.info || '', neg = info.indexOf('\nNegative prompt:'), steps = info.indexOf('\nSteps:');
     const prompt = info ? info.slice(0, neg >= 0 ? neg : steps >= 0 ? steps : info.length).trim() : await english(st.prompt);
     const negative = info && neg >= 0 ? info.slice(neg + 17, steps > neg ? steps : info.length).trim() : await english(st.negative_prompt);
-    const payload = { parts, forces: { ...st.kd.forces }, keep: +st.kd.keep, resolution: +st.kd.resolution, prompt, negative_prompt: negative, seed: -1,
+    const payload = { parts, forces: { ...st.kd.forces }, keep: +st.kd.keep, resolution: +st.kd.resolution, detail: +st.kd.detail || 0, upscale: +st.kd.upscale || 1, prompt, negative_prompt: negative, seed: -1,
       sampler_name: st.sampler_name, scheduler: st.scheduler, steps: +st.steps, cfg_scale: +st.cfg_scale, distilled_cfg_scale: +st.distilled_cfg_scale };
     detailing = true;
     KS.toast('Kane Detailer : ' + parts.length + ' partie(s) en cours…', 'info', 4000);
@@ -1411,7 +1424,7 @@
       const r = await N.forgeKaneDetail(url(), payload, it.bytes || await pngBytes(it.canvas));
       if (!r.ok) throw new Error(r.error);
       const canvas = await fromPng(r.image);
-      const item = { canvas, bytes: r.image, url: URL.createObjectURL(new Blob([r.image], { type: 'image/png' })), info: (info ? info + '\n' : '') + r.info, kind: it.kind || 'txt2img', from: 'Kane Detailer' };
+      const item = { canvas, bytes: r.image, url: URL.createObjectURL(new Blob([r.image], { type: 'image/png' })), info: (info ? info + '\n' : '') + r.info, kind: it.kind || 'txt2img', from: 'Kane Detailer', kdZones: r.zones || null };
       const o = OUT[key] || OUT.t2i; o.items.unshift(item); o.sel = 0; pushGallery([item]); renderOut(key in OUT ? key : 't2i');
       KS.toast(r.info, 'ok', 4000);
     } catch (e) { KS.toast('Kane Detailer : ' + e.message, 'err', 6000); }
@@ -1432,6 +1445,11 @@
       KS.preview.open(canvas, canvas.width, canvas.height, { title: 'Zones Kane Detailer : ' + (Object.entries(labels).map(([k2, n]) => names[k2] + ' ×' + n).join(', ') || 'rien trouvé') });
     } catch (e) { KS.toast('Kane Detailer : ' + e.message, 'err', 6000); }
   }
+  async function showZones(it) {
+    if (!it || !it.kdZones) return;
+    const canvas = await fromPng(it.kdZones);
+    KS.preview.open(canvas, canvas.width, canvas.height, { title: 'Zones repeintes par Kane Detailer (couleur : masque, pointillés : zone de travail)' });
+  }
   function outButtons(key, it) {
     const sub = key === 'i2i' ? 'img2img-images' : key === 'ex' ? 'extras-images' : 'txt2img-images';
     const items = OUT[key].items;
@@ -1443,7 +1461,8 @@
         action('Ajouter en calque', () => addAsLayer(it), { enabled: !!it && !!D(), tip: D() ? 'Ajouter au document « ' + D().name + ' »' : 'Ouvrez d’abord un document' })),
       group('transform', 'Transformer',
         action('Envoyer vers Img2Img', () => sendTo('img2img', it)), action('Envoyer vers Inpaint', () => sendTo('inpaint', it)),
-        action('Détailler (Kane Detailer)', () => detailItem(key, it), { tip: 'Repeint de près chaque partie choisie dans le volet Kane Detailer, couleurs d’origine gardées' })),
+        action('Détailler (Kane Detailer)', () => detailItem(key, it), { tip: 'Repeint de près chaque partie choisie dans le volet Kane Detailer, couleurs d’origine gardées' }),
+        it && it.kdZones ? action('Zones repeintes', () => showZones(it), { tip: 'Ce que Kane Detailer a vraiment repeint sur cette image' }) : null),
       key !== 'ex' ? group('upscale', 'Agrandir',
         action('Agrandir dans Extras', () => sendTo('extras', it)),
         key === 't2i' ? action('Agrandir avec Hires', () => upscaleHires(it), { tip: 'Agrandir cette image avec le hires fix (réglages de « Hires. fix »)' }) : action('Agrandir avec Hires', () => C.sendToStudioItem(it))) : null,
@@ -1485,7 +1504,8 @@
       { label: 'Envoyer vers Img2Img', icon: 'image', action: () => sendTo('img2img', it) },
       { label: 'Envoyer vers Inpaint', icon: 'brush', action: () => sendTo('inpaint', it) },
       { label: 'Détailler (Kane Detailer)', icon: 'sparkles', action: () => detailItem(key, it) },
-      { label: 'Voir les zones (Kane Detailer)', icon: 'grid', action: () => detectItem(key, it) }] }); }
+      { label: 'Voir les zones (Kane Detailer)', icon: 'grid', action: () => detectItem(key, it) },
+      it.kdZones ? { label: 'Zones repeintes (Kane Detailer)', icon: 'eye', action: () => showZones(it) } : null].filter(Boolean) }); }
     else view.append(h('div.fx-ph', key === 'i2i' ? { text: 'Les résultats apparaîtront ici' } : { html: KS.icon('image') }));
     const thumbs = o.items.length > 1 ? h('div.fx-thumbs', ...o.items.map((x, i) => { const t = h('img' + (i === o.sel ? '.on' : ''), { src: x.url, alt: '', title: x.from ? 'Venue de l\'Édition : ' + x.from : '' }); t.addEventListener('click', () => { o.sel = i; renderOut(key); }); return t; })) : null;
     fillEl(box, key === 'i2i' ? h('div.fx-h', { text: 'Résultat' }) : null, view, thumbs, outButtons(key, it), it ? h('div.fx-outinfo', { text: (it.from ? 'Venue de l\'Édition : ' + it.from + '\n\n' : '') + (it.info || '(sans paramètres de génération)') + (o.time && !it.from ? `\n\nTime taken: ${o.time}` : '') }) : null);
@@ -1572,7 +1592,7 @@
       for (const u of st.ad.units) if (u.ad_tab_enable && u.ad_model && u.ad_model !== 'None') units.push({ ...u, ad_prompt: await english(u.ad_prompt), ad_negative_prompt: await english(u.ad_negative_prompt) });
       if (units.length) p.alwayson_scripts.ADetailer = { args: [true, k === 'i2i' && !!st.ad.skip, ...units] };
     }
-    if (st.kd.enabled && st.kd.parts.length && cat && cat.kdInfo) p.alwayson_scripts['Kane Detailer'] = { args: [{ enabled: true, parts: st.kd.parts, forces: { ...st.kd.forces }, skip: k === 'i2i' && !!st.kd.skip, keep: +st.kd.keep, resolution: +st.kd.resolution }] };
+    if (st.kd.enabled && st.kd.parts.length && cat && cat.kdInfo) p.alwayson_scripts['Kane Detailer'] = { args: [{ enabled: true, parts: st.kd.parts, forces: { ...st.kd.forces }, skip: k === 'i2i' && !!st.kd.skip, keep: +st.kd.keep, resolution: +st.kd.resolution, detail: +st.kd.detail || 0, upscale: +st.kd.upscale || 1 }] };
     if (st.noom.unet || st.noom.vae) p.alwayson_scripts['Never OOM Integrated'] = { args: [!!st.noom.unet, !!st.noom.vae] };
     if (k === 'i2i') {
       if (st.md.enabled) p.alwayson_scripts['MultiDiffusion Integrated'] = { args: [true, st.md.method, +st.md.tw, +st.md.th, +st.md.overlap, +st.md.batch] };

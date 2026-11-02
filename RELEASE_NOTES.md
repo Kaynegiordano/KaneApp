@@ -1,3 +1,11 @@
+# 1.20.0 — Kane Detailer : zones repeintes, poitrine, détail en plus
+
+- **Zones repeintes visibles** : après une génération avec Kane Detailer, le bouton « Zones repeintes » (et le clic droit) montre exactement ce qui a été retravaillé. Chaque partie a sa couleur, et les pointillés montrent la zone de travail vue par le modèle. « Voir les zones » montre la même chose avant de générer. La case « Montrer les zones repeintes » se trouve dans le volet.
+- **Meilleure reconnaissance** : les mains et les pieds sont découpés selon la silhouette du personnage (le décor autour des doigts n'est plus repeint), les doublons sont fusionnés et les petits morceaux isolés écartés.
+- **Nouvelle partie Poitrine**, avec un détecteur entraîné sur l'illustration.
+- **Détail en plus** (0 à 1) : ajoute du détail dans les zones (texture, plis, contours) sans toucher au reste.
+- **Agrandir avant de détailler** (×1, ×1,5, ×2) : l'image est agrandie avant le détail, pour que le détail ajouté reste visible même sur un petit visage. L'image finale est plus grande.
+
 # 1.19.0 — Kane Detailer : skip img2img, force par partie
 
 - **Skip img2img** (onglet img2img) : pas de passe img2img classique, seule l'image source est détaillée partie par partie. Ignoré en inpaint.
