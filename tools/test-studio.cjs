@@ -37,7 +37,8 @@ window.ksNative = {
     dtype: 'Automatic', samplers: ['Euler'], schedulers: ['Automatic'], scripts: [], styles: [], presets: {}, upscalers: ['Lanczos'],
     kdInfo: { version: 1, parts: [{ key: 'cheveux', label: 'Cheveux', denoise: 0.3, model: 'anzhc_headhair_seg_y8n.pt' }, { key: 'pieds', label: 'Pieds', denoise: 0.38, model: null },
       { key: 'visage', label: 'Visage', denoise: 0.35, model: 'anzhc_face_seg_640_v4_y11n.pt' }, { key: 'yeux', label: 'Yeux', denoise: 0.3, model: 'anzhc_eyes_seg_hd.pt' }],
-      presets: { Portrait: ['cheveux', 'visage', 'yeux'], 'Corps entier': ['cheveux', 'visage', 'yeux'] } } }),
+      presets: { Portrait: ['cheveux', 'visage', 'yeux'], 'Corps entier': ['cheveux', 'visage', 'yeux'] }, force_help: '0,15–0,25 : retouche légère' } }),
+  forgeKaneDetect: async (url, payload, png) => { window.kdDetect = payload; return { ok: true, regions: [{ part: 'visage', box: [1, 1, 20, 20], conf: 0.9 }], preview: png }; },
   forgeKaneDetail: async (url, payload, png) => { (window.kdCalls = window.kdCalls || []).push(payload); return { ok: true, image: png, info: 'Kane Detailer : Visage x1 (0.35)' }; },
   forgeImg2img: async (url, payload, init, mask) => {
     window.calls.push({ url, payload, init, mask });
@@ -168,13 +169,31 @@ async function scenario() {
     det.click();
     await wait(() => (window.kdCalls || []).length === 1);
     const kd = window.kdCalls[0];
-    assert(kd.parts.join() === 'vetements,cheveux,mains,visage,yeux' && kd.keep === 0.8 && kd.resolution === 1024 && kd.prompt && !/Steps:/.test(kd.prompt), 'Détailler envoie les parties du volet et l’invite de l’image : ' + JSON.stringify(kd).slice(0, 200));
+    assert(kd.parts.join() === 'vetements,cheveux,mains,visage,yeux' && kd.forces && !('strength' in kd) && kd.keep === 0.8 && kd.resolution === 1024 && kd.prompt && !/Steps:/.test(kd.prompt), 'Détailler envoie les parties du volet et l’invite de l’image : ' + JSON.stringify(kd).slice(0, 200));
     await wait(() => /Kane Detailer/.test(document.querySelector('.fx-outinfo')?.textContent || ''));
     assert(shown >= 1, 'Le résultat détaillé s’affiche');
   }
   {
     const titles = [...document.querySelectorAll('.fx-acc-t')].map(x => x.textContent);
     assert(titles.includes('Kane Detailer'), 'Volet Kane Detailer présent : ' + titles.join(', '));
+    // volet ouvert : une ligne par partie avec sa force, la force modifiée part avec la génération
+    const head = [...document.querySelectorAll('.fx-acc-h')].find(x => x.textContent.includes('Kane Detailer'));
+    head.click(); await new Promise(r => setTimeout(r, 50));
+    const rows = [...document.querySelectorAll('.kd-row')];
+    assert(rows.length === 4 && rows[2].querySelector('.fx-num').value === '0.35', 'Une ligne et une force par partie (visage 0,35) : ' + rows.map(r => r.textContent).join(' | '));
+    const num = rows[2].querySelector('.fx-num'); num.value = '0.22'; num.dispatchEvent(new Event('change'));
+    const kdOf = () => KS.prefs.fx[KS.prefs.fx.tab === 'img2img' ? 'i2i' : 't2i'].kd;
+    await wait(() => kdOf().forces.visage === 0.22);
+    assert(kdOf().forces.visage === 0.22 && !rows[2].querySelector('.kd-reset').hidden, 'Changer la force du visage la retient et montre le retour à la recette');
+    head.click();
+    // « Voir les zones » ouvre l'aperçu des zones
+    const vp3 = document.querySelector('.fx-view .iv-viewport'), r3 = vp3.getBoundingClientRect();
+    vp3.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r3.left + 20, clientY: r3.top + 20 }));
+    const zones = [...document.querySelectorAll('.menu *')].find(x => x.children.length < 3 && /^Voir les zones/.test(x.textContent.trim()));
+    assert(zones, 'Le clic droit propose Voir les zones'); zones.click();
+    await wait(() => !!document.querySelector('.iv-lightbox'));
+    assert(window.kdDetect && /Visage ×1/.test(document.querySelector('.iv-lightbox')?.textContent || document.body.textContent), 'Voir les zones affiche les zones trouvées');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   }
   await click('⛶', document.querySelector('.fx-source'));
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));

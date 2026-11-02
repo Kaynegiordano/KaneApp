@@ -1,3 +1,10 @@
+# 1.19.0 — Kane Detailer : skip img2img, force par partie
+
+- **Skip img2img** (onglet img2img) : pas de passe img2img classique, seule l'image source est détaillée partie par partie. Ignoré en inpaint.
+- **Une force par partie**, à la place de « Intensité ». Chaque partie a son curseur, avec un bouton ↺ pour revenir à la recette. Repères : 0,15–0,25 retouche légère, 0,3–0,4 redessine les détails, 0,5 et plus peut changer la forme.
+- **Voir les zones** (clic droit sur un résultat) : montre ce que Kane Detailer va repeindre, sans rien générer.
+- Détection plus sûre : les mains et les hauts de vêtements souvent manqués sont maintenant trouvés (seuils par partie et second avis pour les mains).
+
 # 1.18.0 — Kane Detailer
 
 - **Studio IA : volet Kane Detailer**, à côté d'ADetailer, pensé pour l'illustration et la peinture numérique. Après la génération, chaque partie choisie est détectée puis repeinte de près : vêtements, cheveux, mains, visage, yeux. Le corps entier, les pieds et les bijoux sont disponibles en option.
