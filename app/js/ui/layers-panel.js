@@ -18,8 +18,9 @@
       const lockA = ui.iconBtn('lock-alpha', 'Verrouiller les pixels transparents', () => this.toggle('lockAlpha', 'Verrouillage de la transparence'), '.sm');
       const lockAll = ui.iconBtn('lock', 'Tout verrouiller', () => this.toggle('lockAll', 'Verrouillage'), '.sm');
       this.ctl = { blend, opacity, lockA, lockAll };
+      this.blendNote = h('div.blend-note-slot');
       const top = h('div.layers-top',
-        h('div.row', blend),
+        h('div.row', blend), this.blendNote,
         h('div.row', opacity, h('span', { style: { flex: '1' } }), h('span.opt-label', { text: 'Verrou' }), lockA, lockAll));
       this.list = h('div.layers-list');
       const bottom = h('div.layers-bottom',
@@ -51,6 +52,7 @@
       if (A) {
         const pass = this.ctl.blend.querySelector('.opt-pass'); if (pass) pass.hidden = A.kind !== 'group';
         this.ctl.blend.value = A.blend; this.ctl.opacity.set(Math.round(A.opacity * 100));
+        { const note = KS.blendNote(doc, A); this.blendNote.replaceChildren(...(note ? [note] : [])); }
         this.ctl.lockA.classList.toggle('on', A.lockAlpha); this.ctl.lockAll.classList.toggle('on', A.lockAll);
       }
       const sel = new Set(doc.selected.map(l => l.id));

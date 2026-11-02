@@ -1,3 +1,8 @@
+# 1.20.1 — Retouche : modes de fusion sur un calque seul
+
+- Un mode de fusion (Obscurcir, Produit, Incrustation…) mélange le calque avec ce qui est **en dessous**. Sur un calque seul, il n'y a rien à mélanger, donc l'image ne change pas (comme dans Photoshop). KaneApp l'indique maintenant sous le menu du mode, dans Propriétés et dans Calques.
+- Pour les modes qui agissent sur l'image elle-même (Produit, Superposition, Incrustation, Densités, Lumière tamisée ou crue, Différence, Exclusion), un bouton **Dupliquer et appliquer le mode à la copie** crée la copie au-dessus avec ce mode et remet l'original en Normal. Pour Obscurcir, Éclaircir, Teinte, Saturation, Couleur et Luminosité, même une copie ne change rien : l'indication l'explique.
+
 # 1.20.0 — Kane Detailer : zones repeintes, poitrine, détail en plus
 
 - **Zones repeintes visibles** : après une génération avec Kane Detailer, le bouton « Zones repeintes » (et le clic droit) montre exactement ce qui a été retravaillé. Chaque partie a sa couleur, et les pointillés montrent la zone de travail vue par le modèle. « Voir les zones » montre la même chose avant de générer. La case « Montrer les zones repeintes » se trouve dans le volet.

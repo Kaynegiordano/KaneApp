@@ -196,6 +196,27 @@ async function scenario() {
     assert(window.kdDetect && /Visage ×1/.test(document.querySelector('.iv-lightbox')?.textContent || document.body.textContent), 'Voir les zones affiche les zones trouvées');
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   }
+  {
+    // Retouche : un mode de fusion sur un calque seul n'a rien a melanger ; l'indication le dit et propose la copie
+    // document à part (le document partagé et son historique servent aux tests suivants)
+    const prevDoc = KS.state.doc;
+    const d = KS.addDoc(KS.createDoc({ name: 'Fusion', width: 64, height: 32, background: 'custom', color: { r: 120, g: 150, b: 200 } }));
+    const L0 = d.layers[0];
+    L0.blend = 'darken';
+    const n1 = KS.blendNote(d, L0);
+    assert(n1 && !n1.querySelector('button') && /ne change rien non plus/.test(n1.textContent), 'Obscurcir sur un calque seul : explication, pas de bouton inutile');
+    L0.blend = 'multiply';
+    const n2 = KS.blendNote(d, L0);
+    assert(n2 && n2.querySelector('button'), 'Produit sur un calque seul : bouton « Dupliquer et appliquer »');
+    const px = () => { const c = d.flatten(); const x = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let t = 0; for (let k = 0; k < x.length; k += 4) t += x[k] + x[k + 1] + x[k + 2]; return t; };
+    const before = px();
+    KS.cmd.duplicateWithBlend();
+    const top = d.active;
+    assert(top !== L0 && top.blend === 'multiply' && L0.blend === 'normal' && !KS.blendNote(d, top), 'La copie porte le mode, l’original revient en Normal, plus d’indication');
+    assert(px() < before, 'La copie en Produit assombrit vraiment l’image');
+    d.dirty = false; await KS.closeDoc(d);
+    if (prevDoc && KS.state.doc !== prevDoc) KS.switchDoc(prevDoc);
+  }
   await click('⛶', document.querySelector('.fx-source'));
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   assert(!KS.modalOpen() && +sourceZoom.dataset.scale === 1, 'Échap ferme le plein écran sans changer le zoom de la source');
