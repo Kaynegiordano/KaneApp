@@ -383,7 +383,7 @@
         }
         const self = alone && KS.blendOp(L.blend) !== 'source-over';
         if (self) img = selfBlend(L, img, !vis.length && !L.override);
-        ctx.globalAlpha = L.opacity;
+        ctx.globalAlpha = self ? 1 : L.opacity;   // calque seul : l'opacité dose l'effet (dans selfBlend)
         ctx.globalCompositeOperation = self ? 'source-over' : KS.blendOp(L.blend);
         put(ctx, img);
         ctx.globalAlpha = 1;
@@ -518,7 +518,7 @@
   };
   function selfBlend(L, img, cacheable) {
     const op = KS.blendOp(L.blend), k = img.w ? img.canvas.width / img.w : 1;
-    if (cacheable && L._self && L._self.src === img.canvas && L._self.v === L.version && L._self.op === op) return L._self.r;
+    if (cacheable && L._self && L._self.src === img.canvas && L._self.v === L.version && L._self.op === op && L._self.a === L.opacity) return L._self.r;
     const W = img.canvas.width, H = img.canvas.height;
     const c = U.canvas(W, H), x = c.getContext('2d');
     x.drawImage(img.canvas, 0, 0);
@@ -534,8 +534,15 @@
     }
     x.globalCompositeOperation = op; x.drawImage(top, 0, 0);
     x.globalCompositeOperation = 'destination-in'; x.drawImage(img.canvas, 0, 0);   // forme du calque gardée
+    if (L.opacity < 1) {
+      // l'opacité dose l'effet : mélange entre l'image d'origine et l'image fondue
+      const m = U.canvas(W, H), mx = m.getContext('2d');
+      mx.drawImage(img.canvas, 0, 0); mx.globalAlpha = L.opacity; mx.drawImage(c, 0, 0);
+      x.globalCompositeOperation = 'copy'; x.drawImage(m, 0, 0);
+    }
+    x.globalCompositeOperation = 'source-over';
     const r = { canvas: c, x: img.x, y: img.y, w: img.w || W / k, h: img.h || H / k };
-    if (cacheable) L._self = { src: img.canvas, v: L.version, op, r };
+    if (cacheable) L._self = { src: img.canvas, v: L.version, op, a: L.opacity, r };
     return r;
   }
   Doc.TILE = 512;                  // côté des tuiles de composition (px)

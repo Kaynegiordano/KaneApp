@@ -207,6 +207,8 @@ async function scenario() {
     const px = () => { const c = d.flatten(); const x = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let t = 0; for (let k = 0; k < x.length; k += 4) t += x[k] + x[k + 1] + x[k + 2]; return t; };
     const base = px(), res = {};
     for (const m of ['darken', 'multiply', 'lighten', 'screen', 'overlay', 'difference', 'hue', 'saturation', 'color', 'luminosity']) { L0.blend = m; res[m] = px(); }
+    L0.blend = 'multiply'; L0.opacity = 0.5; const half = px(); L0.opacity = 1;
+    assert(half < base && half > res.multiply && Math.abs(half - (base + res.multiply) / 2) < base * 0.03, 'L’opacité dose l’effet sur un calque seul ' + half);
     L0.blend = 'normal';
     assert(res.darken < base && res.multiply < base, 'Obscurcir et Produit assombrissent un calque seul ' + JSON.stringify([base, res.darken, res.multiply]));
     assert(res.lighten > base && res.screen > base, 'Éclaircir et Superposition éclaircissent un calque seul');
