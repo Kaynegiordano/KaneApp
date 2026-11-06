@@ -527,3 +527,4 @@ Maintenir Alt + bouton droit dans la zone de travail : glisser horizontalement p
 - **1.15.0** : Studio IA, onglet Pose 3D : corps humain réaliste posable (MakeHuman), poses et mains toutes faites, cinématique inverse, caméra et lumière, dessin de référence en fond, calque guide (ombré, contours, silhouette, profondeur, normales, OpenPose).
 - **1.16.0** : Studio IA, l'onglet Pose 3D devient **Angle** : relief de l'image (Depth Anything V2, local), nouvel angle de vue à la souris, zones découvertes repeintes par Forge à la taille de l'image, passe d'unification.
 - **1.16.1** : Angle : invite et invite négative de l'image envoyées telles quelles, SEEDS 3 + Beta57 en 22 étapes par défaut, CFG et Shift repris de l'image.
+- **1.22.0** : Kane Detailer 4 : plusieurs essais par zone départagés par un juge (ou l'original gardé), essai réparateur pour les mains douteuses, grain du pinceau gardé, lumières protégées, visages qui ne vieillissent plus.

@@ -35,7 +35,7 @@ window.ksNative = {
     loras: [{ name: 'test', alias: 'Illustration', weight: 0.7, trigger: 'painted', negative: 'bad lines', rel: 'Art', mtime: 1 }],
     modules: [], current: { model: 'Studio-model', modules: [] },
     dtype: 'Automatic', samplers: ['Euler'], schedulers: ['Automatic'], scripts: [], styles: [], presets: {}, upscalers: ['Lanczos'],
-    kdInfo: { version: 1, parts: [{ key: 'cheveux', label: 'Cheveux', denoise: 0.3, model: 'anzhc_headhair_seg_y8n.pt' }, { key: 'pieds', label: 'Pieds', denoise: 0.38, model: null },
+    kdInfo: { version: 4, parts: [{ key: 'cheveux', label: 'Cheveux', denoise: 0.3, model: 'anzhc_headhair_seg_y8n.pt' }, { key: 'pieds', label: 'Pieds', denoise: 0.38, model: null },
       { key: 'visage', label: 'Visage', denoise: 0.35, model: 'anzhc_face_seg_640_v4_y11n.pt' }, { key: 'yeux', label: 'Yeux', denoise: 0.3, model: 'anzhc_eyes_seg_hd.pt' }],
       presets: { Portrait: ['cheveux', 'visage', 'yeux'], 'Corps entier': ['cheveux', 'visage', 'yeux'] }, force_help: '0,15–0,25 : retouche légère' } }),
   forgeKaneDetect: async (url, payload, png) => { window.kdDetect = payload; return { ok: true, regions: [{ part: 'visage', box: [1, 1, 20, 20], conf: 0.9 }], preview: png }; },
@@ -169,7 +169,7 @@ async function scenario() {
     det.click();
     await wait(() => (window.kdCalls || []).length === 1);
     const kd = window.kdCalls[0];
-    assert(kd.parts.join() === 'vetements,poitrine,cheveux,mains,visage,yeux' && kd.forces && !('strength' in kd) && kd.detail === 0 && kd.upscale === 1 && kd.keep === 0.8 && kd.resolution === 1024 && kd.prompt && !/Steps:/.test(kd.prompt), 'Détailler envoie les parties du volet et l’invite de l’image : ' + JSON.stringify(kd).slice(0, 200));
+    assert(kd.parts.join() === 'vetements,poitrine,cheveux,mains,visage,yeux' && kd.forces && !('strength' in kd) && kd.detail === 0 && kd.upscale === 1 && kd.keep === 0.8 && kd.resolution === 1024 && kd.tries === 2 && kd.repair === true && kd.grain === 0.5 && kd.glow === true && kd.age === true && kd.prompt && !/Steps:/.test(kd.prompt), 'Détailler envoie les parties du volet et l’invite de l’image : ' + JSON.stringify(kd).slice(0, 200));
     await wait(() => /Kane Detailer/.test(document.querySelector('.fx-outinfo')?.textContent || ''));
     assert(shown >= 1, 'Le résultat détaillé s’affiche');
     assert([...document.querySelectorAll('.fx-output-actions button')].some(b => b.textContent === 'Zones repeintes'), 'Le résultat détaillé propose « Zones repeintes »');

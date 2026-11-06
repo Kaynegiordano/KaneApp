@@ -1,3 +1,12 @@
+# 1.22.0 — Kane Detailer 4 : un juge pour chaque zone
+
+- **Essais par zone** : le visage, les yeux, les mains et les pieds sont repeints 2 fois (réglable de 1 à 4). Un juge garde le meilleur essai, ou **l'original si aucun n'est meilleur**. Il s'appuie sur le détecteur de la partie, sur DWPose pour les mains et sur la ressemblance de forme. Les grandes zones (vêtements, cheveux) n'ont qu'un essai, mais passent aussi devant le juge : une passe ratée est annulée.
+- **Réparer les mains douteuses** : une main dont DWPose n'est pas sûr reçoit aussi un essai repeint fort, gardé seulement s'il est nettement meilleur.
+- **Garder le grain du pinceau** : la touche de la peinture est remise là où le repeint l'avait lissée.
+- **Protéger les lumières** : les yeux lumineux et les reflets gardent leur éclat.
+- **Ne pas vieillir les visages** : le repeint de près ne donne plus un air plus mûr, sauf si l'invite le demande.
+- Il faut le moteur du Studio à jour (Kane Detailer 4). Avec 2 essais, le détail prend environ 1,7 fois plus de temps.
+
 # 1.21.0 — Retouche : les modes de fusion agissent sur un calque seul
 
 - Sur un calque sans rien dessous (une image IA seule, par exemple), le mode de fusion agit maintenant **directement sur l'image**, sans copie de calque :

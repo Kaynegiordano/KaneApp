@@ -26,7 +26,7 @@
     prompt: '', negative_prompt: '', styles: [], sampler_name: 'SEEDS 3', scheduler: 'Beta57', steps: 22, width: 1024, height: 1024, n_iter: 1, batch_size: 1,
     cfg_scale: 4, distilled_cfg_scale: 3, seed: -1, seedExtra: false, subseed: -1, subseed_strength: 0, seed_resize_from_w: 0, seed_resize_from_h: 0,
     ad: { enabled: false, skip: false, tab: 0, units: [{ ...AD_UNIT(), ad_model: 'face_yolov8n.pt' }, AD_UNIT(), AD_UNIT(), AD_UNIT()] },
-    kd: { enabled: false, skip: false, parts: ['vetements', 'poitrine', 'cheveux', 'mains', 'visage', 'yeux'], forces: {}, keep: 0.8, resolution: 1024, detail: 0, upscale: 1, showZones: true },
+    kd: { enabled: false, skip: false, parts: ['vetements', 'poitrine', 'cheveux', 'mains', 'visage', 'yeux'], forces: {}, keep: 0.8, resolution: 1024, detail: 0, upscale: 1, showZones: true, tries: 2, repair: true, grain: 0.5, glow: true, age: true },
     noom: { unet: false, vae: false }, script: 'None', scriptArgs: {}, open: {},
   });
   const DEF = {
@@ -923,6 +923,13 @@
           radio('Agrandir avant de détailler', [[1, '×1'], [1.5, '×1,5'], [2, '×2']], st.kd, 'upscale', 'L’image est agrandie (upscaler de Forge) avant le détail : le détail ajouté reste visible même sur un petit visage. L’image finale est plus grande.')),
         row2(slider('Garder les couleurs d’origine', st.kd, 'keep', 0, 1, 0.05, '1 : seul le détail est repris, teintes et lumière inchangées · 0 : le repeint tel quel'),
           slider('Résolution de travail', st.kd, 'resolution', 768, 1536, 64, 'Chaque zone est repeinte à cette taille (1024 pour ANIMA), au plus 3 à 4 fois agrandie')),
+        ...(info.version >= 4 ? [
+          h('div.kd-help', { text: 'Juge et style (Kane Detailer 4)' }),
+          row2(slider('Essais par zone', st.kd, 'tries', 1, 4, 1, 'Visage, yeux, mains et pieds sont repeints plusieurs fois ; le juge (détecteur, DWPose, ressemblance) garde le meilleur essai, ou l’original si aucun n’est meilleur. 2 essais ≈ deux fois plus long sur ces zones.'),
+            slider('Garder le grain du pinceau', st.kd, 'grain', 0, 1, 0.05, 'Remet la touche fine du pinceau là où le repeint a lissé la peinture (0 = non)')),
+          check('Réparer les mains douteuses', st.kd, 'repair', 'Une main peu sûre pour DWPose reçoit aussi un essai repeint fort (0,5), gardé seulement s’il est nettement meilleur', rp),
+          check('Protéger les lumières', st.kd, 'glow', 'Yeux lumineux, reflets, magie : les points qui brillent gardent leur éclat', rp),
+          check('Ne pas vieillir les visages', st.kd, 'age', 'Ajoute « rides, sillons, cernes, âgé » à ce qu’il faut éviter sur le visage et les yeux, sauf si l’invite demande un personnage mûr', rp)] : []),
         check('Montrer les zones repeintes après la génération', st.kd, 'showZones', 'Ajoute à côté du résultat l’image des zones vraiment repeintes (masque et zone de travail)'),
         h('div.note', { text: 'Passe du plus large au plus fin. Clic droit sur un résultat : « Voir les zones » (ce qui sera repeint) ou « Détailler » sur une image déjà faite.' }));
       return out;
@@ -1416,7 +1423,7 @@
     const info = it.info || '', neg = info.indexOf('\nNegative prompt:'), steps = info.indexOf('\nSteps:');
     const prompt = info ? info.slice(0, neg >= 0 ? neg : steps >= 0 ? steps : info.length).trim() : await english(st.prompt);
     const negative = info && neg >= 0 ? info.slice(neg + 17, steps > neg ? steps : info.length).trim() : await english(st.negative_prompt);
-    const payload = { parts, forces: { ...st.kd.forces }, keep: +st.kd.keep, resolution: +st.kd.resolution, detail: +st.kd.detail || 0, upscale: +st.kd.upscale || 1, prompt, negative_prompt: negative, seed: -1,
+    const payload = { parts, forces: { ...st.kd.forces }, keep: +st.kd.keep, resolution: +st.kd.resolution, detail: +st.kd.detail || 0, upscale: +st.kd.upscale || 1, tries: +st.kd.tries || 1, repair: !!st.kd.repair, grain: +st.kd.grain || 0, glow: !!st.kd.glow, age: !!st.kd.age, prompt, negative_prompt: negative, seed: -1,
       sampler_name: st.sampler_name, scheduler: st.scheduler, steps: +st.steps, cfg_scale: +st.cfg_scale, distilled_cfg_scale: +st.distilled_cfg_scale };
     detailing = true;
     KS.toast('Kane Detailer : ' + parts.length + ' partie(s) en cours…', 'info', 4000);
@@ -1592,7 +1599,7 @@
       for (const u of st.ad.units) if (u.ad_tab_enable && u.ad_model && u.ad_model !== 'None') units.push({ ...u, ad_prompt: await english(u.ad_prompt), ad_negative_prompt: await english(u.ad_negative_prompt) });
       if (units.length) p.alwayson_scripts.ADetailer = { args: [true, k === 'i2i' && !!st.ad.skip, ...units] };
     }
-    if (st.kd.enabled && st.kd.parts.length && cat && cat.kdInfo) p.alwayson_scripts['Kane Detailer'] = { args: [{ enabled: true, parts: st.kd.parts, forces: { ...st.kd.forces }, skip: k === 'i2i' && !!st.kd.skip, keep: +st.kd.keep, resolution: +st.kd.resolution, detail: +st.kd.detail || 0, upscale: +st.kd.upscale || 1 }] };
+    if (st.kd.enabled && st.kd.parts.length && cat && cat.kdInfo) p.alwayson_scripts['Kane Detailer'] = { args: [{ enabled: true, parts: st.kd.parts, forces: { ...st.kd.forces }, skip: k === 'i2i' && !!st.kd.skip, keep: +st.kd.keep, resolution: +st.kd.resolution, detail: +st.kd.detail || 0, upscale: +st.kd.upscale || 1, tries: +st.kd.tries || 1, repair: !!st.kd.repair, grain: +st.kd.grain || 0, glow: !!st.kd.glow, age: !!st.kd.age }] };
     if (st.noom.unet || st.noom.vae) p.alwayson_scripts['Never OOM Integrated'] = { args: [!!st.noom.unet, !!st.noom.vae] };
     if (k === 'i2i') {
       if (st.md.enabled) p.alwayson_scripts['MultiDiffusion Integrated'] = { args: [true, st.md.method, +st.md.tw, +st.md.th, +st.md.overlap, +st.md.batch] };
