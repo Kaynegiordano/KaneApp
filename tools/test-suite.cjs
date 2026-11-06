@@ -53,11 +53,12 @@ async function scenario() {
   check(S.project.name === 'KaneApp', 'Le projet par défaut Mon atelier devient KaneApp');
   const creating = S.newProject(); await wait(() => !!document.querySelector('.modal input'));
   document.querySelector('.modal input').value = 'Illustration de test'; click('Enregistrer'); await creating;
-  check(document.body.classList.contains('suite-home') && !!document.querySelector('#suite-toolbar'), 'Accueil Projet et navigation commune');
+  check(document.body.classList.contains('suite-home') && !!document.querySelector('#kane-nav .ws-switch'), 'Accueil Projet et navigation commune (panneau K)');
   await KS.gpuMemory.refresh();
   const gpuVisible = () => { const r = document.querySelector('#gpu-status').getBoundingClientRect(); return r.height >= 20 && r.bottom <= innerHeight && r.width <= innerWidth; };
   check(gpuVisible() && document.querySelector('#gpu-status').dataset.state === 'ready', 'VRAM du pilote visible dès le Projet');
-  check([...document.querySelectorAll('#suite-toolbar .ws-btn')].map(b => b.textContent).join('|') === 'Projet|Edition|Studio IA|Animation|Animation Vidéo|Montage', 'Navigation demandée, Montage en dernier');
+  const navLabels = [...document.querySelectorAll('#kane-nav .ws-btn')].map(b => b.textContent).join('|');
+  check(navLabels === 'Projet|Retouche|Studio IA|Animation|Animation Vidéo|Montage', 'Navigation demandée, Montage en dernier : ' + navLabels);
   document.querySelector('.ws-btn[data-v="video"]').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 600, clientY: 80 }));
   check([...document.querySelectorAll('.menu .mi .lb')].some(b => b.textContent === 'Arrêter'), 'Le clic droit sur une app propose Arrêter');
   KS.ui.closeMenus();
@@ -124,6 +125,7 @@ async function scenario() {
   check(!KS.studio.on && !KS.engine.ready(), 'Arrêter Studio interrompt son espace et arrête le moteur par le pont natif');
   for (const theme of ['light', 'dark', 'graphite']) { KS.prefs.theme = theme; KS.prefs.accent = '#a65cf0'; KS.applyPrefs(); for (const id in WX.el) { WX.theme(id); } }
   KS.dialogs.prefs();
+  document.querySelector('.modal .pf-side .side-item[data-id="look"]').click();   // couleurs des espaces : onglet Apparence
   const color = document.querySelector('[data-space-color="wallpaper"]'); color.value = '#6d9c88'; color.dispatchEvent(new Event('input', { bubbles: true }));
   click('Fermer'); WX.go('wallpaper');
   check(KS.prefs.spaceColors.wallpaper === '#6d9c88' && getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() === '#6d9c88', 'La couleur personnalisée d’Animation est appliquée et mémorisée');
@@ -270,7 +272,7 @@ app.whenReady().then(async () => {
     for (const width of [1440, 1024]) {
       win.setSize(width, 1000); await new Promise(r => setTimeout(r, 350));
       assert(await win.webContents.executeJavaScript('document.querySelector("#gpu-status").getBoundingClientRect().bottom <= innerHeight'));
-      assert(await win.webContents.executeJavaScript('document.querySelector("#suite-toolbar").scrollWidth <= document.querySelector("#suite-toolbar").clientWidth + 1 && document.querySelector("#suite-home").scrollWidth <= document.querySelector("#suite-home").clientWidth + 1'));
+      assert(await win.webContents.executeJavaScript('document.querySelector("#titlebar").scrollWidth <= document.querySelector("#titlebar").clientWidth + 1 && document.querySelector("#suite-home").scrollWidth <= document.querySelector("#suite-home").clientWidth + 1'));
       console.log('OK Mise en page Projet à ' + width + ' px');
       if (process.env.KANEVAS_TEST_SCREENSHOT) fs.writeFileSync(process.env.KANEVAS_TEST_SCREENSHOT.replace('.png', '-' + width + '.png'), (await win.webContents.capturePage()).toPNG());
     }

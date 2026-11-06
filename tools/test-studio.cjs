@@ -31,7 +31,7 @@ window.ksNative = {
     return {ok:true,status:null};
   },
   forgeStatus: async () => { if (window.holdStatus) await new Promise(resolve => { window.releaseStatus = resolve; }); return { ok: true }; },
-  forgeCatalog: async () => ({ ok: true, models: [{ title: 'Studio-model', name: 'Studio-model' }],
+  forgeCatalog: async () => ({ ok: true, models: [{ title: 'Studio-model', name: 'Studio-model' }, { title: 'Anima-2.9B.safetensors [abcdef1234]', name: 'Anima-2.9B' }],
     loras: [{ name: 'test', alias: 'Illustration', weight: 0.7, trigger: 'painted', negative: 'bad lines', rel: 'Art', mtime: 1 }],
     modules: [], current: { model: 'Studio-model', modules: [] },
     dtype: 'Automatic', samplers: ['Euler'], schedulers: ['Automatic'], scripts: [], styles: [], presets: {}, upscalers: ['Lanczos'],
@@ -88,12 +88,12 @@ async function scenario() {
   await wait(() => document.querySelector('.fx-left .fx-panel .fx-slider'));
   assert(KS.studio.on && KS.prefs.fx.tab === 'img2img', 'Img2Img ouvre le Studio');
   assert(gauge.getBoundingClientRect().bottom <= innerHeight && gauge.getBoundingClientRect().height > 0, 'La même jauge reste visible dans Studio IA');
-  assert(document.querySelector('.fx-source img').alt === 'Source A', 'Le document envoyé devient la source');
+  assert(document.querySelector('.fx-source .iv-media').getAttribute('aria-label') === 'Source A', 'Le document envoyé devient la source');
   a.layers[0].ctx.fillStyle = '#cc0011'; a.layers[0].ctx.fillRect(0, 0, 128, 64); a.layers[0].touch(); a.changed();
   const b = doc('Autre document'); KS.addDoc(b);
   b.layers[0].ctx.fillStyle = '#11bb44'; b.layers[0].ctx.fillRect(0, 0, 128, 64); b.layers[0].touch(); b.changed();
   await KS.cmd.toggleStudio(false); await KS.cmd.toggleStudio(true);
-  assert(document.querySelector('.fx-source img').alt === 'Source A', 'Changer de document ne remplace pas la source');
+  assert(document.querySelector('.fx-source .iv-media').getAttribute('aria-label') === 'Source A', 'Changer de document ne remplace pas la source');
   KS.prefs.fx.i2i.prompt = 'original <lora:test:0.7>'; KS.prefs.fx.translate = false;
   const before = a.layers.length;
   await KS.cmd.studioGenerate();
@@ -136,9 +136,13 @@ async function scenario() {
     document.querySelector('.fx-view .iv-scale').click();
   await wait(() => !!document.querySelector('.iv-lightbox .iv-media'));
   assert(KS.modalOpen() && document.querySelector('.iv-lightbox img').src === zoomedMedia.src, 'Cliquer sur la barre au-dessus ouvre la même image en plein écran');
-  const outsideRect = document.querySelector('.iv-fullscreen .iv-viewport').getBoundingClientRect();
+  // position mesurée une fois le plein écran installé (image chargée, mise en page faite), dans la marge gauche
   await new Promise(r => setTimeout(r, 500));
-  await window.realClick(Math.round(outsideRect.left + 4), Math.round(outsideRect.top + 4));
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const outsideRect = document.querySelector('.iv-fullscreen .iv-viewport').getBoundingClientRect();
+  await window.realClick(Math.round(outsideRect.left + 3), Math.round(outsideRect.top + outsideRect.height / 2));
+  // l'envoi du clic rend la main avant que la page l'ait traité : sans cette attente, le test échouait une fois sur deux
+  await new Promise(r => setTimeout(r, 60));
   assert(!KS.modalOpen(), 'Cliquer autour de l’image ferme le plein écran');
   {
     // clic droit sur le résultat : menu avec « Copier l’image », qui met un PNG dans le presse-papiers
@@ -173,6 +177,23 @@ async function scenario() {
     await wait(() => /Kane Detailer/.test(document.querySelector('.fx-outinfo')?.textContent || ''));
     assert(shown >= 1, 'Le résultat détaillé s’affiche');
     assert([...document.querySelectorAll('.fx-output-actions button')].some(b => b.textContent === 'Zones repeintes'), 'Le résultat détaillé propose « Zones repeintes »');
+    // Avant / après : visionneuse de comparaison, rideau puis côte à côte
+    await click('Avant / après', document.querySelector('.fx-output-actions'));
+    await wait(() => !!document.querySelector('.iv-lightbox .iv-cmp'));
+    const cmp = document.querySelector('.iv-lightbox .iv-cmp');
+    await new Promise(r => setTimeout(r, 60));
+    assert(cmp.querySelectorAll('.iv-media').length === 2 && /Kane Detailer/.test(cmp.querySelector('.iv-cmp-tag.b').textContent), 'Avant / après compare l’original et le résultat détaillé');
+    const split0 = +cmp.dataset.split;
+    cmp.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    assert(+cmp.dataset.split > split0 && /inset\(0px 0px 0px \d+px\)/.test(cmp.querySelector('.iv-cmp-b').style.clipPath), 'Les flèches déplacent le rideau : ' + cmp.querySelector('.iv-cmp-b').style.clipPath);
+    const z0 = +cmp.dataset.scale, cr = cmp.getBoundingClientRect();
+    cmp.dispatchEvent(new WheelEvent('wheel', { deltaY: -300, clientX: cr.left + cr.width / 2, clientY: cr.top + cr.height / 2, bubbles: true, cancelable: true }));
+    const [ma, mb] = cmp.querySelectorAll('.iv-media');
+    assert(+cmp.dataset.scale > z0 && ma.style.transform === mb.style.transform, 'La molette zoome les deux images ensemble');
+    await click('Côte à côte', document.querySelector('.iv-lightbox'));
+    assert(cmp.classList.contains('side') && !cmp.querySelector('.iv-cmp-b').style.clipPath, 'Côte à côte montre les deux images entières');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await wait(() => !KS.modalOpen());
   }
   {
     const titles = [...document.querySelectorAll('.fx-acc-t')].map(x => x.textContent);
@@ -284,7 +305,7 @@ async function scenario() {
   await click('Ouvrir le résultat dans Retouche');
   assert(!KS.studio.on && KS.state.doc !== b, 'Ouvrir un résultat crée un nouveau document dans l’Édition');
   await KS.cmd.sendToStudio('extras');
-  assert(KS.prefs.fx.tab === 'extras' && !!document.querySelector('.fx-dropzone img'), 'L’Édition envoie aussi vers Extras');
+  assert(KS.prefs.fx.tab === 'extras' && !!document.querySelector('.fx-dropzone .iv-media'), 'L’Édition envoie aussi vers Extras');
   await KS.cmd.sendToStudio('pnginfo');
   assert(KS.prefs.fx.tab === 'pnginfo', 'L’Édition envoie aussi vers PNG Info');
   await click('Envoyer vers Img2Img');
@@ -296,12 +317,46 @@ async function scenario() {
   const canvas = a.composite(), bytes = new Uint8Array(await (await KS.util.blobFromCanvas(canvas)).arrayBuffer());
   window.pickFiles = [{ name: 'Import.png', data: KS.png.writeText(bytes, 'parameters', 'Imported prompt\nSteps: 18, Sampler: Euler, Seed: 123, Size: 128x64') }];
   document.querySelector('.fx-source .fx-dropzone').click();
-  await wait(() => document.querySelector('.fx-source img')?.alt === 'Import.png');
+  await wait(() => document.querySelector('.fx-source .iv-media')?.getAttribute('aria-label') === 'Import.png');
   assert(KS.prefs.fx.i2i.seed === -1 && KS.prefs.fx.i2i.prompt === 'Imported prompt', 'Importer un PNG reprend l’invite sans figer sa graine');
   await click('Créer', document.querySelector('.fx-rail'));
   assert(KS.prefs.fx.tab === 'txt2img' && !!document.querySelector('.fx-out'), 'txt2img reste accessible');
   KS.prefs.fx.t2i.prompt = 'new image <lora:test:0.8>';
   await KS.cmd.studioGenerate();
+  {
+    // Refaire avec un autre modèle : même invite et même graine, modèle changé pour cette image seulement, puis comparaison
+    const callsBefore = window.txtCalls.length, shownBefore = KS.prefs.fx.t2i.steps;
+    await click('Refaire avec un autre modèle…', document.querySelector('.fx-output-actions'));
+    await wait(() => !!document.querySelector('.modal .fx-pickmodel .fx-card'));
+    const cards = [...document.querySelectorAll('.modal .fx-pickmodel .fx-card')];
+    assert(cards.length === 1 && cards[0].querySelector('.fx-card-n').textContent === 'Anima-2.9B.safetensors', 'Le choix propose les autres modèles, pas le modèle actif : ' + cards.map(c => c.textContent).join(', '));
+    cards[0].click();
+    await wait(() => window.txtCalls.length === callsBefore + 1 && !!document.querySelector('.iv-lightbox .iv-cmp'));
+    const p = window.txtCalls.at(-1);
+    assert(p.seed === 84 && p.override_settings.sd_model_checkpoint === 'Anima-2.9B.safetensors [abcdef1234]' && p.override_settings_restore_afterwards && p.n_iter === 1 && p.steps === 20,
+      'La même image est refaite avec la même graine et l’autre modèle pour cette génération seulement : ' + JSON.stringify({ seed: p.seed, o: p.override_settings, steps: p.steps }));
+    assert(KS.prefs.fx.t2i.steps === shownBefore && KS.prefs.fx.t2i.seed === -1, 'Les réglages affichés du Studio ne changent pas');
+    window.txtCalls.pop();   // la suite compte les générations ordinaires, toutes à graine aléatoire
+    assert(document.querySelectorAll('.iv-lightbox .iv-cmp .iv-media').length === 2 && document.querySelector('.iv-lightbox h3').textContent === 'Comparer les modèles', 'La comparaison s’ouvre sur les deux modèles');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await wait(() => !KS.modalOpen());
+    assert(document.querySelectorAll('.fx-thumbs img').length === 2 && [...document.querySelectorAll('.fx-output-actions button')].some(b => b.textContent === 'Comparer à l’original'), 'L’original reste à côté du nouveau résultat, comparable à tout moment');
+    // galerie : choisir une image, puis comparer avec une autre
+    KS.panels.focus('gallery');
+    const cells = () => [...document.querySelectorAll('.ga-cell')];
+    assert(cells().length >= 2, 'La galerie de la séance montre les images : ' + cells().length);
+    {
+      cells()[0].click();
+      [...document.querySelectorAll('.menu .mi')].find(x => x.textContent.trim() === 'Choisir pour comparer').click();
+      await wait(() => cells()[0].classList.contains('cmp'));
+      cells()[1].click();
+      [...document.querySelectorAll('.menu .mi')].find(x => x.textContent.trim() === 'Comparer avec l’image choisie').click();
+      await wait(() => !!document.querySelector('.iv-lightbox .iv-cmp'));
+      assert(!cells()[0].classList.contains('cmp') && document.querySelectorAll('.iv-lightbox .iv-cmp .iv-media').length === 2, 'Comparer deux images de la galerie, puis le choix est remis à zéro');
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await wait(() => !KS.modalOpen());
+    }
+  }
   const docsBefore = KS.state.docs.length;
   await click('Envoyer vers Img2Img');
   assert(KS.prefs.fx.i2i.seed === -1 && KS.state.docs.length === docsBefore, 'txt2img envoie vers Img2Img avec une nouvelle graine aléatoire');
@@ -317,7 +372,7 @@ async function scenario() {
   assert(window.txtCalls.at(-1).seed === -1, 'Hires demande aussi une graine aléatoire');
   assert(window.txtCalls.at(-1).override_settings.show_progress_type === 'Full' && window.txtCalls.at(-1).override_settings.show_progress_every_n_steps >= 2, 'L’aperçu en direct demande le décodage complet (net) à chaque génération');
   await click('Transformer', document.querySelector('.fx-rail'));
-  assert(document.querySelector('.fx-source img').alt.startsWith('new image'), 'La source survit au changement d’onglet');
+  assert(document.querySelector('.fx-source .iv-media').getAttribute('aria-label').startsWith('new image'), 'La source survit au changement d’onglet');
   await click('Inpaint sketch');
   KS.prefs.fx.painter.color = '#22cc44'; KS.prefs.fx.painter.erase = false;
   const beforeSketch = window.calls.length;
@@ -332,7 +387,7 @@ async function scenario() {
   await click('img2img', document.querySelector('.fx-modes'));
   const file = new File([bytes], 'Drop.png', { type: 'image/png' }), transfer = new DataTransfer(); transfer.items.add(file);
   document.querySelector('.fx-source .fx-dropzone').dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: transfer }));
-  await wait(() => document.querySelector('.fx-source img')?.alt === 'Drop.png');
+  await wait(() => document.querySelector('.fx-source .iv-media')?.getAttribute('aria-label') === 'Drop.png');
   assert(KS.state.docs.length === docsBefore + 1, 'Glisser-déposer importe dans le Studio sans ouvrir de document');
   await click('Batch');
   window.pickFiles = [{ name: 'One.png', data: bytes }, { name: 'Two.png', data: bytes }];
@@ -546,7 +601,10 @@ async function scenario() {
   const lastDone = KS.studio.gallery[0];
   document.querySelector('.fx-view.live').click();
   await wait(() => !!document.querySelector('.iv-lightbox .iv-media'));
-  assert(document.querySelector('.iv-lightbox h3').textContent.startsWith('Dernière image terminée') && document.querySelector('.iv-lightbox .iv-media').src === lastDone.canvas.toDataURL('image/png'), 'Pendant la génération, un clic sur l’aperçu affiche la dernière image terminée');
+  assert(!lastDone.canvas && lastDone.blob instanceof Blob && lastDone.blob.type === 'image/png', 'La galerie garde le PNG compressé, pas l’image décodée');
+  const peek = document.querySelector('.iv-lightbox .iv-media');
+  await wait(() => peek.complete && peek.naturalWidth > 0);
+  assert(document.querySelector('.iv-lightbox h3').textContent.startsWith('Dernière image terminée') && peek.src.startsWith('blob:') && peek.naturalWidth === lastDone.w && peek.naturalHeight === lastDone.h, 'Pendant la génération, un clic sur l’aperçu affiche la dernière image terminée');
   assert(!!document.querySelector('.fx-view.live') && !!document.querySelector('.fx-interrupt'), 'La génération continue derrière le plein écran');
   const interruptsPeek = window.interrupts;
   document.querySelector('.iv-lightbox').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));

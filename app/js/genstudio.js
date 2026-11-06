@@ -189,6 +189,18 @@
     }
     return out;
   };
+  // Le PNG a-t-il déjà un bloc texte de cette clé (tEXt, iTXt ou zTXt) ? Saute de bloc en bloc sans lire les pixels.
+  PNG.hasText = (u8, key) => {
+    if (!isPng(u8)) return false;
+    const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength), k = new TextEncoder().encode(key + '\0');
+    for (let o = 8; o + 12 <= u8.length;) {
+      const len = dv.getUint32(o), type = String.fromCharCode(u8[o + 4], u8[o + 5], u8[o + 6], u8[o + 7]);
+      if (type === 'IEND') return false;
+      if ((type === 'tEXt' || type === 'iTXt' || type === 'zTXt') && len >= k.length && k.every((b, i) => u8[o + 8 + i] === b)) return true;
+      o += 12 + len;
+    }
+    return false;
+  };
   // Ajoute (ou remplace) un bloc texte UTF-8 (iTXt) juste avant la fin du PNG
   PNG.writeText = (u8, key, text) => {
     if (!isPng(u8)) return u8;

@@ -375,8 +375,9 @@
     const d = i2iDoc;
     const paintable = d && FX.i2iMode !== 'img2img' && FX.i2iMode !== 'batch';
     const preview = d && !paintable && sourceFor(d, false);
+    if (preview) { preview.setAttribute('role', 'img'); preview.setAttribute('aria-label', d.name); }
     const zone = h('div.fx-dropzone', { role: 'button', tabIndex: 0, 'aria-label': 'Choisir l’image source Img2Img' },
-      paintable ? painterCanvas(d) : d ? h('img', { src: preview.toDataURL('image/png'), alt: d.name }) : h('div', { text: 'Déposez une image ou cliquez pour l’importer' }));
+      paintable ? painterCanvas(d) : d ? preview : h('div', { text: 'Déposez une image ou cliquez pour l’importer' }));   // canevas affiché tel quel : pas d'encodage PNG à chaque rendu
     if (d) KS.preview.mount(zone, zone.firstElementChild, { identity: d, width: d.width, height: d.height, paint: paintable });
     const pick = async () => {
       if (N && N.openDialog) {
@@ -1284,16 +1285,40 @@
     return items;
   }
   const releaseItems = o => { for (const it of o.items || []) if (it.url) URL.revokeObjectURL(it.url); };
+  // Galerie de la séance : le PNG compressé et une vignette, pas l'image décodée (60 images 1856 × 1024 décodées
+  // tenaient environ 1 Go de mémoire graphique, prise au moteur). L'image n'est décodée qu'au moment de s'en servir.
   function pushGallery(items) {
     if (KS.suite) KS.suite.collect(items).catch(() => {});
     for (const it of items) {
-      const t = U.canvas(Math.max(1, Math.round(it.canvas.width * 220 / Math.max(it.canvas.width, it.canvas.height))), Math.max(1, Math.round(it.canvas.height * 220 / Math.max(it.canvas.width, it.canvas.height))));
-      t.getContext('2d').drawImage(it.canvas, 0, 0, t.width, t.height);
-      SD.gallery.unshift({ id: U.uid(), canvas: it.canvas, info: it.info, params: it.params, seed: it.seed, kind: it.kind, time: Date.now(), thumb: t.toDataURL('image/jpeg', 0.82) });
+      const c = it.canvas, k = 220 / Math.max(c.width, c.height);
+      const t = U.canvas(Math.max(1, Math.round(c.width * k)), Math.max(1, Math.round(c.height * k)));
+      t.getContext('2d').drawImage(c, 0, 0, t.width, t.height);
+      const g = { id: U.uid(), w: c.width, h: c.height, blob: it.bytes ? new Blob([it.bytes], { type: 'image/png' }) : null, canvas: null,
+        info: it.info, params: it.params, seed: it.seed, kind: it.kind, from: it.from, time: Date.now(), thumb: t.toDataURL('image/jpeg', 0.82) };
+      if (!g.blob) { g.canvas = c; U.blobFromCanvas(c).then(b => { if (b) { g.blob = b; g.canvas = null; } }); }
+      SD.gallery.unshift(g);
     }
     if (SD.gallery.length > 120) SD.gallery.length = 120;
     renderGallery();
   }
+  // image de la galerie, décodée pour l'action demandée
+  const galleryItem = async g => ({ ...g, canvas: g.canvas || await U.canvasFromBlob(g.blob) });
+  const galleryMedia = g => {
+    if (g.canvas) return { canvas: g.canvas, w: g.w, h: g.h };
+    const src = URL.createObjectURL(g.blob);
+    return { src, w: g.w, h: g.h, release: () => URL.revokeObjectURL(src) };
+  };
+  /* ---------------------------------------------------------------- comparer deux images */
+  let cmpPick = null;   // image de la galerie choisie en premier
+  const infoModel = info => (/\bModel: ([^,\n]+)/.exec(info || '') || [])[1] || '';
+  // nom d'un checkpoint sans dossier, extension ni empreinte : « anima_aestheticV11 » (infotexte) = « anima_aestheticV11.safetensors [3c18…] » (catalogue)
+  const ckptStem = t => base(norm(t)).replace(/\.(safetensors|ckpt|gguf|pt|bin)$/i, '').toLowerCase();
+  const cmpLabel = (it, fallback) => [it.from === 'Kane Detailer' ? 'Kane Detailer' : '', infoModel(it.info), it.seed != null ? 'graine ' + it.seed : ''].filter(Boolean).join(' · ') || fallback;
+  const itemMedia = it => it.canvas ? { canvas: it.canvas, w: it.canvas.width, h: it.canvas.height } : galleryMedia(it);
+  const compareItems = (a, b, title = 'Comparer') => KS.preview.compare({ ...itemMedia(a), label: cmpLabel(a, 'A') }, { ...itemMedia(b), label: cmpLabel(b, 'B') }, { title });
+  const compareGallery = (a, b) => compareItems(a, b, 'Comparer deux images de la galerie');
+  // résultat refait (Kane Detailer, autre modèle) : comparé à l'image d'origine
+  const compareBefore = it => it && it.before && compareItems(it.before, it, it.from === 'Kane Detailer' ? 'Avant / après Kane Detailer' : 'Comparer les modèles');
   const selItem = key => { const o = OUT[key]; return o.items[o.sel] || null; };
   const docName = it => (it.info || 'Image IA').split('\n')[0].replace(/<[^>]+>|[\\/:*?"<>|]/g, '').trim().slice(0, 40) || 'Image IA';
   const itemDoc = it => {
@@ -1330,9 +1355,10 @@
     if (r && r.ok) KS.toast(r.written.length + ' image(s) enregistrée(s)', 'ok');
   }
   // « Send to » de Forge : l'image et ses paramètres passent à un autre onglet
-  function applyInfoTo(k, textInfo, { size = true } = {}) {
+  // st : réglages à remplir (par défaut ceux de l'onglet, enregistrés)
+  function applyInfoTo(k, textInfo, { size = true, st = FX[k] } = {}) {
     if (!textInfo) return;
-    const I = KS.png.parseInfo(textInfo), P = I.params, st = FX[k];
+    const I = KS.png.parseInfo(textInfo), P = I.params;
     st.prompt = I.prompt; st.negative_prompt = I.negative;
     if (P.Steps) st.steps = +P.Steps;
     if (P.Sampler) st.sampler_name = P.Sampler;
@@ -1347,7 +1373,7 @@
       if (P['Hires upscaler']) st.hr_upscaler = P['Hires upscaler'];
       if (P['Hires steps']) st.hr_second_pass_steps = +P['Hires steps'];
     } else if (P['Denoising strength']) st.denoising_strength = +P['Denoising strength'];
-    save();
+    if (st === FX[k]) save();
   }
   // Réglages repris d'un onglet à l'autre (comme « Send to img2img » de Forge) : l'invite telle qu'elle a été
   // tapée (français, balises <lora:…>), l'invite négative, les styles, l'échantillonnage, la graine, ADetailer
@@ -1431,7 +1457,8 @@
       const r = await N.forgeKaneDetail(url(), payload, it.bytes || await pngBytes(it.canvas));
       if (!r.ok) throw new Error(r.error);
       const canvas = await fromPng(r.image);
-      const item = { canvas, bytes: r.image, url: URL.createObjectURL(new Blob([r.image], { type: 'image/png' })), info: (info ? info + '\n' : '') + r.info, kind: it.kind || 'txt2img', from: 'Kane Detailer', kdZones: r.zones || null };
+      const item = { canvas, bytes: r.image, url: URL.createObjectURL(new Blob([r.image], { type: 'image/png' })), info: (info ? info + '\n' : '') + r.info, kind: it.kind || 'txt2img', from: 'Kane Detailer', kdZones: r.zones || null,
+        seed: it.seed, params: it.params, before: { canvas: it.canvas, info: it.info, seed: it.seed, from: it.from } };
       const o = OUT[key] || OUT.t2i; o.items.unshift(item); o.sel = 0; pushGallery([item]); renderOut(key in OUT ? key : 't2i');
       KS.toast(r.info, 'ok', 4000);
     } catch (e) { KS.toast('Kane Detailer : ' + e.message, 'err', 6000); }
@@ -1452,6 +1479,54 @@
       KS.preview.open(canvas, canvas.width, canvas.height, { title: 'Zones Kane Detailer : ' + (Object.entries(labels).map(([k2, n]) => names[k2] + ' ×' + n).join(', ') || 'rien trouvé') });
     } catch (e) { KS.toast('Kane Detailer : ' + e.message, 'err', 6000); }
   }
+  // Même invite, mêmes réglages et même graine avec un autre modèle, puis comparaison côte à côte.
+  // Le modèle n'est changé que pour cette image (override_settings) : le modèle choisi dans le Studio reste le même.
+  function pickModel(exclude) {
+    const grid = h('div.fx-cards.fx-pickmodel');
+    const modal = KS.modal({ title: 'Refaire avec un autre modèle', width: 760, buttons: [{ label: 'Annuler', value: null }],
+      body: h('div.fx-pick', h('p.fx-info', { text: 'La même image est refaite avec le modèle choisi : même invite, mêmes réglages, même graine. Le modèle est chargé pour cette image seulement ; comptez le temps de chargement des deux modèles.' }), grid) });
+    for (const m of cat.models) {
+      if (ckptStem(m.title) === ckptStem(exclude)) continue;
+      const card = h('button.fx-card', { type: 'button', title: m.title }, m.url ? h('img', { src: m.url, alt: '' }) : h('div.fx-nopv', { text: 'NO PREVIEW' }), h('div.fx-card-n', { text: norm(m.title) }));
+      card.addEventListener('click', () => modal.close(m));
+      grid.appendChild(card);
+    }
+    if (!grid.children.length) grid.replaceWith(h('div.fx-note', { text: 'Aucun autre modèle dans models/Stable-diffusion.' }));
+    return modal.done;
+  }
+  async function remakeWithModel(it) {
+    if (!it || BUSY || PREPARING || detailing) return;
+    const seed = it.seed ?? +((/\bSeed: (\d+)/.exec(it.info || '') || [])[1]);
+    if (!it.info || !Number.isFinite(seed)) return KS.toast('Cette image n’a pas ses paramètres de génération : impossible de la refaire à l’identique.', 'info', 4000);
+    if (!(await ensureCat())) return;
+    const was = infoModel(it.info) || norm(cat.current.model);
+    const model = await pickModel(was);
+    if (!model) return;
+    const prep = PREPARING = { k: 't2i', canceled: false }; renderGenButtons();
+    try {
+      if (await trainingRuns() || prep.canceled) return;
+      // réglages de l'image (infotexte), pas ceux affichés : taille, échantillonnage, hires ; détailleurs actuels du Studio
+      const st = { ...clone(FX.t2i), enable_hr: false, n_iter: 1, batch_size: 1, script: 'None' };
+      if (it.params) Object.assign(st, clone(it.params));
+      applyInfoTo('t2i', it.info, { st });
+      const P = KS.png.parseInfo(it.info).params;
+      const p = await payloadFor('t2i', st);
+      if (prep.canceled) return;
+      p.seed = seed;
+      if (P['Variation seed']) p.subseed = +P['Variation seed'];
+      p.override_settings = { ...p.override_settings, sd_model_checkpoint: model.title };
+      const r = await runForge('t2i', () => N.forgeTxt2img(url(), p));
+      if (!r.ok) throw new Error(r.error);
+      const res = (await toItems(r, 'txt2img', p)).filter(x => !x.grid)[0];
+      if (!res) throw new Error('Forge n\'a renvoyé aucune image (génération interrompue ?)');
+      res.params = snapParams(st); res.seed = seed;
+      res.before = { canvas: it.canvas, info: it.info, seed, from: it.from };
+      OUT.t2i.items.unshift(res); OUT.t2i.sel = 0; FX.tab = 'txt2img';
+      render(); pushGallery([res]);
+      compareBefore(res);
+    } catch (e) { KS.toast('Comparaison impossible : ' + e.message, 'err', 7000); }
+    finally { if (PREPARING === prep) PREPARING = null; renderGenButtons(); }
+  }
   async function showZones(it) {
     if (!it || !it.kdZones) return;
     const canvas = await fromPng(it.kdZones);
@@ -1470,6 +1545,9 @@
         action('Envoyer vers Img2Img', () => sendTo('img2img', it)), action('Envoyer vers Inpaint', () => sendTo('inpaint', it)),
         action('Détailler (Kane Detailer)', () => detailItem(key, it), { tip: 'Repeint de près chaque partie choisie dans le volet Kane Detailer, couleurs d’origine gardées' }),
         it && it.kdZones ? action('Zones repeintes', () => showZones(it), { tip: 'Ce que Kane Detailer a vraiment repeint sur cette image' }) : null),
+      key === 't2i' || (it && it.before) ? group('compare', 'Comparer',
+        it && it.before ? action(it.from === 'Kane Detailer' ? 'Avant / après' : 'Comparer à l’original', () => compareBefore(it), { tip: 'Rideau ou côte à côte, avec l’image de départ' }) : null,
+        key === 't2i' ? action('Refaire avec un autre modèle…', () => remakeWithModel(it), { enabled: !!it && !!it.info && !BUSY, tip: 'Même invite, mêmes réglages, même graine, avec un autre checkpoint, puis comparaison' }) : null) : null,
       key !== 'ex' ? group('upscale', 'Agrandir',
         action('Agrandir dans Extras', () => sendTo('extras', it)),
         key === 't2i' ? action('Agrandir avec Hires', () => upscaleHires(it), { tip: 'Agrandir cette image avec le hires fix (réglages de « Hires. fix »)' }) : action('Agrandir avec Hires', () => C.sendToStudioItem(it))) : null,
@@ -1494,9 +1572,10 @@
     view.title = 'Clic : voir en plein écran la dernière image terminée';
     view.addEventListener('click', () => {
       const g = SD.gallery[0], o = OUT[key], it = o && (o.items[o.sel] || o.items[0]);
-      const pick = g ? { media: g.canvas, w: g.canvas.width, h: g.canvas.height } : it ? { media: h('img', { src: it.url }), w: it.canvas.width, h: it.canvas.height } : null;
+      const m = g ? galleryMedia(g) : null;
+      const pick = m ? { media: m.canvas || h('img', { src: m.src }), w: m.w, h: m.h } : it ? { media: h('img', { src: it.url }), w: it.canvas.width, h: it.canvas.height } : null;
       if (!pick) return KS.toast('Aucune image terminée pour l’instant : la première arrive à la fin de cette génération.', 'info', 2600);
-      KS.preview.open(pick.media, pick.w, pick.h, { title: 'Dernière image terminée (génération en cours…)' });
+      KS.preview.open(pick.media, pick.w, pick.h, { title: 'Dernière image terminée (génération en cours…)' }).done.then(() => m?.release?.());
     });
   }
   function renderOut(key = 't2i') {
@@ -1512,7 +1591,9 @@
       { label: 'Envoyer vers Inpaint', icon: 'brush', action: () => sendTo('inpaint', it) },
       { label: 'Détailler (Kane Detailer)', icon: 'sparkles', action: () => detailItem(key, it) },
       { label: 'Voir les zones (Kane Detailer)', icon: 'grid', action: () => detectItem(key, it) },
-      it.kdZones ? { label: 'Zones repeintes (Kane Detailer)', icon: 'eye', action: () => showZones(it) } : null].filter(Boolean) }); }
+      it.kdZones ? { label: 'Zones repeintes (Kane Detailer)', icon: 'eye', action: () => showZones(it) } : null,
+      it.before ? { label: it.from === 'Kane Detailer' ? 'Avant / après' : 'Comparer à l’original', icon: 'compare', action: () => compareBefore(it) } : null,
+      key === 't2i' && it.info ? { label: 'Refaire avec un autre modèle…', icon: 'compare', action: () => remakeWithModel(it) } : null].filter(Boolean) }); }
     else view.append(h('div.fx-ph', key === 'i2i' ? { text: 'Les résultats apparaîtront ici' } : { html: KS.icon('image') }));
     const thumbs = o.items.length > 1 ? h('div.fx-thumbs', ...o.items.map((x, i) => { const t = h('img' + (i === o.sel ? '.on' : ''), { src: x.url, alt: '', title: x.from ? 'Venue de l\'Édition : ' + x.from : '' }); t.addEventListener('click', () => { o.sel = i; renderOut(key); }); return t; })) : null;
     fillEl(box, key === 'i2i' ? h('div.fx-h', { text: 'Résultat' }) : null, view, thumbs, outButtons(key, it), it ? h('div.fx-outinfo', { text: (it.from ? 'Venue de l\'Édition : ' + it.from + '\n\n' : '') + (it.info || '(sans paramètres de génération)') + (o.time && !it.from ? `\n\nTime taken: ${o.time}` : '') }) : null);
@@ -1737,7 +1818,7 @@
   /* ---------------------------------------------------------------- Extras */
   function extrasTab() {
     const ex = FX.ex, src = OUT.exSrc, d = D();
-    const zone = h('div.fx-dropzone', src ? h('img', { src: src.canvas.toDataURL('image/png'), alt: '' }) : h('div', { text: 'Déposer l\'image ici, ou cliquer pour en choisir une' }));
+    const zone = h('div.fx-dropzone', src ? KS.preview.copyCanvas(src.canvas) : h('div', { text: 'Déposer l\'image ici, ou cliquer pour en choisir une' }));
     const pick = async () => {
       const files = await N.openDialog({ title: 'Image à agrandir', multi: false, filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp'] }] });
       if (files && files[0]) { OUT.exSrc = { canvas: await KS.io.canvasFromEntry(files[0]), name: files[0].name }; render(); }
@@ -1831,7 +1912,7 @@
   }
   function pngTab() {
     const o = OUT.png, d = D();
-    const zone = h('div.fx-dropzone', o ? h('img', { src: o.canvas.toDataURL('image/png'), alt: '' }) : h('div', { text: 'Déposer une image ici, ou cliquer pour en choisir une' }));
+    const zone = h('div.fx-dropzone', o ? KS.preview.copyCanvas(o.canvas) : h('div', { text: 'Déposer une image ici, ou cliquer pour en choisir une' }));
     if (o) KS.preview.mount(zone, zone.firstElementChild, { identity: o, width: o.canvas.width, height: o.canvas.height });
     const pick = async () => {
       const files = await N.openDialog({ title: 'Image à lire', multi: false, filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }] });
@@ -1879,16 +1960,22 @@
     const head = h('div.ga-head', h('span', { text: SD.gallery.length ? SD.gallery.length + ' image(s) cette session' : 'Les images générées apparaîtront ici.' }), h('div.spacer'),
       N && N.openForgeOutput ? ui.iconBtn('folder-open', 'Ouvrir le dossier des images de Forge', () => N.openForgeOutput(''), '.sm') : null);
     const grid = h('div.ga-grid');
+    if (cmpPick && !SD.gallery.includes(cmpPick)) cmpPick = null;
     for (const it of SD.gallery) {
-      const cell = h('button.ga-cell', h('img', { src: it.thumb, alt: '', title: (it.info || '').split('\n')[0].slice(0, 160) }), h('span.ga-k', { text: it.kind }));
+      const cell = h('button.ga-cell' + (it === cmpPick ? '.cmp' : ''), h('img', { src: it.thumb, alt: '', title: (it.info || '').split('\n')[0].slice(0, 160) }), h('span.ga-k', { text: it === cmpPick ? 'à comparer' : it.kind }));
+      const use = fn => async () => fn(await galleryItem(it));
       const openMenu = (x, y) => {
+        const pickItem = () => { cmpPick = it === cmpPick ? null : it; renderGallery(); if (cmpPick) KS.toast('Choisissez maintenant l’autre image à comparer (clic sur sa vignette)', 'info', 2600); };
         ui.menu([
-          { label: 'Ouvrir dans Retouche', icon: 'file-plus', action: () => sendTo('edit', it) },
-          { label: 'Ajouter comme calque', icon: 'layers', action: () => addAsLayer(it), disabled: !D() },
-          { label: 'Envoyer vers Img2Img', icon: 'image', action: () => sendTo('img2img', it) },
-          { label: 'Envoyer vers Inpaint', icon: 'brush', action: () => sendTo('inpaint', it) },
+          cmpPick && cmpPick !== it ? { label: 'Comparer avec l’image choisie', icon: 'compare', action: () => { const a = cmpPick; cmpPick = null; renderGallery(); compareGallery(a, it); } } : null,
+          { label: it === cmpPick ? 'Ne plus choisir pour comparer' : cmpPick ? 'Choisir celle-ci pour comparer' : 'Choisir pour comparer', icon: 'compare', action: pickItem },
+          { sep: true },
+          { label: 'Ouvrir dans Retouche', icon: 'file-plus', action: use(x2 => sendTo('edit', x2)) },
+          { label: 'Ajouter comme calque', icon: 'layers', action: use(addAsLayer), disabled: !D() },
+          { label: 'Envoyer vers Img2Img', icon: 'image', action: use(x2 => sendTo('img2img', x2)) },
+          { label: 'Envoyer vers Inpaint', icon: 'brush', action: use(x2 => sendTo('inpaint', x2)) },
           { label: 'Réutiliser ces réglages (txt2img)', icon: 'history', action: () => sendTo('txt2img', it), disabled: !it.info },
-          { label: 'Copier l’image', icon: 'copy', action: () => KS.preview.copy(it.canvas) },
+          { label: 'Copier l’image', icon: 'copy', action: () => it.blob ? KS.preview.copy(it.blob) : KS.preview.copy(it.canvas) },
         ], x, y);
       };
       cell.addEventListener('click', () => { const r = cell.getBoundingClientRect(); openMenu(r.left, r.bottom + 4); });

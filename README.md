@@ -20,6 +20,14 @@ et les trois copies ICO utilisées par la fenêtre, les raccourcis et l'installa
 dix tailles de 16 à 256 pixels ; le symbole reste transparent et indépendant du thème de l'interface.
 
 ## Outils récents
+### Comparer, refaire avec un autre modèle, galerie compressée (1.23.0)
+
+- **Visionneuse de comparaison** `KS.preview.compare(a, b)` (`app/js/image-preview.js`) : rideau (glisser la ligne, ← →) ou côte à côte, zoom et déplacement communs ; B est affichée à la taille de A. Entrées : Avant / après d’un résultat Kane Detailer (`item.before`), « Choisir pour comparer » dans la galerie, « Refaire avec un autre modèle… ».
+- **Refaire avec un autre modèle** (`remakeWithModel`, `app/js/studio.js`) : réglages relus dans l’infotexte de l’image (`applyInfoTo` sur une copie), graine de l’image, `override_settings.sd_model_checkpoint` avec `override_settings_restore_afterwards` : Forge recharge le modèle pour cette image et le réglage du moteur revient ensuite.
+- **Galerie compressée** : `SD.gallery` garde le PNG (`blob`) et une vignette, plus l’image décodée ; `galleryItem` la décode au moment d’une action. Banc : `electron tools/bench-studio-memory.cjs 120` (KV_APP=<dossier app> pour une autre version). 120 images 1856 × 1024 : processus GPU 1 475 → 552 Mo. Le banc ouvre une fenêtre transparente : dans une fenêtre cachée, Chromium n’a presque pas de temps libre et `toBlob` y attend jusqu’à 5 s.
+- Plus d’encodage PNG à l’affichage : source img2img, Extras, PNG Info et plein écran tracent le canevas (`KS.preview.copyCanvas`) au lieu de `toDataURL`. `KS.suite.collect` réutilise `it.bytes` (`KS.png.hasText` évite un second bloc `parameters`).
+- Tests : `test-suite.cjs` remis à jour pour le panneau K (52 vérifications) ; `test-studio.cjs` 158 vérifications, le test « Cliquer autour de l’image » n’échoue plus une fois sur deux (il vérifiait avant que le clic simulé soit traité) ; `test-owned-main.cjs` et `test-animation-native.cjs` sont sautés avec un message quand les copies des moteurs ont changé, au lieu de bloquer derrière une boîte d’erreur.
+
 ### Animation : la scène va dans « a poster » (1.13.1)
 
 - En sortie **Scène** (par défaut), `a poster` ne contient plus que la scène Wallpaper Engine : ouvert dans l'éditeur de Wallpaper Engine, il est reconnu comme une scène (avant, le fond Web resté dans `a poster` créait un projet Web `myprojects\index…`).

@@ -5,7 +5,11 @@ const root = process.env.KANEVAS_TEST_ROOT || path.join(__dirname, '..');
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'kanevas-owned-main-'));
 process.env.KANEVAS_PROFILE = profile;
 const reportFile = process.env.KANEVAS_MANAGED_REPORT || 'C:\\KaneOS\\KanevasData\\migration.json';
-const owned = require(path.join(root, 'managed-runtimes.cjs'))(profile).activate(reportFile);
+// Les moteurs réels changent (ComfyUI se met à jour au lancement) : sans copie vérifiée intacte, le test est sauté,
+// sans exception au chargement (Electron ouvrirait une boîte d'erreur et attendrait un clic).
+let owned;
+try { owned = require(path.join(root, 'managed-runtimes.cjs'))(profile).activate(reportFile); }
+catch (error) { console.log('SAUTÉ : copies des moteurs non activables (' + error.message + ')'); fs.rmSync(profile, { recursive: true, force: true }); process.exit(0); }
 let handled = false;
 const server = http.createServer((request, response) => {
   response.setHeader('Content-Type', 'application/json');

@@ -43,6 +43,19 @@
 .fx-source .iv-viewport,.fx-left .iv-viewport { height:clamp(180px,30vh,380px); }
 .fx-img2img .fx-view .iv-viewport { height:clamp(260px,46vh,620px); }
 .iv-viewport .fx-painter { cursor:crosshair; }
+.iv-controls .spacer { flex:1; }
+.iv-cmp-modes { display:flex; gap:2px; }
+.iv-controls .iv-cmp-modes button.on { background:var(--hover); color:var(--text); border-color:var(--border); }
+.iv-cmp-pane { position:absolute; inset:0; overflow:hidden; }
+.iv-cmp.side .iv-cmp-pane { right:50%; }
+.iv-cmp.side .iv-cmp-b { left:50%; right:0; border-left:1px solid var(--border); }
+.iv-cmp-handle { position:absolute; top:0; bottom:0; width:2px; margin-left:-1px; background:#fff; box-shadow:0 0 0 1px rgba(0,0,0,.45); cursor:ew-resize; z-index:2; }
+.iv-cmp-handle span { position:absolute; top:50%; left:50%; width:26px; height:26px; margin:-13px 0 0 -13px; border-radius:50%; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.5); }
+.iv-cmp-handle span::before { content:"◂ ▸"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#333; font-size:9px; letter-spacing:-1px; }
+.iv-cmp-tag { position:absolute; top:10px; z-index:3; max-width:40%; padding:3px 8px; border-radius:3px; background:rgba(0,0,0,.62); color:#fff; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none; }
+.iv-cmp-tag.a { left:10px; }
+.iv-cmp-tag.b { right:10px; }
+.iv-cmp.side .iv-cmp-tag.b { left:calc(50% + 10px); right:auto; }
 .wx-bar { background:var(--panel); }
 .suite-detail .btn { flex-shrink:0; }
 @media(max-width:1150px) { #suite-toolbar .ws-btn { padding:0 8px; font-size:11px; } }

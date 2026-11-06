@@ -149,8 +149,10 @@
     await S.ready; const project = S.project.id;
     await S.run('Archivage des générations', async () => {
       for (const it of items) {
-        const data = new Uint8Array(await (await U.blobFromCanvas(it.canvas)).arrayBuffer());
-        const r = await call('capture', { project, name: 'Création ' + new Date().toLocaleTimeString('fr-FR').replace(/:/g, '-') + '.png', data: it.info ? KS.png.writeText(data, 'parameters', it.info) : data, source: 'studio', info: it.info }); adopt(r.project);
+        // le PNG de Forge tel quel (pas de second encodage, ses métadonnées gardées) ; sinon encodé depuis l'image
+        const data = it.bytes || new Uint8Array(await (await U.blobFromCanvas(it.canvas)).arrayBuffer());
+        const tagged = it.info && !KS.png.hasText(data, 'parameters') ? KS.png.writeText(data, 'parameters', it.info) : data;
+        const r = await call('capture', { project, name: 'Création ' + new Date().toLocaleTimeString('fr-FR').replace(/:/g, '-') + '.png', data: tagged, source: 'studio', info: it.info }); adopt(r.project);
       }
     });
   };

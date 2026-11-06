@@ -7,7 +7,10 @@ const root=process.env.KANEVAS_TEST_ROOT || path.join(__dirname,'..');
 const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'kanevas-animation-native-'));
 const profile=path.join(tmp,'profile');process.env.KANEVAS_PROFILE=profile;
 const managed=require(path.join(root,'managed-runtimes.cjs'))(profile);
-const owned=managed.activate('C:\\KaneOS\\KanevasData\\migration.json');
+// moteurs réels modifiés depuis leur vérification (ComfyUI se met à jour) : test sauté, sans boîte d'erreur au chargement
+let owned;
+try{owned=managed.activate('C:\\KaneOS\\KanevasData\\migration.json');}
+catch(error){console.log('SAUTÉ : copies des moteurs non activables ('+error.message+')');fs.rmSync(tmp,{recursive:true,force:true});process.exit(0);}
 owned.source=tmp;fs.writeFileSync(path.join(profile,'managed-runtimes.json'),JSON.stringify(owned));
 const output=path.join(tmp,'output','animation'),fixture=path.join(tmp,'Choix réel.png');fs.mkdirSync(output,{recursive:true});
 const rgba=Buffer.alloc(128*64*4,210);for(let i=3;i<rgba.length;i+=4)rgba[i]=255;

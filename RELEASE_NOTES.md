@@ -1,3 +1,12 @@
+# 1.23.0 — Studio IA : comparer, refaire avec un autre modèle, moins de mémoire vidéo
+
+- **Comparer deux images** : une visionneuse avec un rideau à glisser (ou les flèches ← →), ou les deux images côte à côte. Le zoom et le déplacement sont communs aux deux.
+  - Après Kane Detailer : bouton **Avant / après**.
+  - Dans la galerie : clic sur une image → « Choisir pour comparer », puis clic sur une autre → « Comparer avec l’image choisie ».
+- **Refaire avec un autre modèle…** (txt2img, bouton ou clic droit sur le résultat) : la même image est refaite avec un autre checkpoint, avec la même invite, les mêmes réglages et **la même graine**, puis les deux sont comparées. Le modèle n’est changé que pour cette image : le modèle choisi dans le Studio reste le même. Pratique pour comparer Anima Aesthetic et un Anima 2.9B comme One Obsession.
+- **Moins de mémoire vidéo sur une longue séance** : la galerie garde les images compressées (PNG) au lieu de les garder décodées. Mesure sur 120 générations 1856 × 1024 : mémoire du processus graphique de KaneApp 1 475 Mo → 552 Mo, soit environ 900 Mo laissés à Forge.
+- **Plus fluide** : l’image source d’img2img, d’Extras et de PNG Info n’est plus réencodée en PNG à chaque affichage, et le plein écran ne réencode plus l’image. L’archivage des générations dans le projet réutilise le PNG de Forge, sans second encodage et avec ses paramètres d’origine.
+
 # 1.22.0 — Kane Detailer 4 : un juge pour chaque zone
 
 - **Essais par zone** : le visage, les yeux, les mains et les pieds sont repeints 2 fois (réglable de 1 à 4). Un juge garde le meilleur essai, ou **l'original si aucun n'est meilleur**. Il s'appuie sur le détecteur de la partie, sur DWPose pour les mains et sur la ressemblance de forme. Les grandes zones (vêtements, cheveux) n'ont qu'un essai, mais passent aussi devant le juge : une passe ratée est annulée.
