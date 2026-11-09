@@ -21,7 +21,7 @@
   const COMMON = () => ({
     prompt: '', negative_prompt: '', styles: [], sampler_name: 'SEEDS 3', scheduler: 'Beta57', steps: 22, width: 1024, height: 1024, n_iter: 1, batch_size: 1,
     cfg_scale: 4, distilled_cfg_scale: 3, seed: -1, seedExtra: false, subseed: -1, subseed_strength: 0, seed_resize_from_w: 0, seed_resize_from_h: 0,
-    kd: { enabled: false, skip: false, parts: ['vetements', 'poitrine', 'cheveux', 'mains', 'visage', 'yeux'], forces: {}, keep: 0.8, resolution: 1024, detail: 0, upscale: 1, showZones: true, tries: 2, repair: true, grain: 0.5, glow: true, age: true },
+    kd: { enabled: false, skip: false, parts: ['vetements', 'poitrine', 'cheveux', 'mains', 'visage', 'yeux'], forces: {}, keep: 0.8, resolution: 1024, detail: 0, upscale: 1, showZones: true, tries: 2, repair: true, grain: 0.5, glow: true, age: true, autotag: true, soft: true, wd: true },
     noom: { unet: false, vae: false }, script: 'None', scriptArgs: {}, open: {},
   });
   const DEF = {
@@ -928,7 +928,11 @@
             slider('Garder le grain du pinceau', st.kd, 'grain', 0, 1, 0.05, 'Remet la touche fine du pinceau là où le repeint a lissé la peinture (0 = non)')),
           check('Réparer les mains douteuses', st.kd, 'repair', 'Une main peu sûre pour DWPose reçoit aussi un essai repeint fort (0,5), gardé seulement s’il est nettement meilleur', rp),
           check('Protéger les lumières', st.kd, 'glow', 'Yeux lumineux, reflets, magie : les points qui brillent gardent leur éclat', rp),
-          check('Ne pas vieillir les visages', st.kd, 'age', 'Ajoute « rides, sillons, cernes, âgé » à ce qu’il faut éviter sur le visage et les yeux, sauf si l’invite demande un personnage mûr', rp)] : []),
+          check('Ne pas vieillir les visages', st.kd, 'age', 'Ajoute « rides, sillons, cernes, âgé » à ce qu’il faut éviter sur le visage et les yeux, sauf si l’invite demande un personnage mûr', rp),
+          ...(info.version >= 5 ? [
+            check('Invite de zone d’après ce qu’on y voit', st.kd, 'autotag', 'WD14 reconnaît ce que contient chaque zone (objet tenu, couleur des yeux, ongles…) et l’ajoute à son invite : le repeint ne change plus la couleur des yeux et ne fait plus disparaître l’objet tenu', rp),
+            check('Raccords invisibles', st.kd, 'soft', 'Inpainting doux dans chaque zone : le bord du masque est repeint progressivement, sans couture', rp),
+            check('Juge WD14', st.kd, 'wd', 'Le juge tient aussi compte de la netteté, des erreurs d’anatomie et de l’identité vues par WD14', rp)] : [])] : []),
         check('Montrer les zones repeintes après la génération', st.kd, 'showZones', 'Ajoute à côté du résultat l’image des zones vraiment repeintes (masque et zone de travail)'),
         h('div.note', { text: 'Passe du plus large au plus fin. Clic droit sur un résultat : « Voir les zones » (ce qui sera repeint) ou « Détailler » sur une image déjà faite.' }));
       return out;
@@ -1453,7 +1457,7 @@
     const info = it.info || '', neg = info.indexOf('\nNegative prompt:'), steps = info.indexOf('\nSteps:');
     const prompt = info ? info.slice(0, neg >= 0 ? neg : steps >= 0 ? steps : info.length).trim() : await english(st.prompt);
     const negative = info && neg >= 0 ? info.slice(neg + 17, steps > neg ? steps : info.length).trim() : await english(st.negative_prompt);
-    const payload = { parts, forces: { ...st.kd.forces }, keep: +st.kd.keep, resolution: +st.kd.resolution, detail: +st.kd.detail || 0, upscale: +st.kd.upscale || 1, tries: +st.kd.tries || 1, repair: !!st.kd.repair, grain: +st.kd.grain || 0, glow: !!st.kd.glow, age: !!st.kd.age, prompt, negative_prompt: negative, seed: -1,
+    const payload = { parts, forces: { ...st.kd.forces }, keep: +st.kd.keep, resolution: +st.kd.resolution, detail: +st.kd.detail || 0, upscale: +st.kd.upscale || 1, tries: +st.kd.tries || 1, repair: !!st.kd.repair, grain: +st.kd.grain || 0, glow: !!st.kd.glow, age: !!st.kd.age, autotag: st.kd.autotag !== false, soft: st.kd.soft !== false, wd: st.kd.wd !== false, prompt, negative_prompt: negative, seed: -1,
       sampler_name: st.sampler_name, scheduler: st.scheduler, steps: +st.steps, cfg_scale: +st.cfg_scale, distilled_cfg_scale: +st.distilled_cfg_scale };
     detailing = true;
     KS.toast('Kane Detailer : ' + parts.length + ' partie(s) en cours…', 'info', 4000);
@@ -1712,7 +1716,7 @@
       hr_scheduler: st.hr_scheduler && st.hr_scheduler !== 'Use same scheduler' ? st.hr_scheduler : undefined,
       hr_prompt: await english(st.hr_prompt), hr_negative_prompt: await english(st.hr_negative_prompt),
     });
-    if (st.kd.enabled && st.kd.parts.length && cat && cat.kdInfo) p.alwayson_scripts['Kane Detailer'] = { args: [{ enabled: true, parts: st.kd.parts, forces: { ...st.kd.forces }, skip: k === 'i2i' && !!st.kd.skip, keep: +st.kd.keep, resolution: +st.kd.resolution, detail: +st.kd.detail || 0, upscale: +st.kd.upscale || 1, tries: +st.kd.tries || 1, repair: !!st.kd.repair, grain: +st.kd.grain || 0, glow: !!st.kd.glow, age: !!st.kd.age }] };
+    if (st.kd.enabled && st.kd.parts.length && cat && cat.kdInfo) p.alwayson_scripts['Kane Detailer'] = { args: [{ enabled: true, parts: st.kd.parts, forces: { ...st.kd.forces }, skip: k === 'i2i' && !!st.kd.skip, keep: +st.kd.keep, resolution: +st.kd.resolution, detail: +st.kd.detail || 0, upscale: +st.kd.upscale || 1, tries: +st.kd.tries || 1, repair: !!st.kd.repair, grain: +st.kd.grain || 0, glow: !!st.kd.glow, age: !!st.kd.age, autotag: st.kd.autotag !== false, soft: st.kd.soft !== false, wd: st.kd.wd !== false }] };
     if (st.noom.unet || st.noom.vae) p.alwayson_scripts['Never OOM Integrated'] = { args: [!!st.noom.unet, !!st.noom.vae] };
     if (k === 'i2i') {
       if (st.md.enabled) p.alwayson_scripts['MultiDiffusion Integrated'] = { args: [true, st.md.method, +st.md.tw, +st.md.th, +st.md.overlap, +st.md.batch] };

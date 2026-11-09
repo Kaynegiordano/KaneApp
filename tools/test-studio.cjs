@@ -35,7 +35,7 @@ window.ksNative = {
     loras: [{ name: 'test', alias: 'Illustration', weight: 0.7, trigger: 'painted', negative: 'bad lines', rel: 'Art', mtime: 1 }],
     modules: [], current: { model: 'Studio-model', modules: [] },
     dtype: 'Automatic', samplers: ['Euler'], schedulers: ['Automatic'], scripts: [], styles: [], presets: {}, upscalers: ['Lanczos'],
-    kdInfo: { version: 4, parts: [{ key: 'cheveux', label: 'Cheveux', denoise: 0.3, model: 'anzhc_headhair_seg_y8n.pt' }, { key: 'pieds', label: 'Pieds', denoise: 0.38, model: null },
+    kdInfo: { version: 5, parts: [{ key: 'cheveux', label: 'Cheveux', denoise: 0.3, model: 'anzhc_headhair_seg_y8n.pt' }, { key: 'pieds', label: 'Pieds', denoise: 0.38, model: null },
       { key: 'visage', label: 'Visage', denoise: 0.35, model: 'anzhc_face_seg_640_v4_y11n.pt' }, { key: 'yeux', label: 'Yeux', denoise: 0.3, model: 'anzhc_eyes_seg_hd.pt' }],
       presets: { Portrait: ['cheveux', 'visage', 'yeux'], 'Corps entier': ['cheveux', 'visage', 'yeux'] }, force_help: '0,15–0,25 : retouche légère' } }),
   forgeKaneDetect: async (url, payload, png) => { window.kdDetect = payload; return { ok: true, regions: [{ part: 'visage', box: [1, 1, 20, 20], conf: 0.9 }], preview: png }; },
@@ -173,7 +173,7 @@ async function scenario() {
     det.click();
     await wait(() => (window.kdCalls || []).length === 1);
     const kd = window.kdCalls[0];
-    assert(kd.parts.join() === 'vetements,poitrine,cheveux,mains,visage,yeux' && kd.forces && !('strength' in kd) && kd.detail === 0 && kd.upscale === 1 && kd.keep === 0.8 && kd.resolution === 1024 && kd.tries === 2 && kd.repair === true && kd.grain === 0.5 && kd.glow === true && kd.age === true && kd.prompt && !/Steps:/.test(kd.prompt), 'Détailler envoie les parties du volet et l’invite de l’image : ' + JSON.stringify(kd).slice(0, 200));
+    assert(kd.parts.join() === 'vetements,poitrine,cheveux,mains,visage,yeux' && kd.forces && !('strength' in kd) && kd.detail === 0 && kd.upscale === 1 && kd.keep === 0.8 && kd.resolution === 1024 && kd.tries === 2 && kd.repair === true && kd.grain === 0.5 && kd.glow === true && kd.age === true && kd.autotag === true && kd.soft === true && kd.wd === true && kd.prompt && !/Steps:/.test(kd.prompt), 'Détailler envoie les parties du volet et l’invite de l’image : ' + JSON.stringify(kd).slice(0, 200));
     await wait(() => /Kane Detailer/.test(document.querySelector('.fx-outinfo')?.textContent || ''));
     assert(shown >= 1, 'Le résultat détaillé s’affiche');
     assert([...document.querySelectorAll('.fx-output-actions button')].some(b => b.textContent === 'Zones repeintes'), 'Le résultat détaillé propose « Zones repeintes »');
@@ -207,6 +207,7 @@ async function scenario() {
     const kdOf = () => KS.prefs.fx[KS.prefs.fx.tab === 'img2img' ? 'i2i' : 't2i'].kd;
     await wait(() => kdOf().forces.visage === 0.22);
     assert(kdOf().forces.visage === 0.22 && !rows[2].querySelector('.kd-reset').hidden, 'Changer la force du visage la retient et montre le retour à la recette');
+    { const txt = [...document.querySelectorAll('.fx-acc')].find(x => x.querySelector('.kd-row'))?.textContent || ''; assert(['Invite de zone d’après ce qu’on y voit', 'Raccords invisibles', 'Juge WD14'].every(x => txt.includes(x)), 'Le volet montre les réglages de Kane Detailer 5'); }
     head.click();
     // « Voir les zones » ouvre l'aperçu des zones
     const vp3 = document.querySelector('.fx-view .iv-viewport'), r3 = vp3.getBoundingClientRect();

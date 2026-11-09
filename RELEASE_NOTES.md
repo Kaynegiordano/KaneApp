@@ -1,3 +1,10 @@
+# 1.25.0 — Kane Detailer 5 : chaque zone sait ce qu'elle contient
+
+- **Invite de zone d'après ce qu'on y voit** : WD14 reconnaît ce que contient chaque zone (objet tenu, couleur des yeux, ongles…) et l'ajoute à son invite. Le détail ne change plus des yeux rouges en yeux marron et ne fait plus disparaître l'éventail ou les baguettes. Seules les étiquettes sûres sont gardées, triées par partie : une main ne reçoit ni le visage ni les vêtements, et une bouche fermée le reste.
+- **Juge WD14** : pour choisir entre les essais, le juge tient aussi compte de la netteté, des erreurs d'anatomie et de l'identité. Un essai qui change la couleur des yeux ou l'objet tenu est écarté.
+- **Raccords invisibles** : l'inpainting doux de Forge tourne dans chaque zone, donc plus de couture au bord.
+- Les trois options sont dans le volet Kane Detailer et activées par défaut. Il faut le moteur du Studio à jour (Kane Detailer 5), puis le redémarrer. Compter environ 100 s pour 6 parties.
+
 # 1.24.0 — Studio IA 2 : plus clair, plus direct
 
 - **Nouveau Studio** (Créer et Transformer) :

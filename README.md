@@ -568,3 +568,4 @@ Maintenir Alt + bouton droit dans la zone de travail : glisser horizontalement p
 - **1.16.1** : Angle : invite et invite négative de l'image envoyées telles quelles, SEEDS 3 + Beta57 en 22 étapes par défaut, CFG et Shift repris de l'image.
 - **1.22.0** : Kane Detailer 4 : plusieurs essais par zone départagés par un juge (ou l'original gardé), essai réparateur pour les mains douteuses, grain du pinceau gardé, lumières protégées, visages qui ne vieillissent plus.
 - **1.24.0** : Studio IA 2 : composeur d'invite, résultat en grand, volet de réglages à droite en français, séance sous le résultat, actions compactes ; ADetailer retiré au profit de Kane Detailer ; nombre de médias de la bibliothèque réglable.
+- **1.25.0** : Kane Detailer 5 : invite de zone d'après ce qu'on y voit (WD14), juge WD14 (netteté, identité, erreurs), raccords invisibles (inpainting doux).
