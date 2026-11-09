@@ -143,7 +143,6 @@ module.exports = function services({ getWin, root, engine, managed = () => ({ ac
         if (u === '/api/status') { const s = engine.state(); return out(200, { webui: { status: s === 'ready' || s === 'external' ? 'running' : s === 'starting' ? 'starting' : 'stopped' } }); }
         if (u === '/api/webui/profiles') return out(200, [{ id: 'kanevas', name: 'Moteur IA de KaneApp', args: '--api' }]);
         if (u === '/api/webui/start' && req.method === 'POST') { engine.start(); return out(200, { ok: true }); }
-        if (u === '/api/comfyui/start' && req.method === 'POST') { start('comfyui'); return out(200, { ok: true }); }   // Geste IA de Wallpaper
         out(404, { error: 'introuvable' });
       } catch (e) { out(500, { error: String(e.message || e) }); }
     });
@@ -190,7 +189,7 @@ module.exports = function services({ getWin, root, engine, managed = () => ({ ac
     mainOnly(event);
     try {
       if (typeof dossier !== 'string' || !dossier || dossier.length > 240 || /[\\/\x00]/.test(dossier) || ['.', '..'].includes(dossier)) throw new Error('Projet Animation invalide');
-      if (!['super', 'animer', 'video', 'sam', 'ia'].includes(operation)) throw new Error('Opération Animation inconnue');
+      if (!['super', 'animer', 'video', 'sam'].includes(operation)) throw new Error('Opération Animation inconnue');
       if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Paramètres Animation invalides');
       if ((await animationStatus(dossier)).etat === 'en cours') throw new Error('Une tâche Animation est déjà en cours.');
       const value = await gpu.run(dossier, () => post(8780, '/p/' + encodeURIComponent(dossier) + '/' + operation, body, {}, operation === 'sam' ? 600000 : 120000), { synchronous: operation === 'sam' });

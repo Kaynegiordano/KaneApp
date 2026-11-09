@@ -1,3 +1,9 @@
+# 1.23.1 — Animation sans « Animer par IA »
+
+- **Animation** (moteur 1.21, mis à jour avec Kane OS 4.62) : « Animer par IA » (Wan 2.2) est retiré, le mouvement se fait entièrement dans Animation. Super magique propose des zones justes (visage à son contour, pas de geste pour des mains jointes ou hors cadre, robe et manteau qui ne flottent que debout, lumières repérées), le fond derrière les cheveux reprend le vrai décor, et les mouvements sont calmes. Nouveaux scénarios : Nuit et lumières, Vent léger, Neige.
+- Rebouchage Forge : 0,30 par défaut (ANIMATION_INPAINT), réglable jusqu'à 0,60.
+- KaneApp n'accepte plus l'opération « ia » du pont Animation, ni le démarrage de ComfyUI qui ne servait qu'à elle.
+
 # 1.23.0 — Studio IA : comparer, refaire avec un autre modèle, moins de mémoire vidéo
 
 - **Comparer deux images** : une visionneuse avec un rideau à glisser (ou les flèches ← →), ou les deux images côte à côte. Le zoom et le déplacement sont communs aux deux.
