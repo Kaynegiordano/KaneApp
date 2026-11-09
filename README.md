@@ -20,6 +20,35 @@ et les trois copies ICO utilisées par la fenêtre, les raccourcis et l'installa
 dix tailles de 16 à 256 pixels ; le symbole reste transparent et indépendant du thème de l'interface.
 
 ## Outils récents
+### Studio IA 3 : l'image d'abord (1.26.0)
+
+Après la 1.24 (« tout est trop serré, on ne voit pas si l'image est réussie sans cliquer »), le Studio est repensé autour de l'image.
+Taille de référence : l'écran de l'utilisateur, 2560 × 1440 affiché à 150 % avec KaneApp à 115 %, soit environ 1 480 × 790 pixels d'interface.
+`tools/shot-studio.cjs <dossier> 1484 795` reproduit cette taille.
+
+- **Disposition** (`.fx-v3`, `app/css/studio.css`) :
+  - au centre, l'image en grand (`.fx-center` > `.fx-stage`), avec une fine barre au-dessus (lot, taille · graine · temps, Paramètres, loupe, actions) ;
+  - en bas, l'invite (`dock()`) ;
+  - à droite, la séance (`.fx-film`) puis le tiroir (`.fx-drawer`).
+  - La barre du haut (Checkpoint / VAE / moteur) est masquée en Créer et Transformer ; la pastille Modèle la remplace.
+- **Invite** :
+  - repliée, elle tient sur 2 lignes (l'invite négative sur 1) ;
+  - pendant la saisie, elle grandit vers le haut par-dessus l'image. La place de l'image ne bouge pas : la hauteur du `dock` est celle de l'invite repliée, mesurée par un ResizeObserver.
+- **Pastilles** (`renderPills`) : Modèle (avec état du moteur), Format, Force (Transformer), Lot, LoRA · n, Kane Detailer, Hires fix, Négatif, Styles (seulement s'il y en a) et Réglages.
+  - Modèle, Format, Force, Lot et LoRA ouvrent une petite fenêtre au-dessus (`popover` / `refreshPop`, `.fx.fx-pop` sur `body`) qui suit les réglages.
+  - Kane Detailer et Hires fix s'activent d'un clic.
+- **Tiroir** : les réglages complets en une colonne aérée (Réglages · LoRA · Modèles), fermable.
+  - Il est fermé par défaut sous 1 650 px de large (`FX.drawer` vaut null au premier passage), puis l'état est retenu.
+- **Loupe au survol** (`attachLoupe`) : un rond qui montre l'image à 100 % sous la souris (visage, mains, yeux), sans cliquer.
+  - Cachée si l'image est déjà affichée à 90 % ou plus, pendant un glisser ou un zoom.
+  - Touche L ou bouton loupe pour l'activer ou la couper (`FX.loupe`).
+- **Planche** (`o.board`) : un lot de plusieurs images s'affiche en grand, côte à côte. Un ResizeObserver choisit le nombre de colonnes qui montre les images le plus grand (4 portraits : une ligne ; 4 paysages : 2 × 2). Un clic montre une image seule ; le bouton grille revient à la planche.
+- **Séance** en colonne : toutes les images de la séance, l'image affichée encadrée ; ← → (ou ↑ ↓) pour passer de l'une à l'autre (`stepFilm`).
+- **Actions** : Ouvrir dans Retouche, Vers Img2Img, Vers Inpaint, Détailler, (Zones repeintes, Avant / après), Enregistrer, puis **Plus** : calque, autre modèle, voir les zones, agrandir (Extras, hires fix), tout enregistrer, copier, dossier.
+- **Outils de l'invite** : Historique, Chercher et Nettoyer en icônes ; « ⋯ » pour lire les paramètres, appliquer les styles et effacer.
+- **Captures** : `shot-studio.cjs` active l'émulation du focus (CDP `Emulation.setFocusEmulationEnabled`), car une fenêtre hors écran n'a jamais le focus système et `:focus` ne s'y applique pas. `SHOT_IMAGES` renvoie aussi des lots entiers.
+- **Tests** : `test-studio.cjs` (176 vérifications).
+
 ### Studio IA 2, sans ADetailer, bibliothèque réglable (1.24.0)
 
 - **Studio IA 2** (`app/js/studio.js`, `app/css/studio.css`) pour Créer et Transformer :
@@ -569,3 +598,4 @@ Maintenir Alt + bouton droit dans la zone de travail : glisser horizontalement p
 - **1.22.0** : Kane Detailer 4 : plusieurs essais par zone départagés par un juge (ou l'original gardé), essai réparateur pour les mains douteuses, grain du pinceau gardé, lumières protégées, visages qui ne vieillissent plus.
 - **1.24.0** : Studio IA 2 : composeur d'invite, résultat en grand, volet de réglages à droite en français, séance sous le résultat, actions compactes ; ADetailer retiré au profit de Kane Detailer ; nombre de médias de la bibliothèque réglable.
 - **1.25.0** : Kane Detailer 5 : invite de zone d'après ce qu'on y voit (WD14), juge WD14 (netteté, identité, erreurs), raccords invisibles (inpainting doux).
+- **1.26.0** : Studio IA 3 : l'image en grand au centre, invite en bas qui s'agrandit pendant la saisie, pastilles de réglages rapides, tiroir de réglages aéré, loupe au survol (détails à 100 % sans cliquer), planche pour les lots, séance en colonne avec ← →.

@@ -64,6 +64,12 @@ async function scenario() {
   const assert = (ok, message) => { if (!ok) throw new Error(message); results.push(message); };
   const wait = async test => { for (let i = 0; i < 100; i++) { if (test()) return; await new Promise(r => setTimeout(r, 20)); } throw new Error('Timeout'); };
   const button = (label, scope = document) => [...scope.querySelectorAll('button')].find(b => b.textContent === label);
+  const more = async label => {
+    document.querySelector('.fx-output-actions .fx-more').click(); await new Promise(r => setTimeout(r, 30));
+    const mi = [...document.querySelectorAll('.menu .mi')].find(i => i.textContent.includes(label));
+    if (!mi) throw new Error('Menu Plus sans : ' + label);
+    mi.click(); await new Promise(r => setTimeout(r, 30));
+  };
   const click = async (label, scope) => { const b = button(label, scope); if (!b) throw new Error('Bouton absent : ' + label); b.click(); await new Promise(r => setTimeout(r, 30)); };
   const doc = name => { const d = new KS.Doc({ name, width: 128, height: 64 }); const c = KS.util.canvas(128, 64); const x = c.getContext('2d'); x.fillStyle = '#3970bb'; x.fillRect(0, 0, 128, 64); d.addLayer(new KS.Layer({ name: 'Base', canvas: c }), 0); return d; };
   const a = doc('Source A'); KS.addDoc(a);
@@ -264,7 +270,7 @@ async function scenario() {
   window.dispatchEvent(new Event('blur'));
   assert(!document.querySelector('#viewport').classList.contains('drop-active'), 'Une sortie de fenêtre efface le faux filigrane');
   await KS.cmd.toggleStudio(true);
-  await click('Envoyer vers Img2Img');
+  await click('Vers Img2Img');
   assert(KS.state.docs.length === 2 && KS.studio.on, 'Reprendre un résultat ne crée pas de document dans l’Édition');
   assert(KS.prefs.fx.i2i.prompt === 'original <lora:test:0.7>' && KS.prefs.fx.i2i.seed === -1, 'L’invite suit le résultat et la graine reste aléatoire');
   await click('Inpaint');
@@ -301,7 +307,7 @@ async function scenario() {
   await click('Inverser');
   await KS.cmd.studioGenerate();
   assert(window.calls.length === 3 && !!window.calls[2].mask, 'Les outils de masque fonctionnent depuis le Studio');
-  await click('Ajouter en calque');
+  await more('Ajouter en calque');
   assert(!KS.studio.on && b.layers.length === 2, 'Ajouter en calque revient volontairement au document actif dans l’Édition');
   await KS.cmd.sendToStudio('img2img');
   await click('Ouvrir dans Retouche');
@@ -312,7 +318,7 @@ async function scenario() {
   assert(KS.prefs.fx.tab === 'pnginfo', 'L’Édition envoie aussi vers PNG Info');
   await click('Envoyer vers Img2Img');
   assert(KS.prefs.fx.tab === 'img2img', 'PNG Info renvoie sa source vers Img2Img');
-  await click('Retirer la source');
+  document.querySelector('.fx-srcfoot button[title="Retirer la source"]').click(); await new Promise(r => setTimeout(r, 30));
   const count = window.calls.length;
   await KS.cmd.studioGenerate();
   assert(window.calls.length === count, 'Aucune génération Img2Img sans source');
@@ -328,7 +334,7 @@ async function scenario() {
   {
     // Refaire avec un autre modèle : même invite et même graine, modèle changé pour cette image seulement, puis comparaison
     const callsBefore = window.txtCalls.length, shownBefore = KS.prefs.fx.t2i.steps;
-    await click('Refaire avec un autre modèle…', document.querySelector('.fx-output-actions'));
+    await more('Refaire avec un autre modèle…');
     await wait(() => !!document.querySelector('.modal .fx-pickmodel .fx-card'));
     const cards = [...document.querySelectorAll('.modal .fx-pickmodel .fx-card')];
     assert(cards.length === 1 && cards[0].querySelector('.fx-card-n').textContent === 'Anima-2.9B.safetensors', 'Le choix propose les autres modèles, pas le modèle actif : ' + cards.map(c => c.textContent).join(', '));
@@ -360,16 +366,16 @@ async function scenario() {
     }
   }
   const docsBefore = KS.state.docs.length;
-  await click('Envoyer vers Img2Img');
+  await click('Vers Img2Img');
   assert(KS.prefs.fx.i2i.seed === -1 && KS.state.docs.length === docsBefore, 'txt2img envoie vers Img2Img avec une nouvelle graine aléatoire');
-  await click('Ouvrir la source dans Retouche', document.querySelector('.fx-source'));
+  document.querySelector('.fx-source button[title="Ouvrir la source dans Retouche"]').click(); await new Promise(r => setTimeout(r, 30));
   await KS.cmd.sendToStudio('img2img');
   assert(KS.prefs.fx.i2i.seed === -1, 'Un aller-retour dans l’Édition conserve le mode aléatoire');
   await click('img2img', document.querySelector('.fx-modes'));
   await KS.cmd.studioGenerate();
-  await click('Agrandir avec Hires');
+  await more('Agrandir avec le hires fix (Créer)');
   assert(KS.prefs.fx.tab === 'txt2img' && KS.prefs.fx.t2i.prompt === 'new image <lora:test:0.8>', 'Img2Img renvoie image et réglages vers txt2img / Hires');
-  document.querySelector('button[title^="Agrandir cette image avec le hires fix"]').click();
+  await more('Agrandir avec le hires fix');
   await wait(() => window.txtCalls.length === 2 && !!document.querySelector('.fx-generate'));
   assert(window.txtCalls.at(-1).seed === -1, 'Hires demande aussi une graine aléatoire');
   assert(window.txtCalls.at(-1).override_settings.show_progress_type === 'Full' && window.txtCalls.at(-1).override_settings.show_progress_every_n_steps >= 2, 'L’aperçu en direct demande le décodage complet (net) à chaque génération');
@@ -422,7 +428,7 @@ async function scenario() {
   assert(window.calls.length === beforeShortcut + 1, 'Ctrl+Entrée annule aussi une génération encore en préparation');
   const aiMenu = KS.menus.defs().find(m => m.label === 'IA').items();
   assert(aiMenu.some(i => i.label === 'Envoyer vers Img2Img — transformer l’image') && aiMenu.some(i => i.label === 'Envoyer vers Inpaint — retoucher une zone'), 'Le menu IA propose clairement Img2Img et Inpaint au même niveau');
-  assert(!!button('Envoyer vers Img2Img') && !!button('Envoyer vers Inpaint'), 'Les résultats proposent les deux destinations avec des libellés explicites');
+  assert(!!button('Vers Img2Img') && !!button('Vers Inpaint'), 'Les résultats proposent les deux destinations avec des libellés explicites');
   await KS.cmd.toggleStudio(false);
   document.querySelector('.ws-to-studio').click();
   const sendItem = [...document.querySelectorAll('.menu .mi')].find(i => i.textContent.includes('Envoyer vers Img2Img'));
@@ -447,7 +453,7 @@ async function scenario() {
   await click('Inpaint');
   await click('Peindre le masque');
   paint({ x: 8, y: 8 }, { x: 40, y: 24 });
-  assert(document.querySelectorAll('.fx-output-actions > .fx-actiongroup').length === 4, 'Les actions du résultat sont organisées en quatre groupes');
+  assert(document.querySelectorAll('.fx-output-actions > .fx-actiongroup').length === 3 && !!document.querySelector('.fx-output-actions .fx-more'), 'Les actions du résultat : l’essentiel en trois groupes, le reste dans Plus');
   assert(![...document.querySelectorAll('.fx-output-actions button')].some(b => /^[📂💾🗃️✨]+$/u.test(b.textContent)), 'Les actions du résultat utilisent des libellés explicites');
   for (const theme of ['dark', 'graphite', 'light']) {
     KS.prefs.theme = theme; KS.prefs.accent = '#8c60d0'; KS.applyPrefs();
@@ -613,24 +619,47 @@ async function scenario() {
   assert(!KS.modalOpen() && window.interrupts === interruptsPeek && !!window.releaseGeneration, 'Échap ferme ce plein écran sans interrompre la génération');
   window.holdGeneration = false; window.releaseGeneration(); window.releaseGeneration = null; await running;
   assert(!document.querySelector('.fx-view.live') && !!document.querySelector('.fx-view .iv-click-open'), 'Une fois terminée, l’image se voit en plein écran d’un clic');
-  // Studio 2 : composeur, volet de droite, séance
-  assert(!!document.querySelector('.fx-v2 .fx-main .fx-composer') && !!document.querySelector('.fx-v2 > .fx-aside .fx-left .fx-seg'), 'Studio 2 : invite et scène au centre, réglages dans le volet de droite');
-  const negBtn = [...document.querySelectorAll('.fx-cfoot .fx-cbtn')].find(b => b.textContent.startsWith('Négatif'));
+  // Studio 3 : l'image au centre, l'invite en bas avec ses pastilles, le tiroir, la séance, la loupe
+  assert(!!document.querySelector('.fx-v3 .fx-center .fx-dock .fx-composer') && !!document.querySelector('.fx-v3 > .fx-drawer .fx-left .fx-seg') && !!document.querySelector('.fx-v3 > .fx-film'), 'Studio 3 : image au centre, invite en bas, séance et tiroir à droite');
+  const pillOf = id => document.querySelector('.fx-pill[data-id="' + id + '"]');
   const negWas = KS.prefs.fx.negOpen;
-  negBtn.click(); await new Promise(r => setTimeout(r, 450));
-  assert(document.querySelector('.fx-neg').hidden === negWas && KS.prefs.fx.negOpen === !negWas, 'L’invite négative se replie et se rouvre, état retenu');
-  [...document.querySelectorAll('.fx-cfoot .fx-cbtn')].find(b => b.textContent === 'LoRA').click();
-  assert(document.querySelector('.fx-seg button.on').textContent.startsWith('LoRA') && !!document.querySelector('.fx-aside .fx-card[data-lora]'), 'Le bouton LoRA du composeur ouvre les LoRA dans le volet');
+  pillOf('neg').click(); await new Promise(r => setTimeout(r, 450));
+  assert(document.querySelector('.fx-neg').hidden === negWas && KS.prefs.fx.negOpen === !negWas, 'L’invite négative se replie et se rouvre (pastille), état retenu');
+  const pta3 = document.querySelector('.fx-prompts textarea.fx-prompt'); pta3.value = 'silver moon <lora:test:0.6>'; pta3.dispatchEvent(new Event('input'));
+  assert(pillOf('lora').textContent === 'LoRA · 1', 'La pastille LoRA compte les LoRA de l’invite');
+  pillOf('lora').click();
+  assert(!!document.querySelector('.fx-pop .fx-lchip'), 'La pastille LoRA montre les LoRA actifs avec leur poids');
+  [...document.querySelectorAll('.fx-pop button')].find(b => b.textContent === 'Parcourir tous les LoRA').click();
+  assert(!document.querySelector('.fx-pop') && !document.querySelector('.fx-drawer').hidden && document.querySelector('.fx-seg button.on').textContent.startsWith('LoRA') && !!document.querySelector('.fx-drawer .fx-card[data-lora]'), '« Parcourir tous les LoRA » ouvre le tiroir sur les LoRA');
   document.querySelector('.fx-seg button').click();
-  const older = document.querySelectorAll('.fx-session img');
-  assert(older.length >= 1, 'La séance montre les images déjà générées sous le résultat');
-  const sessionBefore = document.querySelectorAll('.fx-session img').length; older[older.length - 1].click();
-  await wait(() => document.querySelectorAll('.fx-session img').length === sessionBefore - 1);
-  assert(!!document.querySelector('.fx-view .iv-media'), 'Un clic sur une image de la séance la remet en grand dans le Studio');
-  document.querySelector('.fx-topbtn').click();
-  assert(!!document.querySelector('.fx-toppop .fx-modchips') && !!document.querySelector('.fx-toppop select'), 'VAE / Text Encoder et Low Bits sont repliés dans un petit volet');
+  pillOf('drawer').click();
+  assert(document.querySelector('.fx-drawer').hidden && KS.prefs.fx.drawer === false, 'La pastille Réglages ferme le tiroir');
+  pillOf('drawer').click();
+  assert(!document.querySelector('.fx-drawer').hidden && KS.prefs.fx.drawer === true, 'et le rouvre');
+  const kdWas = !!KS.prefs.fx.t2i.kd.enabled;
+  pillOf('kd').click();
+  assert(KS.prefs.fx.t2i.kd.enabled === !kdWas && pillOf('kd').classList.contains('on') === !kdWas, 'La pastille Kane Detailer l’active ou le coupe');
+  pillOf('kd').click();
+  pillOf('model').click();
+  assert(!!document.querySelector('.fx-pop .fx-mlist .fx-mrow.on') && !!document.querySelector('.fx-pop .fx-modchips') && !!document.querySelector('.fx-pop select'), 'La pastille Modèle : modèles, VAE / encodeur et précision');
   document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-  assert(!document.querySelector('.fx-toppop'), 'Le volet se ferme d’un clic ailleurs');
+  assert(!document.querySelector('.fx-pop'), 'La petite fenêtre se ferme d’un clic ailleurs');
+  pillOf('format').click();
+  [...document.querySelectorAll('.fx-pop .fx-chip')].find(b => b.textContent === '1:1').click();
+  assert(pillOf('format').textContent.startsWith('1:1') && KS.prefs.fx.t2i.width === KS.prefs.fx.t2i.height && !!document.querySelector('.fx-pop .fx-chip.on'), 'Le format se choisit dans sa pastille, qui le montre aussitôt');
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert(!document.querySelector('.fx-pop'), 'Échap ferme la petite fenêtre');
+  const film = () => [...document.querySelectorAll('.fx-film img')];
+  assert(film().length >= 2 && film().length === KS.studio.gallery.length, 'La séance montre toutes les images générées, en colonne');
+  film().at(-1).click();
+  await wait(() => film().at(-1).classList.contains('on'));
+  assert(!!document.querySelector('.fx-view .iv-media'), 'Un clic sur une image de la séance la remet en grand');
+  document.querySelector('.fx-view .iv-viewport').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+  await wait(() => film().at(-2).classList.contains('on'));
+  assert(film().at(-2).classList.contains('on'), '← passe à l’image voisine de la séance');
+  const lensArea = document.querySelector('.fx-view .iv-viewport'), mr = document.querySelector('.fx-view .iv-media').getBoundingClientRect();
+  lensArea.dispatchEvent(new PointerEvent('pointermove', { clientX: mr.left + mr.width / 2, clientY: mr.top + mr.height / 2, bubbles: true }));
+  assert(!!document.querySelector('.fx-view .fx-loupe') && document.querySelector('.fx-view .fx-loupe').hidden, 'La loupe existe et reste cachée quand l’image est déjà affichée à 100 %');
   assert(!document.querySelector('#studio').textContent.includes('ADetailer') && !Object.keys(KS.prefs.fx.t2i).includes('ad'), 'ADetailer a disparu du Studio');
   return results;
 }

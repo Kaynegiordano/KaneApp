@@ -32,9 +32,9 @@ window.ksNative = {
   forgeCatalog: async () => ({ ok: true, ...CAT }),
   forgeProgress: async () => ({ ok: true, progress: 0 }),
   loraThumb: async () => ({ ok: false }),
-  forgeTxt2img: async (url, payload) => { const b = IMGS[(window.__n = (window.__n || 0) + 1) % Math.max(1, IMGS.length)];
-    const bytes = b ? Uint8Array.from(atob(b), c => c.charCodeAt(0)) : new Uint8Array();
-    return { ok: true, images: [bytes], info: { seed: 1000 + window.__n, infotexts: [payload.prompt + '\\nNegative prompt: ' + payload.negative_prompt + '\\nSteps: ' + payload.steps + ', Sampler: ' + payload.sampler_name + ', Schedule type: ' + payload.scheduler + ', CFG scale: ' + payload.cfg_scale + ', Seed: ' + (1000 + window.__n) + ', Size: ' + payload.width + 'x' + payload.height] } }; },
+  forgeTxt2img: async (url, payload) => { const n = Math.max(1, (+payload.batch_size || 1) * (+payload.n_iter || 1));
+    const images = Array.from({ length: n }, () => { const b = IMGS[(window.__n = (window.__n || 0) + 1) % Math.max(1, IMGS.length)]; return b ? Uint8Array.from(atob(b), c => c.charCodeAt(0)) : new Uint8Array(); });
+    return { ok: true, images, info: { seed: 1000 + window.__n, infotexts: [payload.prompt + '\\nNegative prompt: ' + payload.negative_prompt + '\\nSteps: ' + payload.steps + ', Sampler: ' + payload.sampler_name + ', Schedule type: ' + payload.scheduler + ', CFG scale: ' + payload.cfg_scale + ', Seed: ' + (1000 + window.__n) + ', Size: ' + payload.width + 'x' + payload.height] } }; },
   forgeImg2img: async (url, payload, init) => ({ ok: true, images: [init], info: { seed: 7, infotexts: [payload.prompt + '\\nSteps: 32, Seed: 7'] } }),
   forgeKaneZones: async () => ({ ok: false }),
   forgeSkip: async () => ({ ok: true }), forgeInterrupt: async () => ({ ok: true }),
@@ -50,12 +50,14 @@ const log = m => { fs.appendFileSync(logFile, m + '\n'); console.log(m); };
 setTimeout(() => { log('ABANDON : plus de 150 s'); app.exit(2); }, 150000);
 app.whenReady().then(async () => {
   try {
-    const win = new BrowserWindow({ width: W, height: H, show: false, skipTaskbar: true,
+    const win = new BrowserWindow({ width: W, height: H, show: false, skipTaskbar: true, enableLargerThanScreen: true, useContentSize: true,
       webPreferences: { preload, contextIsolation: false, sandbox: false, backgroundThrottling: false, offscreen: true } });
+    // une fenêtre hors écran n'a jamais le focus système : sans émulation, :focus ne s'applique pas
     const errors = [];
     win.webContents.on('console-message', d => { if (d.level === 'error') errors.push(d.message); });
     const t0 = Date.now();
     await win.loadFile(process.env.KANEVAS_TEST_APP_PATH || path.join(__dirname, '../app/index.html'));
+    try { win.webContents.debugger.attach('1.3'); await Promise.race([win.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true }), new Promise(r => setTimeout(r, 3000))]); } catch { /* sans émulation */ }
     const js = (s, ms = 25000) => Promise.race([win.webContents.executeJavaScript(s), new Promise((_, no) => setTimeout(() => no(new Error('délai dépassé')), ms))]);
     const shot = async name => { await new Promise(r => setTimeout(r, 350)); fs.writeFileSync(path.join(outDir, name + '.png'), (await win.webContents.capturePage()).toPNG()); log('capture ' + name); };
     await js('new Promise(r => { const t = () => document.querySelector("#studio .fx-body, #studio .st-body") ? r() : setTimeout(t, 50); t(); })');
@@ -72,7 +74,7 @@ app.whenReady().then(async () => {
       const avg = async (n, fn) => { let t = 0; for (let i = 0; i < n; i++) t += await fn(); return t / n; };
       const open = await avg(6, async () => { await KS.cmd.toggleStudio(false); await raf(); const a = performance.now(); await KS.cmd.toggleStudio(true); await raf(); return performance.now() - a; });
       const tabs = await avg(6, async () => { const a = performance.now(); await KS.cmd.openStudioTab('img2img'); await raf(); await KS.cmd.openStudioTab('txt2img'); await raf(); return (performance.now() - a) / 2; });
-      const acc = await avg(6, async () => { const hd = [...document.querySelectorAll('.fx-acc-h')].find(x => /Hires/.test(x.textContent)); const a = performance.now(); hd.click(); await raf(); return performance.now() - a; });
+      const acc = await avg(6, async () => { const hd = [...document.querySelectorAll('.fx-acc-h')].find(x => /Hires/.test(x.textContent)); if (!hd) return 0; const a = performance.now(); hd.click(); await raf(); return performance.now() - a; });
       return 'ouvrir le Studio ' + open.toFixed(1) + ' ms · changer d onglet ' + tabs.toFixed(1) + ' ms · volet ' + acc.toFixed(1) + ' ms · ' + document.querySelectorAll('#studio *').length + ' éléments';
     })()`, 60000);
     log('vitesse : ' + perf);

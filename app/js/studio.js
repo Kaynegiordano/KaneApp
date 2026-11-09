@@ -26,7 +26,7 @@
   });
   const DEF = {
     v: 1, tab: 'txt2img', i2iMode: 'img2img', scale: 'anima', translate: true, saveImages: true, livePreview: true, previewMode: 'net', seeded: false, presetName: '', promptHistory: [],
-    negOpen: false, infoOpen: false,
+    negOpen: false, infoOpen: false, drawer: null, loupe: true,
     lora: { q: '', sort: 'new' },
     painter: { size: 40, color: '#ff7a30', erase: false },
     editor: { target: 'selection', prompt: '', strength: 0.5, variants: 1, fillVersion: 1 },
@@ -250,6 +250,12 @@
       root._keys = true;
       root.addEventListener('keydown', e => {
         if (e.target.matches && e.target.matches('input, textarea, select')) { e.stopPropagation(); return; }
+        if (FX.tab === 'txt2img' && !e.ctrlKey && !e.altKey && !e.metaKey && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key) && !e.target.closest('.iv-cmp, .fx-drawer')) {
+          e.preventDefault(); e.stopPropagation(); stepFilm(e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 1); return;
+        }
+        if (!e.ctrlKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === 'l' && (FX.tab === 'txt2img' || FX.tab === 'img2img')) {
+          e.preventDefault(); FX.loupe = FX.loupe === false; save(); KS.toast(FX.loupe ? 'Loupe au survol activée' : 'Loupe au survol désactivée', 'info', 1400); renderOut(FX.tab === 'img2img' ? 'i2i' : 't2i'); return;
+        }
         if ((e.ctrlKey || e.metaKey) && ['z', 'y'].includes(e.key.toLowerCase())) {
           e.preventDefault(); e.stopPropagation();
           if (FX.tab !== 'img2img' || !i2iDoc) return;
@@ -345,6 +351,7 @@
         field('Diffusion in Low Bits', dt, 'Précision des poids du modèle en mémoire'));
     }
     fillEl(t, h('div.fx-model', h('span.fx-model-i', { html: KS.icon('sparkles') }), ck), more, ref, pop, h('div.spacer'), engineBadge());
+    renderPills(CTX.t2i); renderPills(CTX.i2i);
   }
 
   /* ---------------------------------------------------------------- rendu de la page */
@@ -375,10 +382,29 @@
   }
   function t2iTab() {
     const c = CTX.t2i;
-    c.left = h('div.fx-left'); els.out = h('div.fx-out.fx-stage');
-    const wrap = h('div.fx-gen.fx-v2', h('div.fx-main', promptRow(c), els.out), h('aside.fx-aside', c.left));
+    c.left = h('div.fx-left'); els.out = h('div.fx-out.fx-stage'); els.film = h('div.fx-film');
+    const wrap = h('div.fx-gen.fx-v3', h('div.fx-center', els.out, dock(promptRow(c))), els.film, drawer(c));
     renderParams(); renderOut();
     return wrap;
+  }
+  // Barre d'invite : sa place est celle de l'invite repliée ; pendant la saisie elle s'agrandit vers le haut, par-dessus l'image
+  function dock(composer) {
+    const d = h('div.fx-dock', composer);
+    const sync = () => { if (!composer.querySelector('textarea:focus') && composer.offsetHeight) d.style.height = (composer.offsetHeight + 26) + 'px'; };
+    new ResizeObserver(sync).observe(composer);
+    composer.addEventListener('focusout', () => setTimeout(sync, 0));
+    return d;
+  }
+  // Tiroir des réglages complets : à droite, fermable (pastille « Réglages »), l'état est retenu
+  function drawer(c) {
+    if (FX.drawer == null) { FX.drawer = innerWidth >= 1650; save(); }
+    const d = h('aside.fx-drawer', { hidden: FX.drawer === false, 'aria-label': 'Réglages du Studio' }, c.left);
+    els.drawer = d; return d;
+  }
+  function toggleDrawer(open = FX.drawer === false) {
+    FX.drawer = !!open; save();
+    if (els.drawer) els.drawer.hidden = !open;
+    for (const c of [CTX.t2i, CTX.i2i]) renderPills(c);
   }
   function i2iTab() {
     const c = CTX.i2i;
@@ -407,11 +433,11 @@
     } else { if (paintable) zone.classList.add('fx-paintzone'); zone.removeAttribute('role'); zone.removeAttribute('tabindex'); }
     dropTo(zone, loadI2I);
     source.append(c.modes, zone,
-      h('div.fx-srcfoot', h('div.fx-docinfo', { text: d ? `${d.name} · ${d.width} × ${d.height}` : 'Choisissez une image ou reprenez le document de Retouche.' }),
-        h('div.fx-outbtns', tbtn('Importer une image…', pick, '.sm'), tbtn('Depuis Retouche', () => C.sendToStudio(FX.i2iMode === 'inpaint' ? 'inpaint' : 'img2img'), '.sm'),
-          d ? tbtn('Ouvrir la source dans Retouche', () => toEdition({ canvas: sourceFor(d, true), name: d.name, info: d.genInfo, params: d.genParams }), '.sm') : null,
-          d ? tbtn('Retirer la source', () => { i2iDoc = null; render(); }, '.sm') : null)));
-    const wrap = h('div.fx-gen.fx-v2.fx-img2img', h('div.fx-main', promptRow(c), h('div.fx-i2i-stage', source, els.i2iOut)), h('aside.fx-aside', c.left));
+      h('div.fx-srcfoot', h('div.fx-docinfo', { text: d ? `${d.width} × ${d.height}` : 'Choisissez une image ou reprenez le document de Retouche.', title: d ? d.name : '' }),
+        h('div.fx-outbtns', tbtn('Importer…', pick, '.sm', 'Importer une image source'), tbtn('Depuis Retouche', () => C.sendToStudio(FX.i2iMode === 'inpaint' ? 'inpaint' : 'img2img'), '.sm', 'Prendre le document ouvert dans Retouche'),
+          d ? ibtn('brush', 'Ouvrir la source dans Retouche', () => toEdition({ canvas: sourceFor(d, true), name: d.name, info: d.genInfo, params: d.genParams })) : null,
+          d ? ibtn('close', 'Retirer la source', () => { i2iDoc = null; render(); }) : null)));
+    const wrap = h('div.fx-gen.fx-v3.fx-img2img', h('div.fx-center', h('div.fx-i2i-stage', source, els.i2iOut), dock(promptRow(c))), drawer(c));
     renderModeTools(); renderCtx(c); renderOut('i2i');
     return wrap;
   }
@@ -513,6 +539,25 @@
     c.find = findBar(c);
     renderGenButtons(); trNote(c); renderChips(c);
     c.findBtn = ibtn('search', 'Chercher et remplacer dans l\'invite (Ctrl+F dans l\'invite)', () => c.find.toggle());
+    const clearPrompts = () => { for (const t of [P.ta, Q.ta]) { t.value = ''; t.dispatchEvent(new Event('input')); } };
+    const readP = () => { readParams(c.k); if (c === EDIT) renderEditorDraw(); };
+    if (!compact) {
+      // Studio : historique, chercher et nettoyer restent visibles ; lire les paramètres, styles et effacer passent dans « Plus »
+      const more = ibtn('more', 'Plus d’outils pour l’invite', e => {
+        const r = e.currentTarget.getBoundingClientRect();
+        ui.menu([
+          { label: 'Lire les paramètres collés (ou ceux de la dernière image)', icon: 'import', action: readP },
+          (cat && cat.styles && cat.styles.length) || FX[c.k].styles.length ? { label: 'Appliquer les styles choisis à l’invite', icon: 'palette', action: () => applyStyles(c) } : null,
+          { sep: true },
+          { label: 'Effacer l’invite et l’invite négative', icon: 'trash', action: clearPrompts },
+        ].filter(Boolean), r.right - 300, r.top - 8 - 4 * 34);
+      });
+      var studioTools = h('div.fx-ptools',
+        ibtn('history', 'Historique des invites : reprendre une invite déjà utilisée, avec recherche', () => historyDialog(c)),
+        c.findBtn,
+        ibtn('eraser-magic', 'Nettoyer l\'invite : doublons, virgules et espaces en trop (Ctrl+Z pour annuler)', () => cleanPrompts(c)),
+        more);
+    }
     const tools = h('div.fx-ptools',
       ibtn('import', 'Lire les paramètres collés dans l\'invite (texte d\'une image de Forge), ou ceux de la dernière génération si l\'invite est vide', () => { readParams(c.k); if (c === EDIT) renderEditorDraw(); }),
       ibtn('history', 'Historique des invites : reprendre une invite déjà utilisée, avec recherche', () => historyDialog(c)),
@@ -523,23 +568,100 @@
     if (compact) return h('div.fx-toprow.fx-compact', c.find.bar, P.box, c.chips,
       c === EDIT ? h('details.edraw-details', h('summary', { text: 'Éléments à éviter' }), Q.box) : Q.box,
       c.trNote, c.genbox, h('div.fx-ptools-row', tools, stylesPicker(c.k)));
-    // Studio : l'invite négative se replie (une ligne de résumé) ; LoRA ouvre le volet des LoRA à droite
+    // Studio : invite en bas, pastilles de réglages rapides (modèle, format, lot, LoRA, Kane Detailer, Hires…)
     const neg = h('div.fx-neg', Q.box);
-    const negBtn = h('button.fx-cbtn', { type: 'button', title: 'Afficher ou replier l’invite négative' });
-    const negState = () => {
-      const open = !!FX.negOpen, words = (st.negative_prompt.match(/[^\s,]+/g) || []).length;
-      neg.hidden = !open; negBtn.classList.toggle('on', open);
-      negBtn.innerHTML = KS.icon(open ? 'chevron-down' : 'chevron-right');
-      negBtn.append(h('span', { text: 'Négatif' + (words ? ' · ' + words + ' mot' + (words > 1 ? 's' : '') : '') }));
-    };
-    negBtn.addEventListener('click', () => { FX.negOpen = !FX.negOpen; save(); negState(); if (FX.negOpen) Q.ta.focus(); });
-    Q.ta.addEventListener('input', negState);
-    negState();
-    const loraBtn = h('button.fx-cbtn', { type: 'button', title: 'Parcourir les LoRA dans le volet de droite' });
-    loraBtn.innerHTML = KS.icon('layers'); loraBtn.append(h('span', { text: 'LoRA' }));
-    loraBtn.addEventListener('click', () => { st.open._sub = 'lora'; save(); renderCtx(c); });
-    const foot = h('div.fx-cfoot', loraBtn, negBtn, stylesPicker(c.k), h('div.spacer'), tools);
-    return h('div.fx-toprow.fx-composer', h('div.fx-prompts', c.find.bar, P.box, c.chips, neg, c.trNote, foot), h('div.fx-genside', c.genbox));
+    c.negSync = () => { neg.hidden = !FX.negOpen; };
+    c.negSync();
+    let words = -1;
+    Q.ta.addEventListener('input', () => { const n = (st.negative_prompt.match(/[^\s,]+/g) || []).length; if (n !== words) { words = n; renderPills(c); } });
+    c.pills = h('div.fx-pills');
+    renderPills(c);
+    const foot = h('div.fx-cfoot', c.pills, studioTools);
+    return h('div.fx-toprow.fx-composer', h('div.fx-prompts', c.find.bar, P.box, neg, c.trNote, foot), h('div.fx-genside', c.genbox));
+  }
+  /* ---------------------------------------------------------------- pastilles et petites fenêtres au-dessus de l'invite */
+  let POP = null;
+  const closePop = () => { if (!POP) return; POP.el.remove(); POP.anchor.classList.remove('open'); POP = null; };
+  // Petite fenêtre ancrée au-dessus d'une pastille ; recliquer la pastille la referme. `build` est rejoué par refreshPop.
+  function popover(anchor, title, build) {
+    const same = POP && POP.id === anchor.dataset.id; closePop(); if (same) return;
+    const el = h('div.fx.fx-pop', { role: 'dialog', 'aria-label': title });
+    POP = { el, anchor, id: anchor.dataset.id, title, build }; anchor.classList.add('open');
+    document.body.append(el); refreshPop();
+  }
+  function refreshPop() {
+    if (!POP) return;
+    if (!POP.anchor.isConnected) return closePop();
+    fillEl(POP.el, h('div.fx-pop-h', { text: POP.title }), ...[].concat(POP.build()).filter(Boolean));
+    const r = POP.anchor.getBoundingClientRect(), w = POP.el.offsetWidth;
+    POP.el.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + 'px';
+    POP.el.style.bottom = Math.max(8, innerHeight - r.top + 8) + 'px';
+  }
+  document.addEventListener('pointerdown', e => { if (POP && !POP.el.contains(e.target) && !POP.anchor.contains(e.target) && !e.target.closest('.menu')) closePop(); }, true);
+  document.addEventListener('keydown', e => { if (POP && e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); closePop(); } }, true);
+  const num = v => String(Math.round(+v * 100) / 100).replace('.', ',');
+  function fmtLabel(st) {
+    const sc = SCALES[FX.scale] ? FX.scale : 'anima', p = SCALES[sc].presets.find(x => x[1] === +st.width && x[2] === +st.height);
+    return (p ? p[0] + ' · ' : '') + st.width + ' × ' + st.height;
+  }
+  function pill(id, label, { icon, on, title, dot, onClick } = {}) {
+    const b = h('button.fx-pill' + (on ? '.on' : ''), { type: 'button', title: title || '', 'data-id': id });
+    if (dot) b.append(h('span.fx-pdot.' + dot));
+    if (icon) b.insertAdjacentHTML('beforeend', KS.icon(icon));
+    b.append(h('span', { text: label }));
+    b.addEventListener('click', () => onClick(b));
+    return b;
+  }
+  function renderPills(c) {
+    if (!c.pills) return;
+    const st = FX[c.k], E = KS.engine;
+    const nL = (st.prompt.match(/<lora:/g) || []).length, words = (st.negative_prompt.match(/[^\s,]+/g) || []).length;
+    const model = cat ? (norm(cat.current.model || '') || 'Modèle').replace(/\.safetensors$/i, '') : loading ? 'Lecture de Forge…' : 'Moteur IA arrêté';
+    const dot = E && E.ready() ? 'ok' : E && E.state === 'starting' ? 'busy' : 'off';
+    const keep = POP && c.pills.contains(POP.anchor) ? POP.id : null;
+    fillEl(c.pills,
+      pill('model', model, { dot, title: 'Modèle, VAE / encodeur, précision et état du moteur', onClick: b => popover(b, 'Modèle', () => modelPop()) }),
+      pill('format', fmtLabel(st), { icon: 'crop', title: 'Format et taille de l’image', onClick: b => popover(b, 'Format', () => formatPop(c)) }),
+      c.k === 'i2i' ? pill('force', 'Force ' + num(st.denoising_strength), { icon: 'sliders', title: 'Force (denoising) : bas = proche de l’image de départ, haut = très différent', onClick: b => popover(b, 'Force', () => [slider('Force (denoising)', st, 'denoising_strength', 0, 1, 0.01, 'Denoising strength', () => { renderPills(c); }), h('div.fx-info', { text: '0,3 : retouche légère · 0,5 : redessine · 0,7 et plus : nouvelle image' })]) }) : null,
+      pill('lot', (+st.batch_size * +st.n_iter) + ' image' + (+st.batch_size * +st.n_iter > 1 ? 's' : ''), { icon: 'grid', title: 'Images par lot et nombre de lots', onClick: b => popover(b, 'Lot', () => [
+        slider('Images par lot', st, 'batch_size', 1, 8, 1, 'Batch size : images générées en même temps', () => renderPills(c)),
+        slider('Lots', st, 'n_iter', 1, 128, 1, 'Batch count : nombre de lots à la suite', () => renderPills(c)),
+        h('div.fx-info', { text: 'Plusieurs images s’affichent ensemble en planche, en grand, pour choisir d’un coup d’œil.' })]) }),
+      pill('lora', nL ? 'LoRA · ' + nL : 'LoRA', { icon: 'layers', on: !!nL, title: 'LoRA actifs (poids, fiche) et tous les LoRA', onClick: b => popover(b, nL ? 'LoRA actifs' : 'LoRA', () => [
+        nL ? c.chips : h('div.fx-info', { text: 'Aucun LoRA dans l’invite.' }),
+        h('div.fx-pop-row', tbtn('Parcourir tous les LoRA', () => { closePop(); st.open._sub = 'lora'; save(); toggleDrawer(true); renderCtx(c); }, '.primary.sm'),
+          h('span.fx-info', { text: 'Ctrl+↑ / Ctrl+↓ dans l’invite : poids' }))]) }),
+      cat && cat.kdInfo ? pill('kd', 'Kane Detailer', { icon: 'sparkles', on: !!st.kd.enabled, title: 'Clic : activer ou couper Kane Detailer (ses réglages sont dans le tiroir)', onClick: () => { st.kd.enabled = !st.kd.enabled; save(); renderParams(); } }) : null,
+      c.k === 't2i' ? pill('hires', 'Hires fix', { icon: 'maximize', on: !!st.enable_hr, title: 'Clic : activer ou couper le hires fix (ses réglages sont dans le tiroir)', onClick: () => { st.enable_hr = !st.enable_hr; save(); renderParams(); } }) : null,
+      pill('neg', words ? 'Négatif · ' + words : 'Négatif', { icon: FX.negOpen ? 'chevron-down' : 'chevron-right', on: !!FX.negOpen, title: 'Afficher ou replier l’invite négative', onClick: () => { FX.negOpen = !FX.negOpen; save(); renderPills(c); c.negSync && c.negSync(); if (FX.negOpen && c.negTa) c.negTa.focus(); } }),
+      (cat && cat.styles && cat.styles.length) || st.styles.length ? stylesPicker(c.k) : null,
+      pill('drawer', 'Réglages', { icon: 'sliders', on: FX.drawer !== false, title: 'Ouvrir ou fermer le tiroir des réglages complets', onClick: () => toggleDrawer() }));
+    if (keep) { const n = c.pills.querySelector('[data-id="' + keep + '"]'); if (n) { POP.anchor = n; n.classList.add('open'); } }
+  }
+  function modelPop() {
+    if (!cat) return [engineBadge()];
+    const list = h('div.fx-mlist');
+    for (const m of cat.models) {
+      const on = norm(m.title) === norm(cat.current.model);
+      const row = h('button.fx-mrow' + (on ? '.on' : ''), { type: 'button', title: m.title }, h('span', { text: norm(m.title).replace(/\.safetensors$/i, '') }));
+      row.addEventListener('click', () => { closePop(); if (!on) setOptions({ sd_model_checkpoint: m.title }, 'Checkpoint : ' + norm(m.title) + ' (chargé à la prochaine génération)'); });
+      list.append(row);
+    }
+    const dt = h('select.fx-sel', ...DTYPES.map(d => h('option', { value: d, text: d })));
+    dt.value = cat.dtype || 'Automatic';
+    dt.addEventListener('change', () => { closePop(); setOptions({ forge_unet_storage_dtype: dt.value }, 'Diffusion in Low Bits : ' + dt.value + ' (au prochain chargement du modèle)'); });
+    return [list,
+      field('VAE / Text Encoder', modulesPicker(cat.current.modules || [], v => { closePop(); setOptions({ forge_additional_modules: v }, 'VAE / Text Encoder changés'); })),
+      field('Diffusion in Low Bits', dt, 'Précision des poids du modèle en mémoire'),
+      h('div.fx-pop-row', engineBadge(), h('div.spacer'), tbtn('Relire les modèles', async () => { closePop(); await N.forgeRefreshCheckpoints(url()); await N.forgeRefreshLoras(url()); loadCat(); }, '.sm'))];
+  }
+  function formatPop(c) {
+    const st = FX[c.k], step = (cat && cat.resStep) || 16, d = c.k === 'i2i' ? i2iDoc : null;
+    const manual = () => { if ('autoSize' in st) st.autoSize = false; save(); renderPills(c); renderParams(); };
+    const swap = ebtn('⇅', 'Inverser largeur et hauteur', () => { [st.width, st.height] = [st.height, st.width]; manual(); refreshPop(); });
+    return [formatRow(st),
+      h('div.fx-pop-dims', h('div.fx-col', slider('Largeur', st, 'width', 64, 2048, step, 'Width', manual), slider('Hauteur', st, 'height', 64, 2048, step, 'Height', manual)), swap),
+      d ? h('div.fx-pop-row', tbtn('Ajuster à la source', () => { st.autoSize = true; save(); renderParams(); refreshPop(); }, '.sm'), tbtn('Taille exacte de la source', () => { st.autoSize = 'exact'; save(); renderParams(); refreshPop(); }, '.sm')) : null];
   }
   function trNote(c) {
     if (!c.trNote) return;
@@ -830,7 +952,7 @@
   }
 
   /* ---------------------------------------------------------------- colonne des réglages */
-  function renderParams() { renderCtx(CTX.t2i); renderCtx(CTX.i2i); }
+  function renderParams() { renderCtx(CTX.t2i); renderCtx(CTX.i2i); renderPills(CTX.t2i); renderPills(CTX.i2i); refreshPop(); }
   function renderCtx(c) {
     const left = c.left; if (!left) return;
     const st = FX[c.k];
@@ -846,8 +968,9 @@
     else if (sub === 'checkpoints') content = ckptTab();
     else content = c.k === 't2i' ? t2iParams(st) : i2iParams(st);
     const stale = cat && cat.stale && !(KS.engine && KS.engine.ready()) ? h('div.fx-info.fx-stale', { text: 'Le moteur IA démarre (environ 10 s) : vous pouvez déjà régler et écrire, la génération partira dès qu\'il est prêt.' }) : null;
-    fillEl(left, bar, stale, content);
+    fillEl(left, h('div.fx-dhead', bar, ibtn('close', 'Fermer le tiroir (les pastilles sous l’invite restent)', () => toggleDrawer(false))), stale, content);
     left.scrollTop = sc;
+    renderPills(c);
   }
   const rp = () => renderParams();
   function samplingRow(st) {
@@ -1089,6 +1212,7 @@
     if (!c.left) return;
     const tab = c.left.querySelector('.fx-seg button:nth-child(2)'), n = (FX[c.k].prompt.match(/<lora:/g) || []).length;
     if (tab) tab.textContent = n ? 'LoRA · ' + n : 'LoRA';
+    if (c._nLora !== n) { c._nLora = n; renderPills(c); if (POP && POP.id === 'lora') refreshPop(); }
     for (const el of c.left.querySelectorAll('.fx-card[data-lora]')) el.classList.toggle('on', loraRe(el.dataset.lora).test(FX[c.k].prompt));
   }
   function loraTab(c) {
@@ -1252,7 +1376,8 @@
     }
     if (m === 'batch') tools.push(tbtn('Choisir des images…', pickBatch, '.primary.sm'), h('span.fx-info', { text: OUT.batch.length ? OUT.batch.length + ' image(s)' : 'Aucune image choisie' }),
       OUT.batch.length ? tbtn('Vider', () => { OUT.batch = []; renderModeTools(); }, '.sm') : null);
-    fillEl(box, modes, tools.length ? h('div.fx-i2itools', ...tools.filter(Boolean)) : null, h('div.fx-help', { text: (m === 'batch' ? '' : d ? `Image : ${d.name} (${d.width} × ${d.height}). ` : 'Aucune image ouverte. ') + I2I_HELP[m] }));
+    const help = (m === 'batch' ? '' : d ? `Image : ${d.name} (${d.width} × ${d.height}). ` : 'Aucune image ouverte. ') + I2I_HELP[m];
+    fillEl(box, modes, tools.length ? h('div.fx-i2itools', ...tools.filter(Boolean)) : null, h('div.fx-help', { text: I2I_HELP[m], title: help }));
   }
   function sendMenu(anchor) {
     const r = anchor.getBoundingClientRect();
@@ -1309,7 +1434,7 @@
     }
     if (SD.gallery.length > 120) SD.gallery.length = 120;
     renderGallery();
-    if (SD.on && FX.tab === 'txt2img' && !BUSY) renderOut('t2i');
+    renderFilm();
   }
   // image de la galerie, décodée pour l'action demandée
   const galleryItem = async g => ({ ...g, canvas: g.canvas || await U.canvasFromBlob(g.blob) });
@@ -1549,23 +1674,31 @@
       b.append(h('span', { text: label })); b.disabled = !enabled; b.addEventListener('click', fn); return b;
     };
     const group = (id, label, ...buttons) => h('div.fx-actiongroup', { 'data-group': id, role: 'group', 'aria-label': label, title: label }, ...buttons.filter(Boolean));
+    const more = action('Plus', e => {
+      const r = e.currentTarget.getBoundingClientRect();
+      ui.menu([
+        { label: 'Ajouter en calque' + (D() ? ' · ' + D().name : ''), icon: 'layers', action: () => addAsLayer(it), disabled: !D() },
+        key === 't2i' ? { label: 'Refaire avec un autre modèle…', icon: 'compare', action: () => remakeWithModel(it), disabled: !it.info || !!BUSY } : null,
+        { label: 'Voir les zones (Kane Detailer)', icon: 'grid', action: () => detectItem(key, it) },
+        { sep: true },
+        key !== 'ex' ? { label: 'Agrandir dans Extras', icon: 'upscale', action: () => sendTo('extras', it) } : null,
+        key === 't2i' ? { label: 'Agrandir avec le hires fix', icon: 'maximize', action: () => upscaleHires(it) } : key === 'i2i' ? { label: 'Agrandir avec le hires fix (Créer)', icon: 'maximize', action: () => C.sendToStudioItem(it) } : null,
+        { sep: true },
+        { label: 'Tout enregistrer…', icon: 'export', action: () => saveAll(items), disabled: items.length < 2 },
+        { label: 'Copier l’image', icon: 'copy', action: () => KS.preview.copy(it.bytes ? new Blob([it.bytes], { type: 'image/png' }) : it.canvas) },
+        N ? { label: key === 'ex' ? 'Dossier des images (output\\kanevas)' : 'Dossier des images (output\\' + sub + ')', icon: 'folder-open', action: () => key === 'ex' ? N.openOutputs() : N.openForgeOutput(sub) } : null,
+      ].filter(Boolean), Math.max(8, r.right - 290), r.bottom + 4);
+    }, { icon: 'more', tip: 'Calque, autre modèle, agrandir, tout enregistrer, copier, dossier…' });
+    more.classList.add('fx-more');
     return h('div.fx-output-actions',
-      group('edit', 'Utiliser dans Retouche',
-        action('Ouvrir dans Retouche', () => sendTo('edit', it), { primary: true, icon: 'brush', tip: 'Créer un nouveau document avec ce résultat' }),
-        action('Ajouter en calque', () => addAsLayer(it), { enabled: !!it && !!D(), icon: 'layers', tip: D() ? 'Ajouter au document « ' + D().name + ' »' : 'Ouvrez d’abord un document' })),
+      group('edit', 'Utiliser dans Retouche', action('Ouvrir dans Retouche', () => sendTo('edit', it), { primary: true, icon: 'brush', tip: 'Créer un nouveau document avec ce résultat' })),
       group('transform', 'Transformer',
-        action('Envoyer vers Img2Img', () => sendTo('img2img', it), { icon: 'image' }), action('Envoyer vers Inpaint', () => sendTo('inpaint', it), { icon: 'mask' }),
-        action('Détailler (Kane Detailer)', () => detailItem(key, it), { icon: 'sparkles', tip: 'Repeint de près chaque partie choisie dans le volet Kane Detailer, couleurs d’origine gardées' }),
+        action('Vers Img2Img', () => sendTo('img2img', it), { icon: 'image', tip: 'Envoyer vers Img2Img : transformer cette image' }),
+        action('Vers Inpaint', () => sendTo('inpaint', it), { icon: 'mask', tip: 'Envoyer vers Inpaint : retoucher une zone' }),
+        action('Détailler', () => detailItem(key, it), { icon: 'sparkles', tip: 'Kane Detailer : repeint de près chaque partie choisie dans le tiroir, couleurs d’origine gardées' }),
         it && it.kdZones ? action('Zones repeintes', () => showZones(it), { icon: 'eye', tip: 'Ce que Kane Detailer a vraiment repeint sur cette image' }) : null),
-      key === 't2i' || (it && it.before) ? group('compare', 'Comparer',
-        it && it.before ? action(it.from === 'Kane Detailer' ? 'Avant / après' : 'Comparer à l’original', () => compareBefore(it), { icon: 'compare', tip: 'Rideau ou côte à côte, avec l’image de départ' }) : null,
-        key === 't2i' ? action('Refaire avec un autre modèle…', () => remakeWithModel(it), { enabled: !!it && !!it.info && !BUSY, icon: 'compare', tip: 'Même invite, mêmes réglages, même graine, avec un autre checkpoint, puis comparaison' }) : null) : null,
-      key !== 'ex' ? group('upscale', 'Agrandir',
-        action('Agrandir dans Extras', () => sendTo('extras', it), { icon: 'upscale' }),
-        key === 't2i' ? action('Agrandir avec Hires', () => upscaleHires(it), { icon: 'maximize', tip: 'Agrandir cette image avec le hires fix (réglages de « Hires fix »)' }) : action('Agrandir avec Hires', () => C.sendToStudioItem(it), { icon: 'maximize' })) : null,
-      group('files', 'Fichiers',
-        action('Enregistrer…', () => saveItem(it), { icon: 'save' }), action('Tout enregistrer…', () => saveAll(items), { enabled: items.length > 0, icon: 'export' }),
-        action('Dossier', () => key === 'ex' ? N.openOutputs() : N.openForgeOutput(sub), { enabled: !!N, icon: 'folder-open', tip: key === 'ex' ? 'Ouvrir output\\kanevas' : 'Ouvrir output\\' + sub })));
+      it && it.before ? group('compare', 'Comparer', action(it.from === 'Kane Detailer' ? 'Avant / après' : 'Comparer à l’original', () => compareBefore(it), { icon: 'compare', tip: 'Rideau ou côte à côte, avec l’image de départ' })) : null,
+      group('files', 'Fichiers', action('Enregistrer', () => saveItem(it), { icon: 'save', tip: 'Enregistrer cette image…' }), more));
   }
   C.sendToStudioItem = async it => {
     const bytes = it.bytes || await pngBytes(it.canvas);
@@ -1593,54 +1726,127 @@
   function renderOut(key = 't2i') {
     const box = key === 'i2i' ? els.i2iOut : els.out; if (!box) return;
     const o = OUT[key], it = o.items[o.sel];
-    const view = h('div.fx-view');
-    if (BUSY && BUSY.k === key) { const p = progressBox(); view.classList.add('live'); els.progView = view; view.append(p.box, p.img); peekLastDone(view, key); }
-    else if (it) { const im = h('img', { src: it.url, alt: '' }); KS.preview.mount(view, im, { identity: it, width: it.canvas.width, height: it.canvas.height, clickOpen: true, menu: () => [
-      { label: 'Enregistrer…', icon: 'save', action: () => saveItem(it) },
-      { label: 'Ouvrir dans Retouche', icon: 'file-plus', action: () => sendTo('edit', it) },
-      { label: 'Ajouter en calque', icon: 'layers', action: () => addAsLayer(it), disabled: !D() },
-      { label: 'Envoyer vers Img2Img', icon: 'image', action: () => sendTo('img2img', it) },
-      { label: 'Envoyer vers Inpaint', icon: 'brush', action: () => sendTo('inpaint', it) },
-      { label: 'Détailler (Kane Detailer)', icon: 'sparkles', action: () => detailItem(key, it) },
-      { label: 'Voir les zones (Kane Detailer)', icon: 'grid', action: () => detectItem(key, it) },
-      it.kdZones ? { label: 'Zones repeintes (Kane Detailer)', icon: 'eye', action: () => showZones(it) } : null,
-      it.before ? { label: it.from === 'Kane Detailer' ? 'Avant / après' : 'Comparer à l’original', icon: 'compare', action: () => compareBefore(it) } : null,
-      key === 't2i' && it.info ? { label: 'Refaire avec un autre modèle…', icon: 'compare', action: () => remakeWithModel(it) } : null].filter(Boolean) }); }
-    else view.append(h('div.fx-ph', key === 'i2i' ? { text: 'Les résultats apparaîtront ici' } : { html: KS.icon('image') }));
-    const thumbs = o.items.length > 1 ? h('div.fx-thumbs', ...o.items.map((x, i) => { const t = h('img' + (i === o.sel ? '.on' : ''), { src: x.url, alt: '', title: x.from ? 'Venue de l\'Édition : ' + x.from : '' }); t.addEventListener('click', () => { o.sel = i; renderOut(key); }); return t; })) : null;
-    const info = it ? infoBox((it.from ? 'Venue de l\'Édition : ' + it.from + '\n\n' : '') + (it.info || '(sans paramètres de génération)') + (o.time && !it.from ? `\n\nTemps : ${o.time}` : '')) : null;
-    const session = key === 't2i' ? sessionStrip(o) : null;
-    fillEl(box, view, thumbs || session ? h('div.fx-strips', thumbs, session) : null, it ? outButtons(key, it) : null, info);
+    const real = o.items.filter(x => !x.grid), busy = BUSY && BUSY.k === key;
+    let main;
+    if (busy) { const p = progressBox(); main = h('div.fx-view.live'); els.progView = main; main.append(p.box, p.img); peekLastDone(main, key); }
+    else if (o.board && real.length > 1) {
+      // planche : tout le lot en grand, côte à côte ; un clic montre une image seule
+      main = h('div.fx-thumbs.fx-board', { 'data-n': Math.min(real.length, 9) });
+      for (const x of real) {
+        const i = o.items.indexOf(x), im = h('img', { src: x.url, alt: '', title: 'Clic : voir cette image seule' });
+        const cell = h('div.fx-bcell' + (i === o.sel ? '.on' : ''), im);
+        im.addEventListener('click', () => { o.sel = i; o.board = false; renderOut(key); });
+        cell.addEventListener('contextmenu', e => { e.preventDefault(); o.sel = i; renderOut(key); });
+        attachLoupe(cell, () => containRect(im), x);
+        main.append(cell);
+      }
+      // disposition qui montre les images le plus grand possible (4 portraits : côte à côte ; 4 paysages : 2 × 2)
+      const board = main, ratio = real[0].canvas.width / real[0].canvas.height || 1;
+      const fit = () => {
+        const W = board.clientWidth, H = board.clientHeight, n = real.length, g = 14; if (!W || !H) return;
+        let best = null;
+        for (let cols = 1; cols <= n; cols++) {
+          const rows = Math.ceil(n / cols), w = Math.min((W - g * (cols - 1)) / cols, (H - g * (rows - 1)) / rows * ratio);
+          if (!best || w > best.w + 0.5) best = { cols, rows, w };
+        }
+        board.style.gridTemplateColumns = `repeat(${best.cols}, minmax(0, 1fr))`;
+        board.style.gridTemplateRows = `repeat(${best.rows}, minmax(0, 1fr))`;
+      };
+      new ResizeObserver(fit).observe(board);
+    } else if (it) {
+      main = h('div.fx-view');
+      const im = h('img', { src: it.url, alt: '' });
+      KS.preview.mount(main, im, { identity: it, width: it.canvas.width, height: it.canvas.height, clickOpen: true, menu: () => [
+        { label: 'Enregistrer…', icon: 'save', action: () => saveItem(it) },
+        { label: 'Ouvrir dans Retouche', icon: 'file-plus', action: () => sendTo('edit', it) },
+        { label: 'Ajouter en calque', icon: 'layers', action: () => addAsLayer(it), disabled: !D() },
+        { label: 'Envoyer vers Img2Img', icon: 'image', action: () => sendTo('img2img', it) },
+        { label: 'Envoyer vers Inpaint', icon: 'brush', action: () => sendTo('inpaint', it) },
+        { label: 'Détailler (Kane Detailer)', icon: 'sparkles', action: () => detailItem(key, it) },
+        { label: 'Voir les zones (Kane Detailer)', icon: 'grid', action: () => detectItem(key, it) },
+        it.kdZones ? { label: 'Zones repeintes (Kane Detailer)', icon: 'eye', action: () => showZones(it) } : null,
+        it.before ? { label: it.from === 'Kane Detailer' ? 'Avant / après' : 'Comparer à l’original', icon: 'compare', action: () => compareBefore(it) } : null,
+        key === 't2i' && it.info ? { label: 'Refaire avec un autre modèle…', icon: 'compare', action: () => remakeWithModel(it) } : null].filter(Boolean) });
+      const area = main.querySelector('.iv-viewport');
+      attachLoupe(main, () => im.getBoundingClientRect(), it, () => +(area && area.dataset.scale) >= 0.9);
+    } else main = h('div.fx-view.fx-empty', h('div.fx-ph', h('span', { html: KS.icon(key === 'i2i' ? 'image' : 'sparkles') }),
+      h('b', { text: key === 'i2i' ? 'Le résultat apparaîtra ici' : 'Votre image apparaîtra ici, en grand' }),
+      h('small', { text: key === 'i2i' ? 'Choisissez une image source, décrivez le changement, puis Générer.' : 'Décrivez-la en bas puis Générer (Ctrl+Entrée). Survolez le résultat : la loupe montre les détails à 100 %.' })));
+    // petite barre au-dessus : lot, infos, loupe, puis les actions
+    const thumbs = !busy && real.length > 1 && !(o.board && real.length > 1) ? h('div.fx-thumbs.fx-mini', ...o.items.map((x, i) => { const t = h('img' + (i === o.sel ? '.on' : ''), { src: x.url, alt: '', title: x.from ? 'Venue de l\'Édition : ' + x.from : 'Voir cette image' }); t.addEventListener('click', () => { o.sel = i; renderOut(key); }); return t; }),
+      ibtn('grid', 'Revoir tout le lot en planche', () => { o.board = true; renderOut(key); })) : null;
+    const meta = it && !busy ? h('span.fx-sb-meta', { text: [it.canvas.width + ' × ' + it.canvas.height, it.seed != null ? 'graine ' + it.seed : '', o.time && !it.from ? o.time.replace(' sec.', ' s') : ''].filter(Boolean).join(' · ') }) : null;
+    const info = it && !busy ? infoBox((it.from ? 'Venue de l\'Édition : ' + it.from + '\n\n' : '') + (it.info || '(sans paramètres de génération)') + (o.time && !it.from ? `\n\nTemps : ${o.time}` : '')) : null;
+    const lens = it && !busy ? ibtn('zoom', 'Loupe au survol : détails à 100 % sans cliquer (touche L)', () => { FX.loupe = FX.loupe === false; save(); renderOut(key); }, FX.loupe !== false ? '.on' : '') : null;
+    const bar = h('div.fx-stagebar', h('div.fx-sb-left', thumbs, meta, info, lens), it && !busy ? outButtons(key, it) : null);
+    fillEl(box, bar, main);
+    if (key === 't2i') renderFilm();
   }
   function renderStrip() {
     renderOut('i2i');
   }
-  // Paramètres de génération du résultat, repliés par défaut (une ligne)
+  // Paramètres de génération du résultat : un bouton, le texte s'ouvre par-dessus l'image
   function infoBox(text) {
-    const d = h('details.fx-infobox', h('summary', h('span', { text: 'Paramètres' }), h('span.fx-infoline', { text: text.split('\n')[0].slice(0, 220) })), h('div.fx-outinfo', { text }));
+    const d = h('details.fx-infobox', h('summary', { title: 'Paramètres de génération' }, h('span', { html: KS.icon('info') }), h('span', { text: 'Paramètres' })), h('div.fx-outinfo', { text }));
     d.open = !!FX.infoOpen;
     d.addEventListener('toggle', () => { FX.infoOpen = d.open; save(); });
     return d;
   }
-  // Séance : les images déjà générées (vignettes de la galerie) ; un clic les remet en grand dans le Studio
-  function sessionStrip(o) {
-    const shown = new Set(o.items.map(x => x.gid).filter(Boolean));
-    const older = SD.gallery.filter(g => !shown.has(g.id)).slice(0, 60);
-    if (!older.length) return null;
-    const row = h('div.fx-session', { title: 'Images de la séance : clic pour les revoir ici' }, h('span.fx-session-l', { text: 'Séance' }));
-    for (const g of older) {
-      const t = h('img', { src: g.thumb, alt: '', loading: 'lazy', title: (g.info || '').split('\n')[0].slice(0, 160) });
-      t.addEventListener('click', async () => {
-        const full = await galleryItem(g), bytes = g.blob ? new Uint8Array(await g.blob.arrayBuffer()) : null;
-        const item = { canvas: full.canvas, bytes, url: g.blob ? URL.createObjectURL(g.blob) : full.canvas.toDataURL('image/png'), info: g.info, params: g.params, seed: g.seed, kind: g.kind, from: g.from, gid: g.id };
-        o.items.unshift(item); o.sel = 0;
-        // les résultats revus s'ajoutent devant : au-delà de 16, les plus anciens sont libérés (ils restent dans la séance)
-        while (o.items.length > 16) { const x = o.items.pop(); if (x.url && x.url.startsWith('blob:')) URL.revokeObjectURL(x.url); }
-        renderOut('t2i');
-      });
-      row.appendChild(t);
-    }
-    return row;
+  // rectangle réellement occupé par une image en object-fit: contain
+  function containRect(im) {
+    const r = im.getBoundingClientRect(), W = im.naturalWidth || 1, H = im.naturalHeight || 1, k = Math.min(r.width / W, r.height / H);
+    const w = W * k, hh = H * k;
+    return { left: r.left + (r.width - w) / 2, top: r.top + (r.height - hh) / 2, width: w, height: hh, right: r.left + (r.width + w) / 2, bottom: r.top + (r.height + hh) / 2 };
+  }
+  // Loupe au survol : un rond qui suit la souris et montre l'image à 100 % (visage, mains, yeux) sans cliquer
+  function attachLoupe(host, rectOf, it, off = () => false) {
+    if (!it || !it.url || !it.canvas) return;
+    const W = it.canvas.width, H = it.canvas.height;
+    const lens = h('div.fx-loupe', { hidden: true, 'aria-hidden': 'true' });
+    lens.style.backgroundImage = 'url("' + it.url + '")';
+    lens.style.backgroundSize = W + 'px ' + H + 'px';
+    host.append(lens);
+    host.addEventListener('pointermove', e => {
+      const r = rectOf();
+      if (FX.loupe === false || e.buttons || off() || !r.width || r.width >= W * 0.9 || e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) { lens.hidden = true; return; }
+      const S = lens.offsetWidth || 260, hr = host.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width * W, py = (e.clientY - r.top) / r.height * H;
+      lens.hidden = false;
+      lens.style.transform = `translate(${e.clientX - hr.left - S / 2}px, ${e.clientY - hr.top - S / 2}px)`;
+      lens.style.backgroundPosition = `${S / 2 - px}px ${S / 2 - py}px`;
+    });
+    host.addEventListener('pointerleave', () => { lens.hidden = true; });
+    host.addEventListener('pointerdown', () => { lens.hidden = true; });
+    host.addEventListener('wheel', () => { lens.hidden = true; }, { passive: true });
+  }
+  // Séance : toutes les images de la séance, en colonne à droite (← → pour passer de l'une à l'autre)
+  function renderFilm() {
+    const f = els.film; if (!f) return;
+    const o = OUT.t2i, cur = o.items[o.sel];
+    f.hidden = !SD.gallery.length;
+    if (!SD.gallery.length) return f.replaceChildren();
+    fillEl(f, h('div.fx-film-h', { text: 'Séance', title: 'Les images de cette séance · ← → pour passer de l’une à l’autre' }), ...SD.gallery.map(g => {
+      const t = h('img' + (cur && cur.gid === g.id ? '.on' : ''), { src: g.thumb, alt: '', loading: 'lazy', title: (g.info || '').split('\n')[0].slice(0, 160) || 'Image de la séance' });
+      t.addEventListener('click', () => showGallery(g));
+      return t;
+    }));
+    const on = f.querySelector('img.on'); if (on) on.scrollIntoView({ block: 'nearest' });
+  }
+  async function showGallery(g) {
+    const o = OUT.t2i, i = o.items.findIndex(x => x.gid === g.id);
+    if (i >= 0) { o.sel = i; o.board = false; return renderOut('t2i'); }
+    const full = await galleryItem(g), bytes = g.blob ? new Uint8Array(await g.blob.arrayBuffer()) : null;
+    o.items.unshift({ canvas: full.canvas, bytes, url: g.blob ? URL.createObjectURL(g.blob) : full.canvas.toDataURL('image/png'), info: g.info, params: g.params, seed: g.seed, kind: g.kind, from: g.from, gid: g.id, before: g.before });
+    o.sel = 0; o.board = false;
+    // les images revues s'ajoutent devant : au-delà de 16, les plus anciennes sont libérées (elles restent dans la séance)
+    while (o.items.length > 16) { const x = o.items.pop(); if (x.url && x.url.startsWith('blob:')) URL.revokeObjectURL(x.url); }
+    renderOut('t2i');
+  }
+  function stepFilm(dir) {
+    if (!SD.gallery.length || BUSY) return;
+    const cur = OUT.t2i.items[OUT.t2i.sel], i = cur ? SD.gallery.findIndex(g => g.id === cur.gid) : -1;
+    const next = SD.gallery[U.clamp(i < 0 ? 0 : i + dir, 0, SD.gallery.length - 1)];
+    if (next && (!cur || next.id !== cur.gid)) showGallery(next);
   }
 
   /* ---------------------------------------------------------------- génération */
@@ -1773,7 +1979,8 @@
     if (!items.length) throw new Error('Forge n\'a renvoyé aucune image (génération interrompue ?)');
     for (const it of items) { it.params = snap; const m = /\bSeed: (\d+)/.exec(it.info || ''); if (m) it.seed = +m[1]; }
     releaseItems(OUT.t2i);
-    OUT.t2i.items = items; OUT.t2i.sel = 0;
+    OUT.t2i.items = items; OUT.t2i.sel = items.findIndex(i => !i.grid) >= 0 ? items.findIndex(i => !i.grid) : 0;
+    OUT.t2i.board = items.filter(i => !i.grid).length > 1;
     renderOut(); pushGallery(items.filter(i => !i.grid));
   }
   // ✨ de Forge : la même image, refaite avec le hires fix (image de première passe)
@@ -1826,7 +2033,7 @@
     const items = await toItems(r, 'img2img', p);
     if (!items.length) throw new Error('Forge n\'a renvoyé aucune image (génération interrompue ?)');
     releaseItems(OUT.i2i);
-    OUT.i2i.items = items; OUT.i2i.sel = 0;
+    OUT.i2i.items = items; OUT.i2i.sel = 0; OUT.i2i.board = items.filter(i => !i.grid).length > 1;
     for (const it of items) { it.params = snap; const m = /\bSeed: (\d+)/.exec(it.info || ''); if (m) it.seed = +m[1]; }
     const imgs = items.filter(i => !i.grid);
     renderStrip(); pushGallery(imgs);
@@ -1847,7 +2054,7 @@
       }
     });
     releaseItems(OUT.i2i);
-    OUT.i2i.items = all; OUT.i2i.sel = 0; renderStrip(); pushGallery(all.filter(i => !i.grid));
+    OUT.i2i.items = all; OUT.i2i.sel = 0; OUT.i2i.board = all.filter(i => !i.grid).length > 1; renderStrip(); pushGallery(all.filter(i => !i.grid));
     KS.toast(all.length + ' image(s) traitée(s)' + (FX.saveImages !== false ? ' : dans output\\img2img-images de Forge' : ''), 'ok', 4000);
   }
 

@@ -1,3 +1,20 @@
+# 1.26.0 — Studio IA 3 : l'image d'abord
+
+- **L'image en grand** : elle occupe presque tout l'écran. Une fine barre au-dessus donne la taille, la graine, le temps, les paramètres et les actions.
+- **Loupe au survol** : passez la souris sur l'image, un rond montre les détails à 100 % (visage, yeux, mains). On voit si l'image est réussie sans cliquer. Touche **L** pour la couper ou la remettre.
+- **Planche** : un lot de plusieurs images s'affiche en grand, côte à côte (4 portraits sur une ligne). Un clic en montre une seule ; le bouton grille revient à la planche.
+- **Invite en bas** : repliée sur 2 lignes, elle s'agrandit par-dessus l'image pendant que vous écrivez, sans la déplacer.
+- **Pastilles de réglages rapides** sous l'invite :
+  - Modèle (avec l'état du moteur, VAE / encodeur, précision) ;
+  - Format, Force (Transformer) et Lot ;
+  - LoRA (actifs, poids, fiche) ;
+  - Kane Detailer et Hires fix, à activer d'un clic ;
+  - Négatif ;
+  - Réglages.
+- **Tiroir des réglages** : tous les réglages, aérés, sur une seule colonne. Il se ferme pour laisser toute la place à l'image et reste fermé par défaut sur un écran comme le vôtre. L'état est retenu.
+- **Séance** en colonne à droite : toutes les images de la séance ; les flèches ← → passent de l'une à l'autre.
+- **Actions** : l'essentiel visible (Ouvrir dans Retouche, Vers Img2Img, Vers Inpaint, Détailler, Enregistrer), le reste dans **Plus** (calque, autre modèle, agrandir, tout enregistrer, copier, dossier).
+
 # 1.25.0 — Kane Detailer 5 : chaque zone sait ce qu'elle contient
 
 - **Invite de zone d'après ce qu'on y voit** : WD14 reconnaît ce que contient chaque zone (objet tenu, couleur des yeux, ongles…) et l'ajoute à son invite. Le détail ne change plus des yeux rouges en yeux marron et ne fait plus disparaître l'éventail ou les baguettes. Seules les étiquettes sûres sont gardées, triées par partie : une main ne reçoit ni le visage ni les vêtements, et une bouche fermée le reste.
