@@ -27,6 +27,15 @@ let services = null;           // ateliers ComfyUI / Animation (services.cjs)
 let allowClose = false;
 let animationBusy = false;
 const pending = [];          // fichiers reçus avant que la page soit prête
+// « Envoyer vers KaneApp » de Kane Explorer : --kane-studio=img2img (inpaint, extras, pnginfo) ouvre l'image puis l'envoie
+// dans cet onglet du Studio IA (1.26.1)
+const STUDIO_TARGETS = ['img2img', 'inpaint', 'extras', 'pnginfo'];
+let pendingStudio = null;
+function studioFromArgv(argv) {
+  const a = argv.find(x => typeof x === 'string' && x.startsWith('--kane-studio='));
+  const t = a ? a.slice('--kane-studio='.length) : null;
+  return STUDIO_TARGETS.includes(t) ? t : null;
+}
 
 function filesFromArgv(argv) {
   return argv.slice(app.isPackaged ? 1 : 2).filter(a => {
@@ -40,12 +49,15 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   app.on('second-instance', (_e, argv) => {
     const files = filesFromArgv(argv);
-    if (!win) { pending.push(...files); return; }
+    const studio = studioFromArgv(argv);
+    if (!win) { pending.push(...files); if (studio && files.length) pendingStudio = studio; return; }
     if (win.isMinimized()) win.restore();
     win.focus();
     files.forEach(p => win.webContents.send('open-path', p));
+    if (studio && files.length) win.webContents.send('open-studio', studio);
   });
   pending.push(...filesFromArgv(process.argv));
+  if (pending.length) pendingStudio = studioFromArgv(process.argv);
   app.whenReady().then(() => {
     kcHost.setup(() => win, { output: () => outputPaths.directory('montage') });
     require('./suite-host.cjs')(() => win);
@@ -178,6 +190,7 @@ ipcMain.handle('write-file', (_e, p, data) => {
 });
 
 ipcMain.handle('get-pending', () => pending.splice(0));
+ipcMain.handle('get-pending-studio', () => { const t = pendingStudio; pendingStudio = null; return t; });
 
 // Polices installées (machine + utilisateur), lues dans le registre
 ipcMain.handle('list-fonts', () => new Promise(resolve => {

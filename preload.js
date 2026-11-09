@@ -79,6 +79,9 @@ contextBridge.exposeInMainWorld('ksNative', {
   toggleFullscreen: () => ipcRenderer.send('toggle-fullscreen'),
   showInFolder: p => ipcRenderer.send('show-in-folder', p),
   onOpenPath: fn => ipcRenderer.on('open-path', (_e, p) => fn(p)),
+  // Kane Explorer « Envoyer vers KaneApp → Img2Img… » : onglet du Studio IA où envoyer l'image ouverte
+  onOpenStudio: fn => ipcRenderer.on('open-studio', (_e, t) => fn(t)),
+  getPendingStudio: () => ipcRenderer.invoke('get-pending-studio'),
   onCloseRequest: fn => ipcRenderer.on('close-request', () => fn()),
   aiStatus: () => ipcRenderer.invoke('ai-status'),
   aiDownload: id => ipcRenderer.invoke('ai-download', id),

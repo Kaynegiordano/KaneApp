@@ -282,8 +282,15 @@
     KS.on('history', d => { if (d) titleSoon(); });
     if (KS.native) {
       KS.native.onCloseRequest(onCloseRequest);
-      KS.native.onOpenPath(p => KS.io.openPath(p));
-      KS.native.getPending().then(list => list.forEach(p => KS.io.openPath(p)));
+      // Ouvertures dans l'ordre d'arrivée ; « Envoyer vers le Studio » (Kane Explorer) attend que l'image soit ouverte
+      let opening = Promise.resolve();
+      const queue = fn => { opening = opening.then(fn).catch(() => {}); };
+      KS.native.onOpenPath(p => queue(() => KS.io.openPath(p)));
+      if (KS.native.onOpenStudio) KS.native.onOpenStudio(t => queue(() => KS.cmd.sendToStudio(t)));
+      KS.native.getPending().then(list => {
+        list.forEach(p => queue(() => KS.io.openPath(p)));
+        if (list.length && KS.native.getPendingStudio) KS.native.getPendingStudio().then(t => { if (t) queue(() => KS.cmd.sendToStudio(t)); });
+      });
     } else {
       window.addEventListener('beforeunload', e => { if (KS.state.docs.some(d => d.dirty)) { e.preventDefault(); e.returnValue = ''; } });
     }
