@@ -18,19 +18,15 @@
   const fillEl = (el, ...kids) => el.replaceChildren(...kids.filter(Boolean));
 
   /* ---------------------------------------------------------------- réglages (mêmes clés que l'API de Forge) */
-  const AD_UNIT = () => ({ ad_tab_enable: true, ad_model: 'None', ad_prompt: '', ad_negative_prompt: '', ad_confidence: 0.3, ad_mask_k: 0, ad_mask_min_ratio: 0, ad_mask_max_ratio: 1,
-    ad_x_offset: 0, ad_y_offset: 0, ad_dilate_erode: 4, ad_mask_merge_invert: 'None', ad_mask_blur: 4, ad_denoising_strength: 0.4, ad_inpaint_only_masked: true,
-    ad_inpaint_only_masked_padding: 32, ad_use_inpaint_width_height: false, ad_inpaint_width: 512, ad_inpaint_height: 512, ad_use_steps: false, ad_steps: 28,
-    ad_use_cfg_scale: false, ad_cfg_scale: 7, ad_use_sampler: false, ad_sampler: 'DPM++ 2M', ad_scheduler: 'Use same scheduler', ad_use_noise_multiplier: false, ad_noise_multiplier: 1 });
   const COMMON = () => ({
     prompt: '', negative_prompt: '', styles: [], sampler_name: 'SEEDS 3', scheduler: 'Beta57', steps: 22, width: 1024, height: 1024, n_iter: 1, batch_size: 1,
     cfg_scale: 4, distilled_cfg_scale: 3, seed: -1, seedExtra: false, subseed: -1, subseed_strength: 0, seed_resize_from_w: 0, seed_resize_from_h: 0,
-    ad: { enabled: false, skip: false, tab: 0, units: [{ ...AD_UNIT(), ad_model: 'face_yolov8n.pt' }, AD_UNIT(), AD_UNIT(), AD_UNIT()] },
     kd: { enabled: false, skip: false, parts: ['vetements', 'poitrine', 'cheveux', 'mains', 'visage', 'yeux'], forces: {}, keep: 0.8, resolution: 1024, detail: 0, upscale: 1, showZones: true, tries: 2, repair: true, grain: 0.5, glow: true, age: true },
     noom: { unet: false, vae: false }, script: 'None', scriptArgs: {}, open: {},
   });
   const DEF = {
     v: 1, tab: 'txt2img', i2iMode: 'img2img', scale: 'anima', translate: true, saveImages: true, livePreview: true, previewMode: 'net', seeded: false, presetName: '', promptHistory: [],
+    negOpen: false, infoOpen: false,
     lora: { q: '', sort: 'new' },
     painter: { size: 40, color: '#ff7a30', erase: false },
     editor: { target: 'selection', prompt: '', strength: 0.5, variants: 1, fillVersion: 1 },
@@ -59,7 +55,6 @@
   // Migration vers la force modérée du nouveau remplissage.
   if (!KS.prefs.fx?.editor?.fillVersion) FX.editor.strength = 0.5;
   FX.editor.strength = U.clamp(+FX.editor.strength || 0.5, 0.4, 0.6);
-  for (const k of ['t2i', 'i2i']) FX[k].ad.units = [0, 1, 2, 3].map(i => ({ ...AD_UNIT(), ...((FX[k].ad.units || [])[i] || {}) }));
   for (const k of ['t2i', 'i2i']) { FX[k].seed = -1; FX[k].subseed = -1; }
   KS.prefs.fx = FX;
   const save = U.debounce(() => { KS.prefs.fx = FX; KS.prefs.save(); }, 400);
@@ -132,6 +127,10 @@
   const row3 = (...a) => h('div.fx-row3', ...a);
   const ebtn = (emoji, tip, fn, cls = '') => { const b = h('button.fx-ebtn' + cls, { text: emoji, title: tip }); b.addEventListener('click', fn); return b; };
   const tbtn = (label, fn, cls = '', tip = '') => { const b = h('button.fx-btn2' + cls, { text: label, title: tip }); b.addEventListener('click', fn); return b; };
+  // bouton à icône (Studio 2) : le libellé est dans l'info-bulle et pour les lecteurs d'écran
+  const ibtn = (icon, tip, fn, cls = '') => { const b = h('button.fx-ibtn' + cls, { title: tip, 'aria-label': tip, type: 'button' }); b.innerHTML = KS.icon(icon); b.addEventListener('click', fn); return b; };
+  // section du volet de réglages : un titre discret, pas de cadre
+  const sect = (title, ...kids) => h('section.fx-sect', h('div.fx-sect-h', { text: title }), ...kids.flat().filter(Boolean));
   function slider(label, obj, key, min, max, step, tip, onChange) {
     const num = h('input.fx-num', { type: 'number', min, max, step, value: obj[key] });
     const rng = h('input.fx-rng', { type: 'range', min, max, step, value: obj[key] });
@@ -197,7 +196,7 @@
       i.addEventListener('change', () => { on[0][on[1]] = i.checked; save(); el.classList.toggle('active', i.checked); });
       head.append(i);
     }
-    head.append(h('span.fx-acc-t', { text: title }), h('span.fx-acc-a', { text: open ? '▼' : '◀' }));
+    head.append(h('span.fx-acc-t', { text: title }), h('span.fx-acc-a', { html: KS.icon(open ? 'chevron-down' : 'chevron-right') }));
     head.addEventListener('click', () => { st.open[key] = !open; save(); renderParams(); });
     if (open) el.appendChild(h('div.fx-acc-b', ...[].concat(typeof body === 'function' ? body() : body)));
     return el;
@@ -220,7 +219,7 @@
   };
   function formatRow(st) {
     const sc = SCALES[FX.scale] ? FX.scale : 'anima';
-    const row = h('div.fx-fmt', h('span.fx-fmt-l', { text: 'FORMAT' }));
+    const row = h('div.fx-fmt');
     for (const [id, S] of Object.entries(SCALES)) {
       const b = h('button.fx-chip.fx-scale' + (sc === id ? '.on' : ''), { text: S.label, title: S.title });
       b.addEventListener('click', () => { FX.scale = id; save(); renderParams(); }); row.appendChild(b);
@@ -316,9 +315,13 @@
       h('span', { text: !E ? 'Moteur indisponible' : E.ready() ? (warming ? 'Chargement du modèle…' : E.state === 'external' ? 'Forge de Kane OS' : 'Moteur IA prêt') : st === 'starting' ? 'Démarrage du moteur…' : st === 'error' ? 'Moteur : erreur' : 'Moteur IA arrêté' }),
       E && !E.ready() && st !== 'starting' ? tbtn('Démarrer', () => E.ensure().then(ok => ok && loadCat()), '.primary.sm') : null);
   }
+  let topPop = false;
+  document.addEventListener('pointerdown', e => {
+    if (topPop && !e.target.closest('.fx-toppop, .fx-topbtn, .menu')) { topPop = false; renderTop(); }
+  }, true);
   function renderTop() {
     const t = els.top; if (!t || !SD.on) return;
-    const ck = h('select.fx-sel');
+    const ck = h('select.fx-sel.fx-ck-sel', { title: 'Checkpoint : le modèle de génération' });
     if (cat) {
       for (const m of cat.models) ck.appendChild(h('option', { value: m.title, text: norm(m.title) }));
       const cur = cat.models.find(m => norm(m.title) === norm(cat.current.model));
@@ -326,14 +329,22 @@
       ck.addEventListener('change', () => setOptions({ sd_model_checkpoint: ck.value }, 'Checkpoint : ' + norm(ck.value) + ' (chargé à la prochaine génération)'));
     } else ck.appendChild(h('option', { text: loading ? 'Lecture de Forge…' : 'Moteur IA arrêté' }));
     ck.disabled = !cat;
-    const mods = cat ? modulesPicker(cat.current.modules || [], v => setOptions({ forge_additional_modules: v }, 'VAE / Text Encoder changés')) : h('div.fx-modchips');
-    const dt = h('select.fx-sel', ...DTYPES.map(d => h('option', { value: d, text: d })));
-    dt.value = cat ? cat.dtype : 'Automatic'; dt.disabled = !cat;
-    dt.addEventListener('change', () => setOptions({ forge_unet_storage_dtype: dt.value }, 'Diffusion in Low Bits : ' + dt.value + ' (au prochain chargement du modèle)'));
-    const ref = ebtn('🔄', 'Relire les modèles, modules et LoRA de Forge', async () => { if (!cat) return loadCat(); await N.forgeRefreshCheckpoints(url()); await N.forgeRefreshLoras(url()); loadCat(); });
-    const c1 = field('Checkpoint', ck), c2 = field('VAE / Text Encoder', mods), c3 = field('Diffusion in Low Bits', dt);
-    c1.classList.add('fx-ck'); c2.classList.add('fx-mods'); c3.classList.add('fx-dt');
-    t.replaceChildren(c1, c2, ref, c3, h('div.spacer'), engineBadge());
+    const ref = ibtn('rotate-cw', 'Relire les modèles, modules et LoRA de Forge', async () => { if (!cat) return loadCat(); await N.forgeRefreshCheckpoints(url()); await N.forgeRefreshLoras(url()); loadCat(); });
+    // VAE / Text Encoder et précision : rarement changés, repliés dans un petit volet
+    const mods = cat ? cat.current.modules || [] : [];
+    const more = h('button.fx-topbtn' + (topPop ? '.on' : ''), { type: 'button', title: 'VAE / Text Encoder et Diffusion in Low Bits', 'aria-expanded': String(topPop) },
+      h('span.fx-topbtn-t', { text: mods.length ? mods.map(base).join(' · ') : 'VAE / encodeur' }), h('span.fx-topbtn-a', { html: KS.icon('chevron-down') }));
+    more.disabled = !cat;
+    more.addEventListener('click', () => { topPop = !topPop; renderTop(); });
+    let pop = null;
+    if (topPop && cat) {
+      const dt = h('select.fx-sel', ...DTYPES.map(d => h('option', { value: d, text: d })));
+      dt.value = cat.dtype || 'Automatic';
+      dt.addEventListener('change', () => setOptions({ forge_unet_storage_dtype: dt.value }, 'Diffusion in Low Bits : ' + dt.value + ' (au prochain chargement du modèle)'));
+      pop = h('div.fx-toppop', field('VAE / Text Encoder', modulesPicker(mods, v => setOptions({ forge_additional_modules: v }, 'VAE / Text Encoder changés'))),
+        field('Diffusion in Low Bits', dt, 'Précision des poids du modèle en mémoire'));
+    }
+    fillEl(t, h('div.fx-model', h('span.fx-model-i', { html: KS.icon('sparkles') }), ck), more, ref, pop, h('div.spacer'), engineBadge());
   }
 
   /* ---------------------------------------------------------------- rendu de la page */
@@ -356,6 +367,7 @@
       default: FX.tab = 'txt2img'; content = t2iTab();
     }
     els.body.replaceChildren(content);
+    els.body.classList.toggle('fx-fit', FX.tab === 'txt2img' || FX.tab === 'img2img');
     if (FX.tab === 'train') KS.trainTab ? KS.trainTab.render(content) : content.append(h('div.fx-note', { text: 'Atelier indisponible.' }));
     document.body.classList.toggle('fx-angle', FX.tab === 'angle');
     if (FX.tab === 'angle') KS.angleTab ? KS.angleTab.render(content) : content.append(h('div.fx-note', { text: 'Angle indisponible.' }));
@@ -363,14 +375,14 @@
   }
   function t2iTab() {
     const c = CTX.t2i;
-    c.left = h('div.fx-left'); els.out = h('div.fx-out');
-    const wrap = h('div.fx-gen', promptRow(c), h('div.fx-cols', c.left, els.out));
+    c.left = h('div.fx-left'); els.out = h('div.fx-out.fx-stage');
+    const wrap = h('div.fx-gen.fx-v2', h('div.fx-main', promptRow(c), els.out), h('aside.fx-aside', c.left));
     renderParams(); renderOut();
     return wrap;
   }
   function i2iTab() {
     const c = CTX.i2i;
-    c.left = h('div.fx-left'); c.modes = h('div.fx-i2ihead'); els.i2iOut = h('div.fx-out');
+    c.left = h('div.fx-left'); c.modes = h('div.fx-i2ihead'); els.i2iOut = h('div.fx-out.fx-stage');
     const source = h('div.fx-panel.fx-source');
     const d = i2iDoc;
     const paintable = d && FX.i2iMode !== 'img2img' && FX.i2iMode !== 'batch';
@@ -394,13 +406,12 @@
       zone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
     } else { if (paintable) zone.classList.add('fx-paintzone'); zone.removeAttribute('role'); zone.removeAttribute('tabindex'); }
     dropTo(zone, loadI2I);
-    source.append(h('div.fx-h', { text: 'Image source' }), zone,
-      h('div.fx-docinfo', { text: d ? `${d.name} · ${d.width} × ${d.height}` : 'Choisissez une image ou reprenez le document de Retouche.' }),
-      h('div.fx-outbtns', tbtn('Importer une image…', pick), tbtn('Depuis Retouche', () => C.sendToStudio(FX.i2iMode === 'inpaint' ? 'inpaint' : 'img2img')),
-        d ? tbtn('Ouvrir la source dans Retouche', () => toEdition({ canvas: sourceFor(d, true), name: d.name, info: d.genInfo, params: d.genParams })) : null,
-        d ? tbtn('Retirer la source', () => { i2iDoc = null; render(); }) : null), c.modes);
-    const wrap = h('div.fx-gen.fx-img2img', promptRow(c),
-      h('div.fx-cols', h('div.fx-i2i-work', source, c.left), els.i2iOut));
+    source.append(c.modes, zone,
+      h('div.fx-srcfoot', h('div.fx-docinfo', { text: d ? `${d.name} · ${d.width} × ${d.height}` : 'Choisissez une image ou reprenez le document de Retouche.' }),
+        h('div.fx-outbtns', tbtn('Importer une image…', pick, '.sm'), tbtn('Depuis Retouche', () => C.sendToStudio(FX.i2iMode === 'inpaint' ? 'inpaint' : 'img2img'), '.sm'),
+          d ? tbtn('Ouvrir la source dans Retouche', () => toEdition({ canvas: sourceFor(d, true), name: d.name, info: d.genInfo, params: d.genParams }), '.sm') : null,
+          d ? tbtn('Retirer la source', () => { i2iDoc = null; render(); }, '.sm') : null)));
+    const wrap = h('div.fx-gen.fx-v2.fx-img2img', h('div.fx-main', promptRow(c), h('div.fx-i2i-stage', source, els.i2iOut)), h('aside.fx-aside', c.left));
     renderModeTools(); renderCtx(c); renderOut('i2i');
     return wrap;
   }
@@ -467,7 +478,7 @@
   function promptRow(c, { compact = false } = {}) {
     const st = FX[c.k];
     const area = (key, label, rows) => {
-      const ta = h('textarea.fx-ta.fx-prompt', { placeholder: label + '\nCtrl+Entrée : générer / interrompre · Alt+Entrée : passer une image', spellcheck: false, rows });
+      const ta = h('textarea.fx-ta.fx-prompt', { placeholder: compact ? label + '\nCtrl+Entrée : générer / interrompre · Alt+Entrée : passer une image' : label, spellcheck: false, rows });
       ta.value = st[key] || '';
       const cnt = h('span.fx-tok');
       const upd = () => { const n = tokens(ta.value); cnt.textContent = n + '/' + Math.max(75, Math.ceil(n / 75) * 75); };
@@ -490,7 +501,7 @@
       upd();
       return { box: h('div.fx-pbox', cnt, ta), ta };
     };
-    const P = area('prompt', 'Décrivez l’image souhaitée', 3), Q = area('negative_prompt', 'Éléments à éviter (invite négative)', compact ? 2 : 3);
+    const P = area('prompt', compact ? 'Décrivez l’image souhaitée' : 'Décrivez l’image souhaitée… (Ctrl+Entrée : générer · Échap : interrompre)', 3), Q = area('negative_prompt', 'Éléments à éviter (invite négative)', 2);
     c.promptTa = P.ta; c.negTa = Q.ta;
     c.syncPrompt = () => {
       P.ta.value = st.prompt; Q.ta.value = st.negative_prompt;
@@ -501,18 +512,34 @@
     c.trNote = h('div.fx-trnote'); c.chips = h('div.fx-lchips'); c.genbox = h('div.fx-genbox');
     c.find = findBar(c);
     renderGenButtons(); trNote(c); renderChips(c);
-    c.findBtn = ebtn('🔍', 'Chercher et remplacer dans l\'invite (Ctrl+F dans l\'invite)', () => c.find.toggle());
+    c.findBtn = ibtn('search', 'Chercher et remplacer dans l\'invite (Ctrl+F dans l\'invite)', () => c.find.toggle());
     const tools = h('div.fx-ptools',
-      ebtn('↙️', 'Lire les paramètres collés dans l\'invite (texte d\'une image de Forge), ou ceux de la dernière génération si l\'invite est vide', () => { readParams(c.k); if (c === EDIT) renderEditorDraw(); }),
-      ebtn('🗑️', 'Effacer l\'invite et l\'invite négative', () => { for (const t of [P.ta, Q.ta]) { t.value = ''; t.dispatchEvent(new Event('input')); } }),
-      ebtn('📋', 'Appliquer les styles choisis à l\'invite', () => applyStyles(c)),
+      ibtn('import', 'Lire les paramètres collés dans l\'invite (texte d\'une image de Forge), ou ceux de la dernière génération si l\'invite est vide', () => { readParams(c.k); if (c === EDIT) renderEditorDraw(); }),
+      ibtn('history', 'Historique des invites : reprendre une invite déjà utilisée, avec recherche', () => historyDialog(c)),
       c.findBtn,
-      ebtn('🕘', 'Historique des invites : reprendre une invite déjà utilisée, avec recherche', () => historyDialog(c)),
-      ebtn('🧹', 'Nettoyer l\'invite : doublons, virgules et espaces en trop (Ctrl+Z pour annuler)', () => cleanPrompts(c)));
+      ibtn('eraser-magic', 'Nettoyer l\'invite : doublons, virgules et espaces en trop (Ctrl+Z pour annuler)', () => cleanPrompts(c)),
+      ibtn('palette', 'Appliquer les styles choisis à l\'invite', () => applyStyles(c)),
+      ibtn('trash', 'Effacer l\'invite et l\'invite négative', () => { for (const t of [P.ta, Q.ta]) { t.value = ''; t.dispatchEvent(new Event('input')); } }));
     if (compact) return h('div.fx-toprow.fx-compact', c.find.bar, P.box, c.chips,
       c === EDIT ? h('details.edraw-details', h('summary', { text: 'Éléments à éviter' }), Q.box) : Q.box,
       c.trNote, c.genbox, h('div.fx-ptools-row', tools, stylesPicker(c.k)));
-    return h('div.fx-toprow', h('div.fx-prompts', c.find.bar, P.box, c.chips, Q.box, c.trNote), h('div.fx-side', c.genbox, h('div.fx-ptools-row', tools, stylesPicker(c.k))));
+    // Studio : l'invite négative se replie (une ligne de résumé) ; LoRA ouvre le volet des LoRA à droite
+    const neg = h('div.fx-neg', Q.box);
+    const negBtn = h('button.fx-cbtn', { type: 'button', title: 'Afficher ou replier l’invite négative' });
+    const negState = () => {
+      const open = !!FX.negOpen, words = (st.negative_prompt.match(/[^\s,]+/g) || []).length;
+      neg.hidden = !open; negBtn.classList.toggle('on', open);
+      negBtn.innerHTML = KS.icon(open ? 'chevron-down' : 'chevron-right');
+      negBtn.append(h('span', { text: 'Négatif' + (words ? ' · ' + words + ' mot' + (words > 1 ? 's' : '') : '') }));
+    };
+    negBtn.addEventListener('click', () => { FX.negOpen = !FX.negOpen; save(); negState(); if (FX.negOpen) Q.ta.focus(); });
+    Q.ta.addEventListener('input', negState);
+    negState();
+    const loraBtn = h('button.fx-cbtn', { type: 'button', title: 'Parcourir les LoRA dans le volet de droite' });
+    loraBtn.innerHTML = KS.icon('layers'); loraBtn.append(h('span', { text: 'LoRA' }));
+    loraBtn.addEventListener('click', () => { st.open._sub = 'lora'; save(); renderCtx(c); });
+    const foot = h('div.fx-cfoot', loraBtn, negBtn, stylesPicker(c.k), h('div.spacer'), tools);
+    return h('div.fx-toprow.fx-composer', h('div.fx-prompts', c.find.bar, P.box, c.chips, neg, c.trNote, foot), h('div.fx-genside', c.genbox));
   }
   function trNote(c) {
     if (!c.trNote) return;
@@ -761,7 +788,7 @@
   }
   function stylesPicker(k) {
     const st = FX[k];
-    const b = h('button.fx-styles', { title: 'Styles de Forge (styles.csv) : ajoutés à l\'invite au moment de générer' }, h('span.fx-lbl', { text: 'Styles' }), h('span.fx-styles-v', { text: st.styles.length ? st.styles.join(', ') : '—' }));
+    const b = h('button.fx-styles', { type: 'button', title: 'Styles de Forge (styles.csv) : ajoutés à l\'invite au moment de générer' }, h('span.fx-lbl', { text: 'Styles' }), h('span.fx-styles-v', { text: st.styles.length ? st.styles.join(', ') : '—' }));
     b.addEventListener('click', () => {
       const list = (cat && cat.styles) || [];
       const r = b.getBoundingClientRect();
@@ -793,7 +820,10 @@
         g.replaceChildren(...(BUSY ? [i, s] : [i]));
       } else {
         const d = D(), unavailable = c === EDIT && (!d || !FX.editor.prompt.trim() || (FX.editor.target === 'selection' && !d.selection.bounds));
-        const b = h('button.fx-generate', { text: c === EDIT ? 'Ajouter le dessin' : 'Générer', title: 'Générer (Ctrl+Entrée)', disabled: unavailable }); b.addEventListener('click', () => c.action ? c.action() : generate(c.k));
+        const b = h('button.fx-generate', { title: 'Générer (Ctrl+Entrée)', disabled: unavailable });
+        if (c !== EDIT) b.innerHTML = KS.icon('sparkles');
+        b.append(c === EDIT ? 'Ajouter le dessin' : 'Générer');
+        b.addEventListener('click', () => c.action ? c.action() : generate(c.k));
         g.replaceChildren(b);
       }
     }
@@ -804,11 +834,11 @@
   function renderCtx(c) {
     const left = c.left; if (!left) return;
     const st = FX[c.k];
-    const scroller = els.body;
-    const sc = scroller ? scroller.scrollTop : 0;
-    const subs = [['generation', 'Generation'], ['checkpoints', 'Checkpoints'], ['lora', 'Lora']];
+    const sc = left.scrollTop;
+    const nLora = (st.prompt.match(/<lora:/g) || []).length;
+    const subs = [['generation', 'Réglages'], ['lora', nLora ? 'LoRA · ' + nLora : 'LoRA'], ['checkpoints', 'Modèles']];
     const sub = subs.some(s => s[0] === st.open._sub) ? st.open._sub : 'generation';
-    const bar = tabs(subs, sub, v => { st.open._sub = v; save(); renderCtx(c); });
+    const bar = tabs(subs, sub, v => { st.open._sub = v; save(); renderCtx(c); }, '.fx-seg');
     let content;
     if (!cat) content = h('div.fx-panel', h('div.fx-note', { text: loading ? 'Lecture de Forge…' : (catErr && KS.engine && KS.engine.ready() ? catErr : 'Le moteur IA (Forge) n\'est pas démarré.') }),
       !loading ? tbtn('Démarrer le moteur IA', () => ensureCat(), '.primary') : null);
@@ -817,14 +847,13 @@
     else content = c.k === 't2i' ? t2iParams(st) : i2iParams(st);
     const stale = cat && cat.stale && !(KS.engine && KS.engine.ready()) ? h('div.fx-info.fx-stale', { text: 'Le moteur IA démarre (environ 10 s) : vous pouvez déjà régler et écrire, la génération partira dès qu\'il est prêt.' }) : null;
     fillEl(left, bar, stale, content);
-    if (scroller) scroller.scrollTop = sc;
+    left.scrollTop = sc;
   }
   const rp = () => renderParams();
   function samplingRow(st) {
-    return h('div.fx-row3',
-      select('Sampling Method', cat.samplers, st, 'sampler_name'),
-      select('Schedule Type', cat.schedulers, st, 'scheduler'),
-      slider('Sampling Steps', st, 'steps', 1, 150, 1));
+    return h('div.fx-col',
+      row2(select('Échantillonneur', cat.samplers, st, 'sampler_name', 'Sampling method'), select('Planificateur', cat.schedulers, st, 'scheduler', 'Schedule type')),
+      slider('Étapes', st, 'steps', 1, 150, 1, 'Sampling steps'));
   }
   function presetRow(st) {
     const names = Object.keys(cat.presets || {}).sort();
@@ -839,56 +868,25 @@
       save(); renderParams();
     });
     const write = async presets => { const r = await N.forgePresetsWrite(presets); if (!r.ok) return KS.toast(r.error, 'err'); cat.presets = presets; renderParams(); };
-    const sv = tbtn('Save', () => {
-      const n = inp.value.trim(); if (!n) return KS.toast('Tapez un nom de préréglage puis Save', 'info');
+    inp.placeholder = 'Nom du préréglage…';
+    const sv = ibtn('save', 'Enregistrer l’échantillonnage et la taille sous ce nom (aussi dans Forge)', () => {
+      const n = inp.value.trim(); if (!n) return KS.toast('Tapez un nom de préréglage puis Enregistrer', 'info');
       write({ ...cat.presets, [n]: { sampler: st.sampler_name, scheduler: st.scheduler, steps: st.steps, cfg: st.cfg_scale, dcfg: st.distilled_cfg_scale, width: st.width, height: st.height } })
         .then(() => KS.toast('Préréglage « ' + n + ' » enregistré (aussi dans Forge)', 'ok'));
     });
-    const del = tbtn('Delete', () => { const n = inp.value.trim(); if (!cat.presets[n]) return; const p = { ...cat.presets }; delete p[n]; FX.presetName = ''; write(p); });
-    return h('div.fx-preset', h('div.fx-field.grow', h('label.fx-lbl', { text: 'Preset' }),
-      h('div.fx-info', { text: 'Sampling + size, never the prompt: type a name then Save to record the current settings' }), inp,
+    const del = ibtn('trash', 'Supprimer ce préréglage', () => { const n = inp.value.trim(); if (!cat.presets[n]) return; const p = { ...cat.presets }; delete p[n]; FX.presetName = ''; write(p); });
+    return h('div.fx-preset', { title: 'Préréglage : échantillonnage et taille, jamais l’invite' }, h('div.fx-field.grow', h('label.fx-lbl', { text: 'Préréglage' }), inp,
       h('datalist', { id }, ...names.map(n => h('option', { value: n })))), sv, del);
   }
   function seedRows(st, k) {
-    const out = [h('div.fx-seedrow', field('Graine (seed)', h('input.fx-in', { value: 'Aléatoire à chaque génération', readOnly: true })),
-      check('Variations avancées', st, 'seedExtra', 'Réglages de variation ; la graine reste aléatoire', rp))];
-    if (lastSeed[k] != null) out.push(h('div.fx-info', { text: 'Dernière graine utilisée : ' + lastSeed[k] + ' (une nouvelle sera choisie à la prochaine génération).' }));
+    const out = [h('div.fx-seedrow', h('div.fx-seedv', { text: lastSeed[k] != null ? 'Aléatoire · dernière : ' + lastSeed[k] : 'Aléatoire à chaque génération', title: 'Une nouvelle graine est tirée à chaque génération' }),
+      check('Variations', st, 'seedExtra', 'Réglages de variation ; la graine reste aléatoire', rp))];
     if (st.seedExtra) {
       out.push(slider('Force de variation', st, 'subseed_strength', 0, 1, 0.01),
-        row2(slider('Resize seed from width', st, 'seed_resize_from_w', 0, 2048, 8), slider('Resize seed from height', st, 'seed_resize_from_h', 0, 2048, 8)));
+        row2(slider('Largeur d’origine', st, 'seed_resize_from_w', 0, 2048, 8, 'Resize seed from width'), slider('Hauteur d’origine', st, 'seed_resize_from_h', 0, 2048, 8, 'Resize seed from height')));
     }
     return out;
   }
-  function adAcc(st, k) {
-    return acc('ADetailer', st, 'ad', () => {
-      const ORD = ['1st', '2nd', '3rd', '4th'], u = st.ad.units[st.ad.tab] || st.ad.units[0], o = ORD[st.ad.tab] || '1st';
-      const out = [];
-      if (k === 'i2i') out.push(check('Skip img2img', st.ad, 'skip', 'Garde l\'image et ne refait que les zones détectées (visages, mains…)'));
-      out.push(tabs(ORD.map((x, i) => [i, x]), st.ad.tab, v => { st.ad.tab = v; save(); rp(); }, '.fx-subtabs'),
-        check(`Enable this tab (${o})`, u, 'ad_tab_enable'),
-        select('ADetailer detector', ['None', ...(cat.adModels || [])], u, 'ad_model'),
-        text('', u, 'ad_prompt', { placeholder: `ADetailer prompt ${o}\nIf blank, the main prompt is used.` }),
-        text('', u, 'ad_negative_prompt', { placeholder: `ADetailer negative prompt ${o}\nIf blank, the main negative prompt is used.` }),
-        acc('Detection', st, 'adDet', () => [slider('Detection model confidence threshold', u, 'ad_confidence', 0, 1, 0.01), slider('Mask only the top k (0 to disable)', u, 'ad_mask_k', 0, 10, 1),
-          row2(slider('Mask min area ratio', u, 'ad_mask_min_ratio', 0, 1, 0.001), slider('Mask max area ratio', u, 'ad_mask_max_ratio', 0, 1, 0.001))]),
-        acc('Mask Preprocessing', st, 'adMask', () => [row2(slider('Mask x(→) offset', u, 'ad_x_offset', -200, 200, 1), slider('Mask y(↑) offset', u, 'ad_y_offset', -200, 200, 1)),
-          slider('Mask erosion (-) / dilation (+)', u, 'ad_dilate_erode', -128, 128, 4), radio('Mask merge mode', [['None', 'None'], ['Merge', 'Merge'], ['Merge and Invert', 'Merge and Invert']], u, 'ad_mask_merge_invert')]),
-        acc('Inpainting', st, 'adInp', () => [
-          row2(slider('Inpaint mask blur', u, 'ad_mask_blur', 0, 64, 1), slider('Inpaint denoising strength', u, 'ad_denoising_strength', 0, 1, 0.01)),
-          row2(check('Inpaint only masked', u, 'ad_inpaint_only_masked'), slider('Inpaint only masked padding, pixels', u, 'ad_inpaint_only_masked_padding', 0, 256, 4)),
-          check('Use separate width/height', u, 'ad_use_inpaint_width_height', '', rp),
-          u.ad_use_inpaint_width_height ? row2(slider('inpaint width', u, 'ad_inpaint_width', 64, 2048, 4), slider('inpaint height', u, 'ad_inpaint_height', 64, 2048, 4)) : null,
-          check('Use separate steps', u, 'ad_use_steps', '', rp), u.ad_use_steps ? slider('ADetailer steps', u, 'ad_steps', 1, 150, 1) : null,
-          check('Use separate CFG scale', u, 'ad_use_cfg_scale', '', rp), u.ad_use_cfg_scale ? slider('ADetailer CFG scale', u, 'ad_cfg_scale', 0, 30, 0.5) : null,
-          check('Use separate sampler', u, 'ad_use_sampler', '', rp),
-          u.ad_use_sampler ? row2(select('ADetailer sampler', cat.samplers, u, 'ad_sampler'), select('ADetailer scheduler', ['Use same scheduler', ...cat.schedulers], u, 'ad_scheduler')) : null,
-          check('Use separate noise multiplier', u, 'ad_use_noise_multiplier', '', rp), u.ad_use_noise_multiplier ? slider('Noise multiplier for img2img', u, 'ad_noise_multiplier', 0.5, 1.5, 0.01) : null,
-        ].filter(Boolean)));
-      return out;
-    }, { on: [st.ad, 'enabled'] });
-  }
-  // Kane Detailer (extension du Forge du Studio) : chaque partie repeinte de près, couleurs d'origine gardées.
-  // Une force par partie (part de la zone redessinée), affichée en clair, au lieu d'un multiplicateur global.
   const kdForce = (st, part) => st.kd.forces[part.key] != null ? +st.kd.forces[part.key] : part.denoise;
   function kdAcc(st, k) {
     return acc('Kane Detailer', st, 'kd', () => {
@@ -897,7 +895,7 @@
       const out = [];
       if (k === 'i2i') {
         out.push(check('Skip img2img', st.kd, 'skip', 'Pas de passe img2img classique : seule l’image source est détaillée, partie par partie', rp));
-        if (st.kd.skip && INPAINT_MODES.includes(FX.i2iMode)) out.push(h('div.note', { text: 'En inpaint, la passe classique a quand même lieu (comme avec ADetailer).' }));
+        if (st.kd.skip && INPAINT_MODES.includes(FX.i2iMode)) out.push(h('div.note', { text: 'En inpaint, la passe classique a quand même lieu.' }));
       }
       const presets = Object.entries(info.presets || {});
       const same = list => list.length === st.kd.parts.length && list.every(x => st.kd.parts.includes(x));
@@ -936,9 +934,11 @@
       return out;
     }, { on: [st.kd, 'enabled'], tip: 'Détaille chaque partie du corps après la génération (détecteurs pour l’illustration)' });
   }
-  const noomAcc = st => acc('Never OOM Integrated', st, 'noom', () => [
-    check('Enabled for UNet (always offload)', st.noom, 'unet', 'Décharge le modèle à chaque passe : plus lent, mais pas de manque de mémoire'),
-    check('Enabled for VAE (always tiled)', st.noom, 'vae', 'VAE par tuiles : indispensable pour les très grandes images')], { active: st.noom.unet || st.noom.vae });
+  const advAcc = (st, k) => acc('Avancé', st, 'adv', () => [
+    h('div.fx-sub', { text: 'Never OOM Integrated' }),
+    check('Décharger le modèle à chaque passe (UNet)', st.noom, 'unet', 'Enabled for UNet (always offload) : plus lent, mais pas de manque de mémoire'),
+    check('VAE par tuiles', st.noom, 'vae', 'Enabled for VAE (always tiled) : indispensable pour les très grandes images'),
+    ...scriptBlock(st, k)], { active: st.noom.unet || st.noom.vae || (st.script && st.script !== 'None'), tip: 'Never OOM, scripts de Forge (X/Y/Z plot, Prompt matrix…)' });
   const SCRIPT_NAMES = { 'prompt matrix': 'Prompt matrix', 'prompts from file or textbox': 'Prompts from file or textbox', 'x/y/z plot': 'X/Y/Z plot', loopback: 'Loopback', 'sd upscale': 'SD upscale' };
   const SCRIPT_HELP = {
     'x/y/z plot': 'Grille de comparaison : choisissez un paramètre par axe et ses valeurs séparées par des virgules (ex. Steps : 20, 30, 40 ; CFG Scale : 3, 4, 5).',
@@ -950,7 +950,7 @@
   const XYZ_HIDDEN = [2, 5, 8, 18];
   function scriptBlock(st, k) {
     const list = (cat.scripts || []).filter(s => s.img2img === (k === 'i2i'));
-    const out = [select('Script', [['None', 'None'], ...list.map(s => [s.name, SCRIPT_NAMES[s.name] || s.name.replace(/^./, c => c.toUpperCase())])], st, 'script', '', rp)];
+    const out = [select('Script', [['None', 'Aucun'], ...list.map(s => [s.name, SCRIPT_NAMES[s.name] || s.name.replace(/^./, c => c.toUpperCase())])], st, 'script', '', rp)];
     const sc = list.find(s => s.name === st.script);
     if (!sc) return out;
     const vals = st.scriptArgs[sc.name] || (st.scriptArgs[sc.name] = sc.args.map(a => a.value == null ? (a.choices ? a.choices[0] : '') : a.value));
@@ -977,31 +977,32 @@
       let tw, th;
       if (st.hr_resize_x || st.hr_resize_y) { tw = st.hr_resize_x || Math.round(st.hr_resize_y * w / hh); th = st.hr_resize_y || Math.round(st.hr_resize_x * hh / w); }
       else { tw = Math.round(w * st.hr_scale); th = Math.round(hh * st.hr_scale); }
-      return `from ${w}x${hh} to ${tw}x${th}`;
+      return `${w} × ${hh} → ${tw} × ${th}`;
     };
     const hrInfo = h('div.fx-info');
     const updHr = () => { hrInfo.textContent = hrRes(); };
     updHr();
-    const hires = acc('Hires. fix', st, 'hr', () => [
-      field('Upscaled resolution', hrInfo),
-      row2(select('Upscaler', [...(cat.latent.length ? cat.latent : ['Latent']), ...cat.upscalers], st, 'hr_upscaler'), slider('Hires steps', st, 'hr_second_pass_steps', 0, 150, 1, '0 = autant que la première passe')),
-      slider('Denoising strength', st, 'denoising_strength', 0, 1, 0.05),
-      row3(slider('Upscale by', st, 'hr_scale', 1, 4, 0.05, '', updHr), slider('Resize width to', st, 'hr_resize_x', 0, 4096, step, '', updHr), slider('Resize height to', st, 'hr_resize_y', 0, 4096, step, '', updHr)),
-      row2(slider('Shift', st, 'hr_distilled_cfg', 1, 24, 0.5), slider('Hires CFG Scale', st, 'hr_cfg', 1, 24, 0.5)),
-      row2(select('Hires Checkpoint', ['Use same checkpoint', ...cat.models.map(m => norm(m.title))], st, 'hr_checkpoint_name'),
-        field('Hires VAE / Text Encoder', modulesPicker(st.hr_additional_modules, v => { st.hr_additional_modules = v.length ? v : ['Use same choices']; save(); rp(); }, { same: true }))),
-      row2(select('Hires sampling method', ['Use same sampler', ...cat.samplers], st, 'hr_sampler_name'), select('Hires schedule type', ['Use same scheduler', ...cat.schedulers], st, 'hr_scheduler')),
-      text('', st, 'hr_prompt', { placeholder: 'Prompt for hires fix pass.\nLeave empty to use the same prompt as in first pass.' }),
-      text('', st, 'hr_negative_prompt', { placeholder: 'Negative prompt for hires fix pass.\nLeave empty to use the same negative prompt as in first pass.' }),
-    ], { on: [st, 'enable_hr'] });
+    const hires = acc('Hires fix', st, 'hr', () => [
+      field('Résolution finale', hrInfo),
+      row2(select('Agrandisseur', [...(cat.latent.length ? cat.latent : ['Latent']), ...cat.upscalers], st, 'hr_upscaler', 'Upscaler'), slider('Étapes', st, 'hr_second_pass_steps', 0, 150, 1, 'Hires steps : 0 = autant que la première passe')),
+      slider('Force (denoising)', st, 'denoising_strength', 0, 1, 0.05, 'Denoising strength'),
+      row3(slider('Agrandir ×', st, 'hr_scale', 1, 4, 0.05, 'Upscale by', updHr), slider('Largeur cible', st, 'hr_resize_x', 0, 4096, step, 'Resize width to (0 = selon ×)', updHr), slider('Hauteur cible', st, 'hr_resize_y', 0, 4096, step, 'Resize height to (0 = selon ×)', updHr)),
+      row2(slider('Shift', st, 'hr_distilled_cfg', 1, 24, 0.5), slider('CFG', st, 'hr_cfg', 1, 24, 0.5, 'Hires CFG Scale')),
+      row2(select('Modèle', [['Use same checkpoint', 'Même modèle'], ...cat.models.map(m => norm(m.title))], st, 'hr_checkpoint_name', 'Hires checkpoint'),
+        field('VAE / encodeur', modulesPicker(st.hr_additional_modules, v => { st.hr_additional_modules = v.length ? v : ['Use same choices']; save(); rp(); }, { same: true }), 'Hires VAE / Text Encoder')),
+      row2(select('Échantillonneur', [['Use same sampler', 'Le même'], ...cat.samplers], st, 'hr_sampler_name', 'Hires sampling method'), select('Planificateur', [['Use same scheduler', 'Le même'], ...cat.schedulers], st, 'hr_scheduler', 'Hires schedule type')),
+      text('', st, 'hr_prompt', { placeholder: 'Invite de la passe hires\n(vide : la même que la première passe)' }),
+      text('', st, 'hr_negative_prompt', { placeholder: 'Invite négative de la passe hires\n(vide : la même que la première passe)' }),
+    ], { on: [st, 'enable_hr'], tip: 'Seconde passe plus grande : plus de détails' });
     const swap = ebtn('⇅', 'Inverser largeur et hauteur', () => { [st.width, st.height] = [st.height, st.width]; save(); rp(); });
-    return h('div.fx-panel',
-      samplingRow(st), presetRow(st), hires,
-      h('div.fx-dims', h('div.fx-col', slider('Width', st, 'width', 64, 2048, step, '', updHr), slider('Height', st, 'height', 64, 2048, step, '', updHr)), swap,
-        h('div.fx-col', slider('Batch Count', st, 'n_iter', 1, 128, 1, 'Nombre de lots à la suite'), slider('Batch Size', st, 'batch_size', 1, 8, 1, 'Images par lot (en même temps)'))),
-      formatRow(st),
-      row2(slider('Shift', st, 'distilled_cfg_scale', 1, 24, 0.5, 'Shift des modèles à flux (anima) : Distilled CFG Scale de l\'API'), slider('CFG Scale', st, 'cfg_scale', 1, 24, 0.5)),
-      ...seedRows(st, 't2i'), adAcc(st, 't2i'), kdAcc(st, 't2i'), noomAcc(st), ...scriptBlock(st, 't2i'));
+    return h('div.fx-panel.fx-plain',
+      sect('Format', formatRow(st),
+        h('div.fx-dims', h('div.fx-col', slider('Largeur', st, 'width', 64, 2048, step, 'Width', updHr), slider('Hauteur', st, 'height', 64, 2048, step, 'Height', updHr)), swap,
+          h('div.fx-col', slider('Images par lot', st, 'batch_size', 1, 8, 1, 'Batch size : images générées en même temps'), slider('Lots', st, 'n_iter', 1, 128, 1, 'Batch count : nombre de lots à la suite')))),
+      sect('Échantillonnage', samplingRow(st),
+        row2(slider('CFG', st, 'cfg_scale', 1, 24, 0.5, 'CFG Scale'), slider('Shift', st, 'distilled_cfg_scale', 1, 24, 0.5, 'Shift des modèles à flux (anima) : Distilled CFG Scale de l\'API')), presetRow(st)),
+      sect('Graine', seedRows(st, 't2i')),
+      kdAcc(st, 't2i'), hires, advAcc(st, 't2i'));
   }
   const INPAINT_MODES = ['inpaint', 'inpaint_sketch', 'inpaint_upload'];
   // Taille de génération la plus fidèle aux proportions de la source (multiples de 8, côté long <= 2048) :
@@ -1023,44 +1024,46 @@
   function i2iParams(st) {
     const step = cat.resStep || 16, d = i2iDoc, inpaint = INPAINT_MODES.includes(FX.i2iMode);
     if (st.autoSize && d) { const f = autoDims(st, d); st.width = f.w; st.height = f.h; st.scale_by = Math.round(f.w / d.width * 1000) / 1000; }
-    const out = [radio('Resize mode', [[0, 'Just Resize'], [1, 'Crop and Resize'], [2, 'Resize and Fill'], [3, 'Just Resize (latent upscale)']], st, 'resize_mode')];
-    if (inpaint) out.push(
-      slider('Mask blur', st, 'mask_blur', 0, 64, 1),
-      radio('Mask mode', [[0, 'Inpaint masked'], [1, 'Inpaint not masked']], st, 'inpainting_mask_invert'),
-      radio('Masked content', [[0, 'fill'], [1, 'original'], [2, 'latent noise'], [3, 'latent nothing']], st, 'inpainting_fill', 'original = repart de l\'image ; fill = des couleurs voisines ; latent noise = du bruit (nouveau contenu)'),
-      radio('Inpaint area', [[0, 'Whole picture'], [1, 'Only masked']], st, 'inpaint_full_res', 'Only masked : la zone est recadrée et refaite en Width × Height, puis recollée (plus de détails)'),
-      slider('Only masked padding, pixels', st, 'inpaint_full_res_padding', 0, 256, 4),
-      acc('Soft inpainting', st, 'soft', () => [
-        row2(slider('Schedule bias', st.soft, 'bias', 0, 8, 0.1), slider('Preservation strength', st.soft, 'preserve', 0, 8, 0.05)),
-        row2(slider('Transition contrast boost', st.soft, 'contrast', 1, 32, 0.5), slider('Mask influence', st.soft, 'influence', 0, 1, 0.05)),
-        row2(slider('Difference threshold', st.soft, 'diffThr', 0, 8, 0.25), slider('Difference contrast', st.soft, 'diffContrast', 0, 8, 0.25))], { on: [st.soft, 'enabled'] }));
+    const trans = [slider('Force (denoising)', st, 'denoising_strength', 0, 1, 0.01, 'Denoising strength : écart à l\'image de départ, bas = proche, haut = très différent'),
+      radio('Redimensionnement', [[0, 'Étirer'], [1, 'Recadrer'], [2, 'Compléter'], [3, 'Étirer (latent)']], st, 'resize_mode', 'Resize mode : Just Resize, Crop and Resize, Resize and Fill, Just Resize (latent upscale)')];
+    const inp = inpaint ? [
+      slider('Flou du masque', st, 'mask_blur', 0, 64, 1, 'Mask blur'),
+      radio('Zone refaite', [[0, 'Masquée'], [1, 'Non masquée']], st, 'inpainting_mask_invert', 'Mask mode : Inpaint masked / not masked'),
+      radio('Départ', [[0, 'Remplissage'], [1, 'Original'], [2, 'Bruit latent'], [3, 'Latent vide']], st, 'inpainting_fill', 'Masked content : Original = repart de l\'image ; Remplissage = des couleurs voisines ; Bruit latent = du bruit (nouveau contenu)'),
+      radio('Surface', [[0, 'Image entière'], [1, 'Zone seule']], st, 'inpaint_full_res', 'Inpaint area : Zone seule = la zone est recadrée et refaite en Largeur × Hauteur, puis recollée (plus de détails)'),
+      slider('Marge autour de la zone (px)', st, 'inpaint_full_res_padding', 0, 256, 4, 'Only masked padding, pixels')] : [];
+    const soft = inpaint ? acc('Soft inpainting', st, 'soft', () => [
+        row2(slider('Biais', st.soft, 'bias', 0, 8, 0.1, 'Schedule bias'), slider('Préservation', st.soft, 'preserve', 0, 8, 0.05, 'Preservation strength')),
+        row2(slider('Contraste de transition', st.soft, 'contrast', 1, 32, 0.5, 'Transition contrast boost'), slider('Influence du masque', st.soft, 'influence', 0, 1, 0.05, 'Mask influence')),
+        row2(slider('Seuil de différence', st.soft, 'diffThr', 0, 8, 0.25, 'Difference threshold'), slider('Contraste de différence', st.soft, 'diffContrast', 0, 8, 0.25, 'Difference contrast'))], { on: [st.soft, 'enabled'], tip: 'Fond progressif entre la zone refaite et le reste' }) : null;
     const manual = () => { st.autoSize = false; save(); };
     const maxSz = Math.max(2048, d ? r8(Math.max(d.width, d.height)) : 0);
     const swap = ebtn('⇅', 'Inverser largeur et hauteur', () => { [st.width, st.height] = [st.height, st.width]; st.autoSize = false; save(); rp(); });
     const auto = ebtn('📐', 'Prendre la taille exacte de l’image source', () => { st.autoSize = 'exact'; save(); rp(); }, st.autoSize ? '.on' : '');
     const src = d ? { w: d.width, h: d.height } : null;
-    const byText = v => { const w = r8(src.w * v), hh = r8(src.h * v); return `Resize: from ${src.w}x${src.h} to ${w}x${hh}` + (Math.max(w, hh) > 2048 ? ' — très grand pour la génération (mémoire, lenteur) : réduisez l’échelle' : ''); };
+    const byText = v => { const w = r8(src.w * v), hh = r8(src.h * v); return `${src.w} × ${src.h} → ${w} × ${hh}` + (Math.max(w, hh) > 2048 ? ' — très grand pour la génération (mémoire, lenteur) : réduisez l’échelle' : ''); };
     const byInfo = h('div.fx-info', { text: src ? byText(st.scale_by) : 'Aucune image' });
     const sizeBody = st.sizeTab === 'by'
-      ? h('div.fx-col', slider('Scale', st, 'scale_by', 0.1, 4, 0.01, '', v => { st.autoSize = false; if (src) byInfo.textContent = byText(v); }), byInfo,
+      ? h('div.fx-col', slider('Échelle', st, 'scale_by', 0.1, 4, 0.01, 'Resize by', v => { st.autoSize = false; if (src) byInfo.textContent = byText(v); }), byInfo,
         st.autoSize && src ? h('div.fx-info', { text: st.autoSize === 'exact' ? 'Échelle 1 : taille exacte de la source (📐).' : 'Échelle ajustée à la source : mêmes proportions, côté long <= 2048. Cliquez 📐 pour la taille exacte.' }) : null)
-      : h('div.fx-col', slider('Width', st, 'width', 64, maxSz, step, '', manual), slider('Height', st, 'height', 64, maxSz, step, '', manual),
+      : h('div.fx-col', slider('Largeur', st, 'width', 64, maxSz, step, 'Width', manual), slider('Hauteur', st, 'height', 64, maxSz, step, 'Height', manual),
         st.autoSize && d ? (st.autoSize === 'exact'
           ? h('div.fx-info', { text: `Taille exacte de la source (📐) : ${d.width} × ${d.height}` + (Math.max(st.width, st.height) > 2048 ? ' — très grand pour la génération (mémoire, lenteur). ' : '. ') }, shrinkBtn(d, st))
           : h('div.fx-info', { text: `Source ${d.width} × ${d.height} → ${st.width} × ${st.height} (mêmes proportions, côté long <= 2048). Cliquez 📐 pour la taille exacte.` })) : null);
-    out.push(samplingRow(st), presetRow(st),
-      tabs([['to', 'Resize to'], ['by', 'Resize by']], st.sizeTab, v => { st.sizeTab = v; save(); rp(); }, '.fx-subtabs'),
-      h('div.fx-dims', sizeBody, h('div.fx-col.fx-mid', swap, auto),
-        h('div.fx-col', slider('Batch Count', st, 'n_iter', 1, 128, 1), slider('Batch Size', st, 'batch_size', 1, 8, 1))),
-      st.sizeTab === 'to' ? formatRow(st) : null,
-      row2(slider('Shift', st, 'distilled_cfg_scale', 0, 24, 0.5), slider('CFG Scale', st, 'cfg_scale', 1, 24, 0.5)),
-      slider('Denoising Strength', st, 'denoising_strength', 0, 1, 0.01, 'Écart à l\'image de départ : bas = proche, haut = très différent'),
-      ...seedRows(st, 'i2i'), adAcc(st, 'i2i'), kdAcc(st, 'i2i'),
-      acc('MultiDiffusion Integrated', st, 'md', () => [select('Method', ['MultiDiffusion', 'Mixture of Diffusers'], st.md, 'method'),
-        row2(slider('Tile Width', st.md, 'tw', 256, 2048, 64), slider('Tile Height', st.md, 'th', 256, 2048, 64)),
-        row2(slider('Tile Overlap', st.md, 'overlap', 0, 1024, 16), slider('Tile Batch Size', st.md, 'batch', 1, 8, 1))], { on: [st.md, 'enabled'] }),
-      noomAcc(st), ...scriptBlock(st, 'i2i'));
-    return h('div.fx-panel', ...out.filter(Boolean));
+    return h('div.fx-panel.fx-plain',
+      sect(inpaint ? 'Retouche de zone' : 'Transformation', trans, inp),
+      sect('Taille', tabs([['to', 'Taille'], ['by', 'Échelle']], st.sizeTab, v => { st.sizeTab = v; save(); rp(); }, '.fx-subtabs'),
+        st.sizeTab === 'to' ? formatRow(st) : null,
+        h('div.fx-dims', sizeBody, h('div.fx-col.fx-mid', swap, auto),
+          h('div.fx-col', slider('Images par lot', st, 'batch_size', 1, 8, 1, 'Batch size'), slider('Lots', st, 'n_iter', 1, 128, 1, 'Batch count')))),
+      sect('Échantillonnage', samplingRow(st),
+        row2(slider('CFG', st, 'cfg_scale', 1, 24, 0.5, 'CFG Scale'), slider('Shift', st, 'distilled_cfg_scale', 0, 24, 0.5)), presetRow(st)),
+      sect('Graine', seedRows(st, 'i2i')),
+      kdAcc(st, 'i2i'), soft,
+      acc('MultiDiffusion', st, 'md', () => [select('Méthode', ['MultiDiffusion', 'Mixture of Diffusers'], st.md, 'method'),
+        row2(slider('Largeur de tuile', st.md, 'tw', 256, 2048, 64, 'Tile width'), slider('Hauteur de tuile', st.md, 'th', 256, 2048, 64, 'Tile height')),
+        row2(slider('Chevauchement', st.md, 'overlap', 0, 1024, 16, 'Tile overlap'), slider('Tuiles par lot', st.md, 'batch', 1, 8, 1, 'Tile batch size'))], { on: [st.md, 'enabled'], tip: 'MultiDiffusion Integrated : génération par tuiles, pour les très grandes images' }),
+      advAcc(st, 'i2i'));
   }
 
   /* ---------------------------------------------------------------- onglets Lora et Checkpoints */
@@ -1080,11 +1083,13 @@
   }
   function markLoras(c) {
     if (!c.left) return;
+    const tab = c.left.querySelector('.fx-seg button:nth-child(2)'), n = (FX[c.k].prompt.match(/<lora:/g) || []).length;
+    if (tab) tab.textContent = n ? 'LoRA · ' + n : 'LoRA';
     for (const el of c.left.querySelectorAll('.fx-card[data-lora]')) el.classList.toggle('on', loraRe(el.dataset.lora).test(FX[c.k].prompt));
   }
   function loraTab(c) {
     const L = FX.lora;
-    const q = h('input.fx-in.fx-search', { type: 'search', placeholder: 'Search', value: L.q, spellcheck: false });
+    const q = h('input.fx-in.fx-search', { type: 'search', placeholder: 'Rechercher un LoRA…', value: L.q, spellcheck: false });
     const sort = h('select.fx-sel.fx-sort', ...[['forge', 'Défaut de Forge'], ['new', 'Plus récentes d’abord'], ['old', 'Plus anciennes d’abord'], ['name', 'Nom (A→Z)']].map(([v, l]) => h('option', { value: v, text: l })));
     sort.value = L.sort;
     const refresh = ebtn('🔄', 'Relire la liste des LoRA', async () => { await N.forgeRefreshLoras(url()); await loadCat(); });
@@ -1107,7 +1112,7 @@
       }));
       if (!list.length) grid.appendChild(h('div.fx-note', { text: cat.loras.length ? 'Aucun LoRA ne correspond.' : 'Aucun LoRA dans Forge.' }));
       chips.replaceChildren(...['', ...folders].map(f => {
-        const b = h('button.fx-chip' + ((f === '' ? !term : term === f.toLowerCase()) ? '.on' : ''), { text: f ? f + '\\' : 'all' });
+        const b = h('button.fx-chip' + ((f === '' ? !term : term === f.toLowerCase()) ? '.on' : ''), { text: f ? f + '\\' : 'Tous' });
         b.addEventListener('click', () => { L.q = f; q.value = f; save(); fill(); }); return b;
       }));
     };
@@ -1296,10 +1301,11 @@
       const g = { id: U.uid(), w: c.width, h: c.height, blob: it.bytes ? new Blob([it.bytes], { type: 'image/png' }) : null, canvas: null,
         info: it.info, params: it.params, seed: it.seed, kind: it.kind, from: it.from, time: Date.now(), thumb: t.toDataURL('image/jpeg', 0.82) };
       if (!g.blob) { g.canvas = c; U.blobFromCanvas(c).then(b => { if (b) { g.blob = b; g.canvas = null; } }); }
-      SD.gallery.unshift(g);
+      SD.gallery.unshift(g); it.gid = g.id;
     }
     if (SD.gallery.length > 120) SD.gallery.length = 120;
     renderGallery();
+    if (SD.on && FX.tab === 'txt2img' && !BUSY) renderOut('t2i');
   }
   // image de la galerie, décodée pour l'action demandée
   const galleryItem = async g => ({ ...g, canvas: g.canvas || await U.canvasFromBlob(g.blob) });
@@ -1376,16 +1382,14 @@
     if (st === FX[k]) save();
   }
   // Réglages repris d'un onglet à l'autre (comme « Send to img2img » de Forge) : l'invite telle qu'elle a été
-  // tapée (français, balises <lora:…>), l'invite négative, les styles, l'échantillonnage, la graine, ADetailer
+  // tapée (français, balises <lora:…>), l'invite négative, les styles, l'échantillonnage, la graine
   const SHARED = ['prompt', 'negative_prompt', 'styles', 'sampler_name', 'scheduler', 'steps', 'cfg_scale', 'distilled_cfg_scale',
-    'seed', 'seedExtra', 'subseed', 'subseed_strength', 'seed_resize_from_w', 'seed_resize_from_h', 'ad', 'noom'];
+    'seed', 'seedExtra', 'subseed', 'subseed_strength', 'seed_resize_from_w', 'seed_resize_from_h', 'noom'];
   const snapParams = st => clone(Object.fromEntries(SHARED.map(k => [k, st[k]])));
   function paramsTo(k, it) {
     if (it.params) {
       const st = FX[k], src = clone(it.params);
-      const skip = st.ad && st.ad.skip;
       for (const key of SHARED) if (key !== 'seed' && key !== 'subseed' && src[key] !== undefined) st[key] = src[key];
-      if (src.ad && k === 'i2i') st.ad.skip = !!skip;
       st.seed = -1; st.subseed = -1;
       save();
     } else applyInfoTo(k, it.info, { size: false });
@@ -1535,25 +1539,29 @@
   function outButtons(key, it) {
     const sub = key === 'i2i' ? 'img2img-images' : key === 'ex' ? 'extras-images' : 'txt2img-images';
     const items = OUT[key].items;
-    const action = (label, fn, { enabled = !!it, primary = false, tip = '' } = {}) => { const b = tbtn(label, fn, primary ? '.primary' : '', tip); b.disabled = !enabled; return b; };
-    const group = (id, label, ...buttons) => h('div.fx-actiongroup', { 'data-group': id }, h('span.fx-actionlabel', { text: label }), h('div.fx-actionbuttons', ...buttons.filter(Boolean)));
+    const action = (label, fn, { enabled = !!it, primary = false, tip = '', icon } = {}) => {
+      const b = h('button.fx-abtn' + (primary ? '.primary' : ''), { type: 'button', title: tip || label });
+      if (icon) b.innerHTML = KS.icon(icon);
+      b.append(h('span', { text: label })); b.disabled = !enabled; b.addEventListener('click', fn); return b;
+    };
+    const group = (id, label, ...buttons) => h('div.fx-actiongroup', { 'data-group': id, role: 'group', 'aria-label': label, title: label }, ...buttons.filter(Boolean));
     return h('div.fx-output-actions',
       group('edit', 'Utiliser dans Retouche',
-        action('Ouvrir le résultat dans Retouche', () => sendTo('edit', it), { primary: true, tip: 'Créer un nouveau document avec ce résultat' }),
-        action('Ajouter en calque', () => addAsLayer(it), { enabled: !!it && !!D(), tip: D() ? 'Ajouter au document « ' + D().name + ' »' : 'Ouvrez d’abord un document' })),
+        action('Ouvrir dans Retouche', () => sendTo('edit', it), { primary: true, icon: 'brush', tip: 'Créer un nouveau document avec ce résultat' }),
+        action('Ajouter en calque', () => addAsLayer(it), { enabled: !!it && !!D(), icon: 'layers', tip: D() ? 'Ajouter au document « ' + D().name + ' »' : 'Ouvrez d’abord un document' })),
       group('transform', 'Transformer',
-        action('Envoyer vers Img2Img', () => sendTo('img2img', it)), action('Envoyer vers Inpaint', () => sendTo('inpaint', it)),
-        action('Détailler (Kane Detailer)', () => detailItem(key, it), { tip: 'Repeint de près chaque partie choisie dans le volet Kane Detailer, couleurs d’origine gardées' }),
-        it && it.kdZones ? action('Zones repeintes', () => showZones(it), { tip: 'Ce que Kane Detailer a vraiment repeint sur cette image' }) : null),
+        action('Envoyer vers Img2Img', () => sendTo('img2img', it), { icon: 'image' }), action('Envoyer vers Inpaint', () => sendTo('inpaint', it), { icon: 'mask' }),
+        action('Détailler (Kane Detailer)', () => detailItem(key, it), { icon: 'sparkles', tip: 'Repeint de près chaque partie choisie dans le volet Kane Detailer, couleurs d’origine gardées' }),
+        it && it.kdZones ? action('Zones repeintes', () => showZones(it), { icon: 'eye', tip: 'Ce que Kane Detailer a vraiment repeint sur cette image' }) : null),
       key === 't2i' || (it && it.before) ? group('compare', 'Comparer',
-        it && it.before ? action(it.from === 'Kane Detailer' ? 'Avant / après' : 'Comparer à l’original', () => compareBefore(it), { tip: 'Rideau ou côte à côte, avec l’image de départ' }) : null,
-        key === 't2i' ? action('Refaire avec un autre modèle…', () => remakeWithModel(it), { enabled: !!it && !!it.info && !BUSY, tip: 'Même invite, mêmes réglages, même graine, avec un autre checkpoint, puis comparaison' }) : null) : null,
+        it && it.before ? action(it.from === 'Kane Detailer' ? 'Avant / après' : 'Comparer à l’original', () => compareBefore(it), { icon: 'compare', tip: 'Rideau ou côte à côte, avec l’image de départ' }) : null,
+        key === 't2i' ? action('Refaire avec un autre modèle…', () => remakeWithModel(it), { enabled: !!it && !!it.info && !BUSY, icon: 'compare', tip: 'Même invite, mêmes réglages, même graine, avec un autre checkpoint, puis comparaison' }) : null) : null,
       key !== 'ex' ? group('upscale', 'Agrandir',
-        action('Agrandir dans Extras', () => sendTo('extras', it)),
-        key === 't2i' ? action('Agrandir avec Hires', () => upscaleHires(it), { tip: 'Agrandir cette image avec le hires fix (réglages de « Hires. fix »)' }) : action('Agrandir avec Hires', () => C.sendToStudioItem(it))) : null,
+        action('Agrandir dans Extras', () => sendTo('extras', it), { icon: 'upscale' }),
+        key === 't2i' ? action('Agrandir avec Hires', () => upscaleHires(it), { icon: 'maximize', tip: 'Agrandir cette image avec le hires fix (réglages de « Hires fix »)' }) : action('Agrandir avec Hires', () => C.sendToStudioItem(it), { icon: 'maximize' })) : null,
       group('files', 'Fichiers',
-        action('Enregistrer…', () => saveItem(it)), action('Tout enregistrer…', () => saveAll(items), { enabled: items.length > 0 }),
-        action('Dossier des images', () => key === 'ex' ? N.openOutputs() : N.openForgeOutput(sub), { enabled: !!N, tip: key === 'ex' ? 'Ouvrir output\\kanevas' : 'Ouvrir output\\' + sub })));
+        action('Enregistrer…', () => saveItem(it), { icon: 'save' }), action('Tout enregistrer…', () => saveAll(items), { enabled: items.length > 0, icon: 'export' }),
+        action('Dossier', () => key === 'ex' ? N.openOutputs() : N.openForgeOutput(sub), { enabled: !!N, icon: 'folder-open', tip: key === 'ex' ? 'Ouvrir output\\kanevas' : 'Ouvrir output\\' + sub })));
   }
   C.sendToStudioItem = async it => {
     const bytes = it.bytes || await pngBytes(it.canvas);
@@ -1596,10 +1604,39 @@
       key === 't2i' && it.info ? { label: 'Refaire avec un autre modèle…', icon: 'compare', action: () => remakeWithModel(it) } : null].filter(Boolean) }); }
     else view.append(h('div.fx-ph', key === 'i2i' ? { text: 'Les résultats apparaîtront ici' } : { html: KS.icon('image') }));
     const thumbs = o.items.length > 1 ? h('div.fx-thumbs', ...o.items.map((x, i) => { const t = h('img' + (i === o.sel ? '.on' : ''), { src: x.url, alt: '', title: x.from ? 'Venue de l\'Édition : ' + x.from : '' }); t.addEventListener('click', () => { o.sel = i; renderOut(key); }); return t; })) : null;
-    fillEl(box, key === 'i2i' ? h('div.fx-h', { text: 'Résultat' }) : null, view, thumbs, outButtons(key, it), it ? h('div.fx-outinfo', { text: (it.from ? 'Venue de l\'Édition : ' + it.from + '\n\n' : '') + (it.info || '(sans paramètres de génération)') + (o.time && !it.from ? `\n\nTime taken: ${o.time}` : '') }) : null);
+    const info = it ? infoBox((it.from ? 'Venue de l\'Édition : ' + it.from + '\n\n' : '') + (it.info || '(sans paramètres de génération)') + (o.time && !it.from ? `\n\nTemps : ${o.time}` : '')) : null;
+    const session = key === 't2i' ? sessionStrip(o) : null;
+    fillEl(box, view, thumbs || session ? h('div.fx-strips', thumbs, session) : null, it ? outButtons(key, it) : null, info);
   }
   function renderStrip() {
     renderOut('i2i');
+  }
+  // Paramètres de génération du résultat, repliés par défaut (une ligne)
+  function infoBox(text) {
+    const d = h('details.fx-infobox', h('summary', h('span', { text: 'Paramètres' }), h('span.fx-infoline', { text: text.split('\n')[0].slice(0, 220) })), h('div.fx-outinfo', { text }));
+    d.open = !!FX.infoOpen;
+    d.addEventListener('toggle', () => { FX.infoOpen = d.open; save(); });
+    return d;
+  }
+  // Séance : les images déjà générées (vignettes de la galerie) ; un clic les remet en grand dans le Studio
+  function sessionStrip(o) {
+    const shown = new Set(o.items.map(x => x.gid).filter(Boolean));
+    const older = SD.gallery.filter(g => !shown.has(g.id)).slice(0, 60);
+    if (!older.length) return null;
+    const row = h('div.fx-session', { title: 'Images de la séance : clic pour les revoir ici' }, h('span.fx-session-l', { text: 'Séance' }));
+    for (const g of older) {
+      const t = h('img', { src: g.thumb, alt: '', loading: 'lazy', title: (g.info || '').split('\n')[0].slice(0, 160) });
+      t.addEventListener('click', async () => {
+        const full = await galleryItem(g), bytes = g.blob ? new Uint8Array(await g.blob.arrayBuffer()) : null;
+        const item = { canvas: full.canvas, bytes, url: g.blob ? URL.createObjectURL(g.blob) : full.canvas.toDataURL('image/png'), info: g.info, params: g.params, seed: g.seed, kind: g.kind, from: g.from, gid: g.id };
+        o.items.unshift(item); o.sel = 0;
+        // les résultats revus s'ajoutent devant : au-delà de 16, les plus anciens sont libérés (ils restent dans la séance)
+        while (o.items.length > 16) { const x = o.items.pop(); if (x.url && x.url.startsWith('blob:')) URL.revokeObjectURL(x.url); }
+        renderOut('t2i');
+      });
+      row.appendChild(t);
+    }
+    return row;
   }
 
   /* ---------------------------------------------------------------- génération */
@@ -1675,11 +1712,6 @@
       hr_scheduler: st.hr_scheduler && st.hr_scheduler !== 'Use same scheduler' ? st.hr_scheduler : undefined,
       hr_prompt: await english(st.hr_prompt), hr_negative_prompt: await english(st.hr_negative_prompt),
     });
-    if (st.ad.enabled) {
-      const units = [];
-      for (const u of st.ad.units) if (u.ad_tab_enable && u.ad_model && u.ad_model !== 'None') units.push({ ...u, ad_prompt: await english(u.ad_prompt), ad_negative_prompt: await english(u.ad_negative_prompt) });
-      if (units.length) p.alwayson_scripts.ADetailer = { args: [true, k === 'i2i' && !!st.ad.skip, ...units] };
-    }
     if (st.kd.enabled && st.kd.parts.length && cat && cat.kdInfo) p.alwayson_scripts['Kane Detailer'] = { args: [{ enabled: true, parts: st.kd.parts, forces: { ...st.kd.forces }, skip: k === 'i2i' && !!st.kd.skip, keep: +st.kd.keep, resolution: +st.kd.resolution, detail: +st.kd.detail || 0, upscale: +st.kd.upscale || 1, tries: +st.kd.tries || 1, repair: !!st.kd.repair, grain: +st.kd.grain || 0, glow: !!st.kd.glow, age: !!st.kd.age }] };
     if (st.noom.unet || st.noom.vae) p.alwayson_scripts['Never OOM Integrated'] = { args: [!!st.noom.unet, !!st.noom.vae] };
     if (k === 'i2i') {
@@ -2061,7 +2093,7 @@
       if (await trainingRuns() || prep.canceled) return;
       if (!(await ensureCat()) || prep.canceled) return;
       const p = await payloadFor('t2i', { ...st, enable_hr: false, script: 'None',
-        ad: mode === 'selection' ? { ...st.ad, enabled: false } : st.ad, n_iter: 1, batch_size: U.clamp(+options.variants || 1, 1, 4) }, true);
+        kd: mode === 'selection' ? { ...st.kd, enabled: false } : st.kd, n_iter: 1, batch_size: U.clamp(+options.variants || 1, 1, 4) }, true);
       let initBytes = null, maskBytes = null;
       if (alpha) {
         Object.assign(p, { denoising_strength: U.clamp(+options.strength || 0.5, 0.4, 0.6), resize_mode: 0, mask_blur: 4,

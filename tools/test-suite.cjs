@@ -79,6 +79,13 @@ async function scenario() {
   check(!selection.snapshotPath && selection.id !== first.id, 'La sélection seule est un média distinct');
   await S.home(); S.selected = second.id; await S.refresh();
   check(document.querySelector('.suite-detail h3').textContent === second.name, 'La sélection de bibliothèque affiche ses actions');
+  const cards = () => document.querySelectorAll('#suite-home .suite-media').length;
+  KS.prefs.libraryCount = 2; KS.emit('prefs');
+  check(S.project.items.length > 2 && cards() === 2 && !!document.querySelector('#suite-home .suite-more'), 'La bibliothèque montre le nombre de médias choisi (' + cards() + ' sur ' + S.project.items.length + '), avec « Afficher plus »');
+  [...document.querySelectorAll('#suite-home .suite-more button')].find(b => b.textContent === 'Tout afficher').click();
+  check(cards() === S.project.items.length && !document.querySelector('#suite-home .suite-more'), 'Tout afficher montre tous les médias du projet');
+  KS.prefs.libraryCount = 48; KS.emit('prefs');
+  check(cards() === S.project.items.length && document.querySelector('#suite-home .suite-count').value === '48', 'Le nombre se règle aussi dans la bibliothèque');
   await S.animate(second); check(S.project.animation?.item === second.id && WX.el.wallpaper.ready, 'Création et liaison d’une animation par le véritable pont preload');
   check(gpuVisible(), 'VRAM visible dans Animation avec son cadre intégré');
   const dossier = S.project.animation.dossier;

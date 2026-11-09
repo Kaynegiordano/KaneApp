@@ -111,7 +111,7 @@
       grid.appendChild(card);
     }
     if (KS.prefs.showQuickStart !== false) inner.appendChild(grid);
-    const rec = KS.prefs.recent || [];
+    const rec = (KS.prefs.recent || []).slice(0, +(KS.prefs.recentCount ?? 16) || 16);
     const showRecent = KS.prefs.showRecent !== false;
     if (rec.length && KS.native) {
       const toggle = ui.btn(showRecent ? 'Masquer' : 'Afficher', () => { KS.prefs.showRecent = !showRecent; KS.prefs.save(); renderHome(); }, '.small', showRecent ? 'eye-off' : 'eye');

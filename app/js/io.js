@@ -483,7 +483,7 @@
     let thumb = null; try { thumb = io.thumbnail(doc, 96); } catch { /* ignore */ }
     const list = (KS.prefs.recent || []).filter(r => r.path !== doc.path);
     list.unshift({ path: doc.path, name: doc.name, thumb, w: doc.width, h: doc.height, t: Date.now() });
-    KS.prefs.recent = list.slice(0, 16); KS.prefs.save();
+    KS.prefs.recent = list.slice(0, 30); KS.prefs.save();
     KS.emit('recent');
   };
   io.forgetRecent = p => { KS.prefs.recent = (KS.prefs.recent || []).filter(r => r.path !== p); KS.prefs.save(); KS.emit('recent'); };

@@ -20,6 +20,37 @@ et les trois copies ICO utilisées par la fenêtre, les raccourcis et l'installa
 dix tailles de 16 à 256 pixels ; le symbole reste transparent et indépendant du thème de l'interface.
 
 ## Outils récents
+### Studio IA 2, sans ADetailer, bibliothèque réglable (1.24.0)
+
+- **Studio IA 2** (`app/js/studio.js`, `app/css/studio.css`) pour Créer et Transformer :
+  - au centre, le composeur d'invite (invite négative repliable, boutons LoRA et Styles, outils en icônes) avec le bouton Générer, puis le résultat en grand ;
+  - à droite, un volet qui défile seul (onglets Réglages · LoRA · Modèles) : sections Format, Échantillonnage, Graine, puis Kane Detailer, Hires fix et Avancé (Never OOM, scripts) ;
+  - la page tient dans la fenêtre, sans défiler.
+- **Libellés en français**, avec le nom de Forge dans l'info-bulle (Échantillonneur = Sampling method, Lots = Batch count…). Les valeurs envoyées à l'API sont inchangées.
+- **Barre du haut** : le checkpoint, puis VAE / Text Encoder et Diffusion in Low Bits repliés dans un petit volet.
+- **Sous le résultat** :
+  - la **séance**, avec les vignettes des images déjà générées ; un clic remet une image en grand (au-delà de 16, les plus anciennes sont libérées) ;
+  - les actions en une barre compacte avec icônes ;
+  - les paramètres de génération repliés sur une ligne.
+- **ADetailer retiré** (remplacé par Kane Detailer) :
+  - plus d'accordéon ni de requête `/adetailer/v1/ad_model` dans le catalogue ;
+  - `C.detailPass` supprimé ;
+  - au démarrage du moteur, `disableReplacedExtensions` (`main.js`) ajoute l'extension `aadetailer-neoforge` à `disabled_extensions` de son `config.json`.
+  - Les fichiers de l'extension restent : l'atelier LoRA emprunte son tagger WD14 pour les légendes.
+  - Démarrage du moteur mesuré : 9,8 s avec ADetailer, 9,6 s sans (pas de différence nette). Kane Detailer détecte seul (5 zones en 4,2 s).
+- **Bibliothèque du projet** :
+  - préférence `libraryCount` (12, 24, 48, 96, 200 ou Tous ; 48 par défaut), réglable aussi dans la bibliothèque ;
+  - « Afficher N de plus » et « Tout afficher » en bas de la grille.
+  - Écran Retouche : `recentCount`, le nombre de fichiers récents (jusqu'à 30).
+- **Captures** : `electron tools/shot-studio.cjs <dossier> [largeur] [hauteur]` affiche le Studio avec le vrai catalogue mis en cache, sans moteur, dans une fenêtre hors écran. Variables :
+  - `SHOT_STEPS` : fichier JSON `[[nom, code], …]` ;
+  - `SHOT_IMAGES` : PNG renvoyés par une fausse génération ;
+  - `SHOT_THEME` ;
+  - `KANEVAS_TEST_APP_PATH` : une autre version de l'application.
+
+  Les temps d'ouverture, de changement d'onglet et de volet restent sous une image (33 ms, le pas de la mesure hors écran), avant comme après.
+- **Tests** : `test-studio.cjs` (166 vérifications) et `test-suite.cjs` (55).
+
 ### Comparer, refaire avec un autre modèle, galerie compressée (1.23.0)
 
 - **Visionneuse de comparaison** `KS.preview.compare(a, b)` (`app/js/image-preview.js`) : rideau (glisser la ligne, ← →) ou côte à côte, zoom et déplacement communs ; B est affichée à la taille de A. Entrées : Avant / après d’un résultat Kane Detailer (`item.before`), « Choisir pour comparer » dans la galerie, « Refaire avec un autre modèle… ».
@@ -536,3 +567,4 @@ Maintenir Alt + bouton droit dans la zone de travail : glisser horizontalement p
 - **1.16.0** : Studio IA, l'onglet Pose 3D devient **Angle** : relief de l'image (Depth Anything V2, local), nouvel angle de vue à la souris, zones découvertes repeintes par Forge à la taille de l'image, passe d'unification.
 - **1.16.1** : Angle : invite et invite négative de l'image envoyées telles quelles, SEEDS 3 + Beta57 en 22 étapes par défaut, CFG et Shift repris de l'image.
 - **1.22.0** : Kane Detailer 4 : plusieurs essais par zone départagés par un juge (ou l'original gardé), essai réparateur pour les mains douteuses, grain du pinceau gardé, lumières protégées, visages qui ne vieillissent plus.
+- **1.24.0** : Studio IA 2 : composeur d'invite, résultat en grand, volet de réglages à droite en français, séance sous le résultat, actions compactes ; ADetailer retiré au profit de Kane Detailer ; nombre de médias de la bibliothèque réglable.

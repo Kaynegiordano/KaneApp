@@ -246,6 +246,7 @@ async function scenario() {
   await click('⛶', document.querySelector('.fx-source'));
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   assert(!KS.modalOpen() && +sourceZoom.dataset.scale === 1, 'Échap ferme le plein écran sans changer le zoom de la source');
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));   // mise en page finie avant de viser l'image
   const sourceRect = document.querySelector('.fx-source .iv-media').getBoundingClientRect();
   await window.realDoubleClick(Math.round(sourceRect.left + sourceRect.width / 2), Math.round(sourceRect.top + sourceRect.height / 2));
   await wait(() => !!document.querySelector('.iv-lightbox'));
@@ -302,7 +303,7 @@ async function scenario() {
   await click('Ajouter en calque');
   assert(!KS.studio.on && b.layers.length === 2, 'Ajouter en calque revient volontairement au document actif dans l’Édition');
   await KS.cmd.sendToStudio('img2img');
-  await click('Ouvrir le résultat dans Retouche');
+  await click('Ouvrir dans Retouche');
   assert(!KS.studio.on && KS.state.doc !== b, 'Ouvrir un résultat crée un nouveau document dans l’Édition');
   await KS.cmd.sendToStudio('extras');
   assert(KS.prefs.fx.tab === 'extras' && !!document.querySelector('.fx-dropzone .iv-media'), 'L’Édition envoie aussi vers Extras');
@@ -456,7 +457,7 @@ async function scenario() {
   drawDoc.selection.rect({ x: 20, y: 10, w: 30, h: 25 }, 'new', 0); KS.emit('selection', drawDoc);
   KS.prefs.fx.t2i.prompt = 'golden star <lora:test:0.6>'; KS.prefs.fx.t2i.negative_prompt = 'noise';
   KS.prefs.fx.t2i.styles = ['Shared style']; KS.prefs.fx.t2i.sampler_name = 'Euler'; KS.prefs.fx.t2i.scheduler = 'Automatic'; KS.prefs.fx.t2i.steps = 19; KS.prefs.fx.t2i.cfg_scale = 5;
-  KS.prefs.fx.t2i.ad.enabled = true; KS.prefs.fx.t2i.ad.units[0].ad_prompt = 'a woman';
+  KS.prefs.fx.t2i.kd.enabled = true;
   drawDoc.genParams = { prompt: 'initial landscape', styles: [] }; drawDoc.genInfo = 'initial landscape\nSteps: 19';
   const beforePanel = window.calls.length + window.txtCalls.length;
   await KS.cmd.openEditorDraw();
@@ -473,7 +474,7 @@ async function scenario() {
   await KS.cmd.editorDraw();
   const request = window.calls.at(-1);
   assert(request.payload.prompt === 'a small wooden bridge <lora:test:0.6>' && request.payload.styles[0] === 'Shared style' && request.payload.sampler_name === 'Euler' && request.payload.steps === 19 && request.payload.cfg_scale === 5 && request.payload.negative_prompt === 'noise' && request.url === KS.gen.url(), 'La demande remplace la scène du Studio et conserve LoRA, styles, échantillonnage et moteur');
-  assert(request.payload.denoising_strength === 0.5 && request.payload.seed === -1 && request.mask && !request.payload.enable_hr && !request.payload.alwayson_scripts.ADetailer, 'Le remplissage est un inpaint à 50 %, avec masque, graine aléatoire et sans retouche automatique des visages');
+  assert(request.payload.denoising_strength === 0.5 && request.payload.seed === -1 && request.mask && !request.payload.enable_hr && !request.payload.alwayson_scripts['Kane Detailer'] && !request.payload.alwayson_scripts.ADetailer, 'Le remplissage est un inpaint à 50 %, avec masque, graine aléatoire et sans retouche automatique des visages');
   assert(KS.prefs.fx.t2i.prompt === expectedPrompt, 'La demande locale ne modifie pas la description du Studio');
   assert(drawDoc.genParams.prompt === 'initial landscape' && drawDoc.genInfo.startsWith('initial landscape'), 'La retouche préserve le prompt initial et les métadonnées du document');
   await KS.cmd.sendToStudio('params');
@@ -577,17 +578,17 @@ async function scenario() {
   const interruptsBefore = window.interrupts;
   fbar.querySelector('.kf-input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
   assert(fbar.hidden && !pta.parentElement.querySelector('.kf-mirror mark') && window.interrupts === interruptsBefore, 'Échap range la recherche sans interrompre la génération');
-  await click('🧹', document.querySelector('.fx-ptools'));
+  document.querySelector('.fx-ptools button[title^="Nettoyer"]').click(); await new Promise(r => setTimeout(r, 30));
   assert(KS.prefs.fx.t2i.prompt === 'blonde hair, blue eyes, smile', 'Nettoyer retire les doublons');
   type(pta, '  (red hair, blue eyes:1.2),, smile ,smile, <lora:test:0.7>  painted\nBREAK , smile');
-  await click('🧹', document.querySelector('.fx-ptools'));
+  document.querySelector('.fx-ptools button[title^="Nettoyer"]').click(); await new Promise(r => setTimeout(r, 30));
   assert(KS.prefs.fx.t2i.prompt === '(red hair, blue eyes:1.2), smile, <lora:test:0.7> painted\nBREAK, smile', 'Nettoyer garde les groupes entre parenthèses, les LoRA et les lignes');
   KS.prefs.fx.promptHistory = [];
   type(pta, 'history one'); await KS.cmd.studioGenerate();
   type(pta, 'history two'); await KS.cmd.studioGenerate();
   type(pta, 'history one'); await KS.cmd.studioGenerate();
   assert(KS.prefs.fx.promptHistory.map(e => e.p).join('|') === 'history one|history two', 'L’historique garde chaque invite générée une fois, la plus récente en tête');
-  await click('🕘', document.querySelector('.fx-ptools'));
+  document.querySelector('.fx-ptools button[title^="Historique"]').click(); await new Promise(r => setTimeout(r, 30));
   const hmodal = document.querySelector('.modal'), hq = hmodal.querySelector('input[type=search]');
   type(hq, 'two');
   assert(hmodal.querySelectorAll('.kf-hrow').length === 1, 'La recherche filtre l’historique');
@@ -611,6 +612,25 @@ async function scenario() {
   assert(!KS.modalOpen() && window.interrupts === interruptsPeek && !!window.releaseGeneration, 'Échap ferme ce plein écran sans interrompre la génération');
   window.holdGeneration = false; window.releaseGeneration(); window.releaseGeneration = null; await running;
   assert(!document.querySelector('.fx-view.live') && !!document.querySelector('.fx-view .iv-click-open'), 'Une fois terminée, l’image se voit en plein écran d’un clic');
+  // Studio 2 : composeur, volet de droite, séance
+  assert(!!document.querySelector('.fx-v2 .fx-main .fx-composer') && !!document.querySelector('.fx-v2 > .fx-aside .fx-left .fx-seg'), 'Studio 2 : invite et scène au centre, réglages dans le volet de droite');
+  const negBtn = [...document.querySelectorAll('.fx-cfoot .fx-cbtn')].find(b => b.textContent.startsWith('Négatif'));
+  const negWas = KS.prefs.fx.negOpen;
+  negBtn.click(); await new Promise(r => setTimeout(r, 450));
+  assert(document.querySelector('.fx-neg').hidden === negWas && KS.prefs.fx.negOpen === !negWas, 'L’invite négative se replie et se rouvre, état retenu');
+  [...document.querySelectorAll('.fx-cfoot .fx-cbtn')].find(b => b.textContent === 'LoRA').click();
+  assert(document.querySelector('.fx-seg button.on').textContent.startsWith('LoRA') && !!document.querySelector('.fx-aside .fx-card[data-lora]'), 'Le bouton LoRA du composeur ouvre les LoRA dans le volet');
+  document.querySelector('.fx-seg button').click();
+  const older = document.querySelectorAll('.fx-session img');
+  assert(older.length >= 1, 'La séance montre les images déjà générées sous le résultat');
+  const sessionBefore = document.querySelectorAll('.fx-session img').length; older[older.length - 1].click();
+  await wait(() => document.querySelectorAll('.fx-session img').length === sessionBefore - 1);
+  assert(!!document.querySelector('.fx-view .iv-media'), 'Un clic sur une image de la séance la remet en grand dans le Studio');
+  document.querySelector('.fx-topbtn').click();
+  assert(!!document.querySelector('.fx-toppop .fx-modchips') && !!document.querySelector('.fx-toppop select'), 'VAE / Text Encoder et Low Bits sont repliés dans un petit volet');
+  document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+  assert(!document.querySelector('.fx-toppop'), 'Le volet se ferme d’un clic ailleurs');
+  assert(!document.querySelector('#studio').textContent.includes('ADetailer') && !Object.keys(KS.prefs.fx.t2i).includes('ad'), 'ADetailer a disparu du Studio');
   return results;
 }
 

@@ -49,6 +49,9 @@
   on('display', 'Écran Projet', 'showHero', 'En-tête du projet', 'Nom du projet, Renommer et Dossier du projet.', true);
   on('display', 'Écran Projet', 'showPipeline', 'Parcours Créer · Retoucher · Animer · Monter', 'Les quatre grandes étapes en haut de l’écran Projet.', true);
   on('display', 'Écran Projet', 'showLibrary', 'Bibliothèque du projet', 'La grille des médias sur l’écran Projet. Le bouton Bibliothèque la rouvre dans un panneau.', true, { kw: 'médias images grille' });
+  add({ tab: 'display', group: 'Écran Projet', key: 'libraryCount', def: 48, label: 'Médias affichés à l’ouverture', desc: 'Les plus récents d’abord. « Afficher plus » en bas de la bibliothèque montre les suivants. Moins de vignettes = ouverture plus rapide.', type: 'seg', num: true, kw: 'nombre images bibliothèque projet vignettes',
+    opts: [['12', '12'], ['24', '24'], ['48', '48'], ['96', '96'], ['200', '200'], ['0', 'Tous']] });
+  add({ tab: 'display', group: 'Écran Retouche', key: 'recentCount', def: 16, label: 'Fichiers récents affichés', type: 'seg', num: true, kw: 'nombre récents', opts: [['4', '4'], ['8', '8'], ['16', '16'], ['30', '30']] });
   on('display', 'Écran Projet', 'showHomeFooter', 'Pied de page', 'Le rappel sur la copie des médias et le raccourci Animation Vidéo.', true);
   on('display', 'Écran Retouche', 'showRecent', 'Projets récents', 'La liste des derniers fichiers ouverts. Un bouton Masquer / Afficher est aussi présent sur l’écran.', true, { kw: 'récents derniers fichiers' });
   on('display', 'Écran Retouche', 'showQuickStart', 'Démarrer rapidement', 'Les formats prêts à l’emploi.', true, { kw: 'préréglages formats' });

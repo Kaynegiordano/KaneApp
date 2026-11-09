@@ -1,3 +1,20 @@
+# 1.24.0 — Studio IA 2 : plus clair, plus direct
+
+- **Nouveau Studio** (Créer et Transformer) :
+  - En haut, une seule zone d'écriture avec le bouton **Générer** à côté.
+  - En dessous, **le résultat en grand**.
+  - À droite, les **réglages dans un volet** qui défile seul : Format, Échantillonnage, Graine, puis Kane Detailer, Hires fix et Avancé.
+  - Tout tient dans la fenêtre, plus besoin de faire défiler la page.
+- **Réglages en français** (Échantillonneur, Planificateur, Étapes, Lots…). Le nom de Forge reste dans l'info-bulle et les valeurs envoyées à Forge ne changent pas.
+- **Invite négative repliable** : une ligne « Négatif · n mots », un clic pour l'ouvrir. Le bouton **LoRA** ouvre les LoRA dans le volet de droite, avec leur nombre sur l'onglet.
+- **Séance** : sous le résultat, les vignettes des images déjà générées. Un clic remet l'image en grand, avec toutes ses actions.
+- **Actions du résultat** en une barre compacte avec icônes. Les paramètres de génération sont repliés sur une ligne.
+- **VAE / Text Encoder et Diffusion in Low Bits** sont rangés dans un petit volet, à côté du choix du modèle.
+- **ADetailer retiré** : Kane Detailer le remplace.
+  - Son extension n'est plus chargée par le moteur du Studio. Ses fichiers restent, car l'atelier LoRA s'en sert pour légender les images.
+  - Le démarrage du moteur reste à environ 10 s : ADetailer n'y pesait presque rien.
+- **Projet** : choisissez combien de médias la bibliothèque montre à l'ouverture (48 par défaut ; 12 à 200, ou tous). Le choix se fait dans la bibliothèque ou dans Préférences › Affichage. « Afficher plus » montre les suivants. Sur l'écran Retouche, le nombre de fichiers récents se règle aussi.
+
 # 1.23.1 — Animation sans « Animer par IA »
 
 - **Animation** (moteur 1.21, mis à jour avec Kane OS 4.62) : « Animer par IA » (Wan 2.2) est retiré, le mouvement se fait entièrement dans Animation. Super magique propose des zones justes (visage à son contour, pas de geste pour des mains jointes ou hors cadre, robe et manteau qui ne flottent que debout, lumières repérées), le fond derrière les cheveux reprend le vrai décor, et les mouvements sont calmes. Nouveaux scénarios : Nuit et lumières, Vent léger, Neige.

@@ -470,8 +470,6 @@ const catalogHandler = forgeHandler(async base => {
   }
   let presets = {};
   try { if (flags && flags.data_dir) presets = JSON.parse(fs.readFileSync(path.join(flags.data_dir, 'style_presets.json'), 'utf8')); } catch { /* aucun */ }
-  let adModels = [];
-  try { const r = await forgeCall(base, '/adetailer/v1/ad_model', null, 8000); adModels = (r && r.ad_model) || []; } catch { /* ADetailer absent */ }
   let kdInfo = null;   // Kane Detailer (extension du Forge du Studio) : parties et détecteurs présents
   try { kdInfo = await forgeCall(base, '/kane-detailer/v1/info', null, 8000); } catch { /* extension absente */ }
   let upscalers = [];
@@ -508,7 +506,7 @@ const catalogHandler = forgeHandler(async base => {
     : { data: flags.data_dir || '', models: flags.model_ref || '', lora: flags.lora_dir || '' };
   if (dirs.data) { forgeDirs = dirs; try { fs.writeFileSync(path.join(app.getPath('userData'), 'forge-dirs.json'), JSON.stringify(dirs)); } catch { /* rien */ } }
   return {
-    adModels, kdInfo, upscalers, dirs,
+    kdInfo, upscalers, dirs,
     models: (models || []).map(m => ({ title: m.title, name: m.model_name, file: m.filename, preview: thumb(m.filename) })),
     styles: (styles || []).map(x => ({ name: x.name, prompt: x.prompt || '', negative: x.negative_prompt || '' })),
     scripts, latent: (latent || []).map(x => x.name).filter(Boolean), defaults,
@@ -827,7 +825,26 @@ let integrationRoot = '';
 const engine = { state: 'off', url: '', pid: null, ours: false, log: [], error: '', profile: '', startedAt: 0 };
 // Aperçu en direct net : le moteur ne proposait que l'approximation « RGB » (image 8 fois plus petite que le résultat). La méthode
 // « Full » décode le latent avec le VAE ; Kanevas la demande par génération (override_settings), le réglage de Forge ne change pas.
+// ADetailer est remplacé par Kane Detailer (1.24) : son extension n'est plus chargée par le moteur du Studio (démarrage plus
+// court, plus de script toujours actif). Ses fichiers restent : l'atelier LoRA emprunte son tagger WD14 pour les légendes.
+function disableReplacedExtensions(dir) {
+  try {
+    const ext = path.join(dir, 'extensions');
+    const names = fs.existsSync(ext) ? fs.readdirSync(ext).filter(n => /adetailer/i.test(n) && fs.statSync(path.join(ext, n)).isDirectory()) : [];
+    if (!names.length) return;
+    const file = path.join(dir, 'config.json');
+    let cfg = {};
+    try { cfg = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { /* absent : Forge le créera */ }
+    const off = Array.isArray(cfg.disabled_extensions) ? cfg.disabled_extensions : [];
+    const add = names.filter(n => !off.includes(n));
+    if (!add.length) return;
+    cfg.disabled_extensions = [...off, ...add];
+    fs.writeFileSync(file, JSON.stringify(cfg, null, 4));
+    engineLog('Extension remplacée par Kane Detailer désactivée : ' + add.join(', '));
+  } catch (e) { engineLog('Désactivation d’ADetailer impossible (' + e.message + ')'); }
+}
 function ensureEnginePatches(dir) {
+  disableReplacedExtensions(dir);
   try {
     const f = path.join(dir, 'modules', 'sd_samplers_common.py');
     const src = fs.readFileSync(f, 'utf8');

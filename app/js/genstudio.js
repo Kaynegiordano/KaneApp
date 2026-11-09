@@ -1,15 +1,13 @@
-// Studio Forge dans Kanevas : nouvelle image (nouveau document), image vers image, retouche ADetailer seule
+// Studio Forge dans Kanevas : nouvelle image (nouveau document), image vers image
 // (visages, mains, yeux), agrandir et détailler (MultiDiffusion), PNG Info (lecture, écriture, envoi au
 // panneau), et l'IA en direct (rendu qui suit le dessin). Tout passe par le Forge local.
 'use strict';
 (() => {
   const U = KS.util, h = KS.h, ui = KS.ui, C = KS.cmd, G = KS.gen, N = KS.native;
   const D = () => KS.state.doc;
-  const AD_UNIT = { model: 'face_yolov8n.pt', prompt: '', denoise: 0.4, confidence: 0.3 };
   const DEF = {
     size: { w: 1024, h: 1024 },
     i2iStrength: 0.5,
-    ad: { enabled: false, units: [{ ...AD_UNIT }] },
     md: { factor: 1.5, upscaler: '', tile: 1024, overlap: 64, method: 'Mixture of Diffusers', denoise: 0.3, steps: 20 },
     hr: { enabled: false, scale: 1.5, upscaler: '', steps: 0, denoise: 0.4, cfg: 0 },
     refiner: { model: '', at: 0.8 },
@@ -31,21 +29,9 @@
   const r8 = v => Math.max(64, Math.round(v / 8) * 8);
   const mp1 = (w, hh, target = 1048576) => { const k = Math.sqrt(target / (w * hh)); return { W: U.clamp(Math.round(w * k / 64) * 64, 256, 2048), H: U.clamp(Math.round(hh * k / 64) * 64, 256, 2048) }; };
 
-  /* ---------------------------------------------------------------- scripts (ADetailer, MultiDiffusion) */
+  /* ---------------------------------------------------------------- scripts (MultiDiffusion) */
   G.scriptsFor = async (st, kind, opt = {}) => {
     const s = {};
-    const ad = st.ad || DEF.ad;
-    if ((ad.enabled && kind !== 'live') || opt.adOnly) {
-      const units = [];
-      for (const u of (ad.units || []).slice(0, 3)) {
-        if (!u || !u.model || u.model === 'None') continue;
-        let p = (u.prompt || '').trim();
-        if (p) p = (await G.toEnglish(p, false)) ?? p;
-        units.push({ ad_model: u.model, ad_tab_enable: true, ad_prompt: p, ad_negative_prompt: '', ad_confidence: +u.confidence || 0.3,
-          ad_denoising_strength: +u.denoise || 0.4, ad_mask_blur: 4, ad_dilate_erode: 4, ad_inpaint_only_masked: true, ad_inpaint_only_masked_padding: 32 });
-      }
-      if (units.length) s.ADetailer = { args: [true, !!opt.adOnly, ...units] };
-    }
     if (opt.md) { const m = st.md || DEF.md; s['MultiDiffusion Integrated'] = { args: [true, m.method, +m.tile, +m.tile, +m.overlap, 1] }; }
     return s;
   };
@@ -110,27 +96,6 @@
       const alpha = U.canvas(d.width, d.height); if (sel) alpha.getContext('2d').drawImage(d.selection.mask, 0, 0);
       return G.addGenLayer(d, res, alpha, { name: 'Image → image' + (raw ? ' : ' + raw.slice(0, 30) : ''), prompt: raw, hist: 'Image vers image', noMask: !sel, icon: 'image' });
     } catch (e) { KS.toast('Image vers image impossible : ' + e.message, 'err', 6000); }
-  };
-
-  /* ---------------------------------------------------------------- retouche ADetailer seule */
-  // Comme « Skip img2img » dans Forge : l'image n'est pas régénérée, seuls les visages / mains / yeux
-  // détectés sont refaits par ADetailer. Le résultat est un calque au-dessus, l'original reste intact.
-  C.detailPass = async () => {
-    const d = D(); if (!d) return;
-    const st = G.studio();
-    const forge = await needForge(); if (!forge) return;
-    const units = (st.ad.units || []).filter(u => u.model && u.model !== 'None');
-    if (!units.length) { KS.toast('Choisissez au moins un détecteur ADetailer dans le panneau IA', 'info'); KS.panels.focus('generate'); return; }
-    const k = Math.min(1, 3072 / Math.max(d.width, d.height));
-    const W = r8(d.width * k), H = r8(d.height * k);
-    try {
-      const pp = await G.preparePrompt(promptOf() || 'masterpiece, best quality, detailed', forge, st);
-      const payload = { ...basePayload(st, pp, W, H, 1), denoising_strength: 0.4, resize_mode: 0 };
-      G.addScripts(payload, await G.scriptsFor(st, 'img2img', { adOnly: true }));
-      const job = { payload, W, H, R: d.rect, init: await pngBytes(scaled(d.composite(), W, H)), mask: null };
-      const res = await G.forgeRun(job); res.job = job;
-      return G.addGenLayer(d, res, null, { name: 'Retouche ADetailer', hist: 'Retouche ADetailer', noMask: true, icon: 'sparkles' });
-    } catch (e) { KS.toast('Retouche impossible : ' + e.message, 'err', 6000); }
   };
 
   /* ---------------------------------------------------------------- agrandir et détailler */

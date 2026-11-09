@@ -4,7 +4,11 @@
   const N = KS.native, h = KS.h, ui = KS.ui, C = KS.cmd, U = KS.util;
   if (!N?.suiteCall) return;
   const S = KS.suite = { project: null, tasks: [], selected: null };
-  let home, drawer, nav, list, stage, details, taskButton, projectButton, search = '', filter = 'all', started = false;
+  let home, drawer, nav, list, stage, details, taskButton, projectButton, search = '', filter = 'all', started = false, extra = 0;
+  // Nombre de médias montrés dans la bibliothèque (préférence libraryCount ; 0 = tous) : un projet de plusieurs centaines
+  // d'images ne charge plus toutes ses vignettes à l'ouverture de KaneApp. « Afficher plus » en ajoute pour la séance.
+  const COUNTS = [[12, '12'], [24, '24'], [48, '48'], [96, '96'], [200, '200'], [0, 'Tous']];
+  const shown = () => { const n = +(KS.prefs.libraryCount ?? 48); return n > 0 ? n + extra : Infinity; };
   let resolveReady; S.ready = new Promise(r => resolveReady = r);
   const captures = new WeakMap(), animations = new Map();
   const mediaURL = p => 'kcm://f/' + encodeURIComponent(p);
@@ -265,9 +269,13 @@
   function renderLibrary(container) {
     const input = h('input.field', { placeholder: 'Rechercher un média…', value: search, 'aria-label': 'Rechercher un média' });
     const type = ui.select([['all', 'Tous les médias'], ['image', 'Images'], ['video', 'Vidéos'], ['audio', 'Audio']], filter);
+    const count = ui.select(COUNTS.map(([v, l]) => [String(v), v ? l + ' affichés' : 'Tout afficher']), String(+(KS.prefs.libraryCount ?? 48)));
+    count.title = 'Nombre de médias montrés à l’ouverture (les plus récents d’abord)';
+    count.classList.add('suite-count');
     const grid = h('div.suite-media-grid');
     const fill = () => {
-      const items = S.project.items.filter(it => (filter === 'all' || it.kind === filter) && (it.name + ' ' + titleOf(it.source)).toLowerCase().includes(search.toLowerCase()));
+      const all = S.project.items.filter(it => (filter === 'all' || it.kind === filter) && (it.name + ' ' + titleOf(it.source)).toLowerCase().includes(search.toLowerCase()));
+      const items = all.slice(0, shown());
       grid.replaceChildren();
       for (const it of items) {
         const b = h('button.suite-media' + (it.id === S.selected ? '.selected' : ''), { 'data-item': it.id, title: it.name, 'aria-pressed': String(it.id === S.selected) });
@@ -281,14 +289,22 @@
         b.addEventListener('dblclick', () => S.run('Ouverture du média', () => it.kind === 'image' ? S.open(it) : S.toVideo(it)).catch(() => {}));
         grid.append(b);
       }
+      if (all.length > items.length) {
+        const rest = all.length - items.length, step = Math.min(rest, +(KS.prefs.libraryCount ?? 48) || 48);
+        const more = h('div.suite-more', h('span', { text: items.length + ' sur ' + all.length + ' médias' }),
+          ui.btn('Afficher ' + step + ' de plus', () => { extra += step; fill(); }, '.small'),
+          ui.btn('Tout afficher', () => { extra = Infinity; fill(); }, '.small'));
+        grid.append(more);
+      }
       if (!items.length) grid.append(h('div.suite-library-empty', h('span', { html: KS.icon('image') }), h('b', { text: S.project.items.length ? 'Aucun média correspondant' : 'Votre projet commence ici' }), h('p', { text: 'Importez une image, créez-la dans le Studio ou capturez votre document avec ses calques.' })));
     };
     input.addEventListener('input', () => { search = input.value; fill(); });
     type.addEventListener('change', () => { filter = type.value; fill(); });
+    count.addEventListener('change', () => { KS.prefs.libraryCount = +count.value; KS.prefs.save(); extra = 0; fill(); });
     const detail = h('aside.suite-detail');
     container.replaceChildren(h('div.suite-library-head', h('b', { text: 'Bibliothèque du projet' }), h('span', { text: S.project.items.length + ' média(s)' }), h('div.spacer'),
       action('Importer…', () => S.import(), '.small', false, 'folder-open'), container === drawer ? ui.iconBtn('close', 'Fermer la bibliothèque', () => drawer.hidden = true) : null),
-      h('div.suite-library-tools', input, type), h('div.suite-library-body', h('div.suite-media-scroll', grid), detail));
+      h('div.suite-library-tools', input, type, count), h('div.suite-library-body', h('div.suite-media-scroll', grid), detail));
     fill(); renderDetails(detail);
   }
   function renderDetails(el) {
@@ -333,6 +349,8 @@
     b.addEventListener('click', () => S.run(title, fn).catch(() => {})); return b;
   }
   S.refresh = async () => { adopt(await call('get')); };
+  let lastCount = KS.prefs.libraryCount;
+  KS.on('prefs', () => { if (KS.prefs.libraryCount !== lastCount) { lastCount = KS.prefs.libraryCount; extra = 0; render(); } });
   KS.on('doc', d => { if (d && (document.body.classList.contains('suite-home') || KS.ws.cur)) C.toggleStudio(false); });
   KS.on('ui-ready', () => setTimeout(async () => {
     if (started) return; started = true;
