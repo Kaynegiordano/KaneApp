@@ -1,5 +1,5 @@
-# 1.26.3 — Ouverture sur Projets
+# 1.26.4 — Projets sans bibliothèque
 
-- **KaneApp s'ouvre sur Projets**, même si vous l'aviez quitté dans le Studio IA. Avant, il rouvrait le dernier écran utilisé.
-- **Préférences › Général › Écran au lancement** : Projet (par défaut), Retouche ou, nouveau, Studio IA.
-- Une image ouverte depuis l'explorateur ou envoyée par Kane Explorer arrive toujours directement dans Retouche ou dans le Studio IA.
+- **La bibliothèque du projet n'est plus affichée sur l'écran Projets** : l'écran est plus léger et s'ouvre plus vite (les vignettes ne sont plus préparées).
+- Le bouton **Bibliothèque** du panneau KaneApp (K) l'ouvre toujours dans un panneau.
+- Pour la remettre sur l'écran Projets : **Préférences › Affichage › Bibliothèque du projet**.

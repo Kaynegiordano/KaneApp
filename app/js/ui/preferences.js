@@ -15,10 +15,11 @@
   let lastBars = '';
   L.apply = () => {
     const cl = document.body.classList;
-    for (const [key, name] of Object.entries(FLAGS)) cl.toggle('pf-hide-' + name, P[key] === false);
+    // la bibliothèque de l'écran Projet est masquée tant qu'on ne l'a pas activée (1.26.4)
+    for (const [key, name] of Object.entries(FLAGS)) cl.toggle('pf-hide-' + name, key === 'showLibrary' ? P[key] !== true : P[key] === false);
     for (const [id] of SPACES) cl.toggle('pf-hide-ws-' + id, !!P.hiddenSpaces?.[id]);
     cl.toggle('pf-reduce-motion', !!P.reduceMotion);
-    cl.toggle('pf-home-empty', P.showHero === false && P.showPipeline === false && P.showLibrary === false);
+    cl.toggle('pf-home-empty', P.showHero === false && P.showPipeline === false && P.showLibrary !== true);
     const bars = `${P.showStatusbar}|${P.showGpu}|${JSON.stringify(P.hiddenSpaces || {})}`;
     if (bars !== lastBars) { lastBars = bars; setTimeout(() => { try { V.resize(); } catch { /* pas encore prêt */ } window.dispatchEvent(new Event('resize')); }, 0); }
   };
@@ -48,7 +49,7 @@
   // Affichage : tout ce que l’on peut masquer
   on('display', 'Écran Projet', 'showHero', 'En-tête du projet', 'Nom du projet, Renommer et Dossier du projet.', true);
   on('display', 'Écran Projet', 'showPipeline', 'Parcours Créer · Retoucher · Animer · Monter', 'Les quatre grandes étapes en haut de l’écran Projet.', true);
-  on('display', 'Écran Projet', 'showLibrary', 'Bibliothèque du projet', 'La grille des médias sur l’écran Projet. Le bouton Bibliothèque la rouvre dans un panneau.', true, { kw: 'médias images grille' });
+  on('display', 'Écran Projet', 'showLibrary', 'Bibliothèque du projet', 'La grille des médias sur l’écran Projet. Désactivée par défaut : le bouton Bibliothèque l’ouvre dans un panneau.', false, { kw: 'médias images grille', after: () => KS.suite?.rerender?.() });
   add({ tab: 'display', group: 'Écran Projet', key: 'libraryCount', def: 48, label: 'Médias affichés à l’ouverture', desc: 'Les plus récents d’abord. « Afficher plus » en bas de la bibliothèque montre les suivants. Moins de vignettes = ouverture plus rapide.', type: 'seg', num: true, kw: 'nombre images bibliothèque projet vignettes',
     opts: [['12', '12'], ['24', '24'], ['48', '48'], ['96', '96'], ['200', '200'], ['0', 'Tous']] });
   add({ tab: 'display', group: 'Écran Retouche', key: 'recentCount', def: 16, label: 'Fichiers récents affichés', type: 'seg', num: true, kw: 'nombre récents', opts: [['4', '4'], ['8', '8'], ['16', '16'], ['30', '30']] });

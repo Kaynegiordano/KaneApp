@@ -50,6 +50,8 @@ async function scenario() {
   click('Fermer');
 
   const S = KS.suite, WX = KS.ws;
+  check(document.body.classList.contains('pf-hide-library') && !document.querySelector('#suite-home .suite-media'), 'La bibliothèque de l’écran Projet est masquée par défaut');
+  KS.prefs.showLibrary = true; KS.prefs.save(); KS.layout.apply(); S.rerender();
   check(S.project.name === 'KaneApp', 'Le projet par défaut Mon atelier devient KaneApp');
   const creating = S.newProject(); await wait(() => !!document.querySelector('.modal input'));
   document.querySelector('.modal input').value = 'Illustration de test'; click('Enregistrer'); await creating;

@@ -85,7 +85,7 @@
   };
   S.library = async () => {
     await S.ready;
-    if (document.body.classList.contains('suite-home') && KS.prefs.showLibrary !== false) { search = ''; render(); list?.scrollIntoView({ block: 'nearest' }); return; }
+    if (document.body.classList.contains('suite-home') && KS.prefs.showLibrary === true) { search = ''; render(); list?.scrollIntoView({ block: 'nearest' }); return; }
     drawer.hidden = !drawer.hidden; if (!drawer.hidden) renderLibrary(drawer);
   };
   async function inputName(title, initial) {
@@ -340,7 +340,7 @@
         pipeline('04', 'Monter', 'Assemblez les séquences et le son.', 'layers', () => S.openVideo())),
       list = h('section.suite-library'),
       h('footer.suite-home-footer', h('span', { text: 'Les médias importés et leurs versions sont copiés dans ce projet. Les générations du Studio y sont archivées.' }), action('Animation Vidéo · ComfyUI', () => KS.ws.go('comfyui'), '.small'))));
-    renderLibrary(list);
+    if (KS.prefs.showLibrary === true) renderLibrary(list); // masquée par défaut : rien à préparer
     if (!drawer.hidden) renderLibrary(drawer);
     KS.ws?.sync(); renderTasks();
   }
@@ -348,6 +348,7 @@
     const b = h('button.suite-step', h('span.suite-step-top', h('span', { text: num }), h('span', { html: KS.icon(icon) })), h('b', { text: title }), h('small', { text: description }));
     b.addEventListener('click', () => S.run(title, fn).catch(() => {})); return b;
   }
+  S.rerender = () => { if (home && document.body.classList.contains('suite-home')) render(); };
   S.refresh = async () => { adopt(await call('get')); };
   let lastCount = KS.prefs.libraryCount;
   KS.on('prefs', () => { if (KS.prefs.libraryCount !== lastCount) { lastCount = KS.prefs.libraryCount; extra = 0; render(); } });
