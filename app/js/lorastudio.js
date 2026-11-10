@@ -87,7 +87,7 @@
     const F2 = root.querySelector('.lt-newname');
     const r = await busy('project', 'Import…', () => call('import', { folder: folder || '', paths: paths || [], name: S.cur || '', new_name: F2 ? F2.value.trim() : '' }));
     await refreshProjects(); await openProject(r.name);
-    msg('project', `Imported ${r.added} image(s) into **${label(S.projects.find(p => p.name === r.name) || { name: r.name })}** (${r.count} au total). Originaux conservés ; aperçus réduits. Now caption them (or apply a preset), then train.`);
+    msg('project', `${r.added} image(s) importée(s) dans **${label(S.projects.find(p => p.name === r.name) || { name: r.name })}** (${r.count} au total). Originaux conservés ; aperçus réduits. Légendez-les (ou appliquez un préréglage), puis entraînez.`);
   }
   async function addFromKanevas(which) {
     if (!S.cur) return KS.toast('Choisissez ou créez d\'abord un projet', 'info');
@@ -105,7 +105,7 @@
     msg('project', `${n} image(s) ajoutée(s) depuis KaneApp.`);
   }
   async function applyPreset() {
-    if (!S.cur) return msg('preset', 'Select a project first.');
+    if (!S.cur) return msg('preset', 'Choisissez d’abord un projet.');
     const r = await busy('preset', 'Légendes manquantes puis préréglage…', () => call('preset', { name: S.cur, kind: S.form.lora_type, threshold: S.form.threshold }));
     const m = r.manifest;
     for (const k of FORM_KEYS) if (m[k] != null) S.form[k] = m[k];
@@ -114,7 +114,7 @@
     render();
   }
   async function autoCaption() {
-    if (!S.cur) return msg('captions', 'Select a project first.');
+    if (!S.cur) return msg('captions', 'Choisissez d’abord un projet.');
     const r = await busy('captions', 'Légendes WD14…', () => call('caption', { name: S.cur, threshold: S.form.threshold, only_missing: false }));
     S.caps = { ...(r.captions || {}) };
     const n = S.data.images.length, f = r.failed || [];
@@ -124,10 +124,10 @@
   async function saveCaptions() {
     if (!S.cur) return;
     await busy('captions', 'Enregistrement…', () => call('save', { name: S.cur, patch: { captions: S.caps } }));
-    msg('captions', `Saved captions for ${Object.keys(S.caps).length} image(s).`);
+    msg('captions', `Légendes enregistrées pour ${Object.keys(S.caps).length} image(s).`);
   }
   async function removeImage(file) {
-    if (!(await KS.confirm('Retirer « ' + file + ' » du projet ? Le fichier est supprimé du dossier du projet.', { title: 'Train LoRA', ok: 'Retirer', danger: true }))) return;
+    if (!(await KS.confirm('Retirer « ' + file + ' » du projet ? Le fichier est supprimé du dossier du projet.', { title: 'Atelier LoRA', ok: 'Retirer', danger: true }))) return;
     await call('remove', { name: S.cur, files: [file] });
     await openProject(S.cur);
   }
@@ -147,9 +147,9 @@
     return before.ok && after.ok ? `Free VRAM **${mb(after.total - after.used)} MB** of ${mb(after.total)} MB (was ${mb(before.total - before.used)} MB). Forge reloads the checkpoint by itself on the next generation.` : 'Modèle de Forge déchargé.';
   }
   async function start() {
-    if (!S.cur) return msg('train', 'Select a project first.');
+    if (!S.cur) return msg('train', 'Choisissez d’abord un projet.');
     const f = S.form;
-    if (!String(f.trigger || '').trim()) return msg('train', 'Give a trigger word - it is the token you put in a prompt to summon the style.');
+    if (!String(f.trigger || '').trim()) return msg('train', 'Donnez un mot déclencheur : c’est le mot à écrire dans l’invite pour appeler le LoRA.');
     try {
       let note = '';
       if (await forgeBusy()) return msg('train', 'Forge utilise actuellement le GPU. Attends la fin de la génération.');
@@ -167,14 +167,14 @@
     } catch (e) { msg('train', '⚠️ ' + e.message); }
   }
   async function stop() {
-    if (!S.run || !S.run.running) return msg('train', 'Nothing is running.');
+    if (!S.run || !S.run.running) return msg('train', 'Aucun entraînement en cours.');
     try { S.run = (await call('stop', { run: S.run.run })).status; S.run.stopped = true; stopPoll(); msg('train', 'Entraînement arrêté. Les checkpoints déjà sauvegardés sont conservés.'); render(); }
     catch (e) { msg('train', 'Échec de l’arrêt : ' + e.message); }
   }
   async function del() {
     if (!S.cur) return;
     if (S.run && S.run.running && S.run.project === S.cur) return msg('project', 'Arrête l’entraînement avant de supprimer ce projet.');
-    if (!(await KS.confirm('Supprimer le projet « ' + label(S.projects.find(p => p.name === S.cur) || { name: S.cur }) + ' » et ses images ? Les LoRA déjà entraînés restent dans le dossier des LoRA.', { title: 'Train LoRA', ok: 'Supprimer', danger: true }))) return;
+    if (!(await KS.confirm('Supprimer le projet « ' + label(S.projects.find(p => p.name === S.cur) || { name: S.cur }) + ' » et ses images ? Les LoRA déjà entraînés restent dans le dossier des LoRA.', { title: 'Atelier LoRA', ok: 'Supprimer', danger: true }))) return;
     await call('delete', { name: S.cur });
     await refreshProjects(); S.cur = ''; await openProject('');
   }
@@ -282,10 +282,10 @@
     const sel = h('select.fx-sel', h('option', { value: '', text: '' }), ...S.projects.map(p => h('option', { value: p.name, text: label(p) + ' · ' + p.count + ' img' + (p.last && p.last.running ? ' · en cours' : '') })));
     sel.value = S.cur;
     sel.addEventListener('change', () => openProject(sel.value).catch(e => msg('project', '⚠️ ' + e.message)));
-    const newName = h('input.fx-in.lt-newname', { placeholder: 'name', spellcheck: false });
+    const newName = h('input.fx-in.lt-newname', { placeholder: 'nom', spellcheck: false });
     const folder = h('input.fx-in', { placeholder: 'C:\\Users\\you\\Pictures\\training set', spellcheck: false, value: S.folder || '' });
     folder.addEventListener('input', () => { S.folder = folder.value; });
-    const drop = h('div.fx-dropzone.lt-drop', h('div', { text: '...or drop images here (ou cliquez pour les choisir)' }));
+    const drop = h('div.fx-dropzone.lt-drop', h('div', { text: '… ou déposez des images ici (ou cliquez pour les choisir)' }));
     drop.addEventListener('click', async () => { const paths = await N.pickImagePaths(); if (paths.length) importFrom({ paths }).catch(() => {}); });
     drop.addEventListener('dragenter', e => { e.preventDefault(); e.stopPropagation(); drop.classList.add('over'); });
     drop.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); drop.classList.add('over'); });
@@ -299,25 +299,25 @@
       gallery.appendChild(cell);
     }
     const project = h('div.fx-panel.lt-card',
-      h('div.lt-row', field('Project', sel), tbtn('Actualiser', () => refreshAll()), tbtn('Delete', del)),
-      h('div.lt-row', field('New project', newName, 'Also names the project when you import below, instead of the source folder\'s name'),
-        tbtn('Create', async () => {
-          const n = newName.value.trim(); if (!n) return msg('project', 'Give the project a name first.');
-          const r = await call('create', { name: n }); await refreshProjects(); await openProject(r.name); msg('project', `Created '${r.name}'.`);
+      h('div.lt-row', field('Projet', sel), tbtn('Actualiser', () => refreshAll()), tbtn('Supprimer', del)),
+      h('div.lt-row', field('Nouveau projet', newName, 'Ce nom sert aussi au projet créé par une importation, à la place du nom du dossier source'),
+        tbtn('Créer', async () => {
+          const n = newName.value.trim(); if (!n) return msg('project', 'Donnez d’abord un nom au projet.');
+          const r = await call('create', { name: n }); await refreshProjects(); await openProject(r.name); msg('project', `Projet « ${r.name} » créé.`);
         }, '.primary')),
-      h('div.fx-info', { text: 'also names the project when you import below, instead of the source folder\'s name' }),
-      h('div.lt-row', field('Source folder', folder), tbtn('Parcourir…', async () => { const p = await N.pickFolder('Dossier d\'images'); if (p) { folder.value = p; S.folder = p; } }),
-        tbtn('Import images', () => { if (!folder.value.trim()) return msg('project', 'Give a folder path, or drop some images.'); importFrom({ folder: folder.value.trim() }).catch(() => {}); }, '.primary')),
-      h('div.fx-info', { text: 'Pour de gros lots haute résolution : indiquez le dossier puis Import images. Copie locale ; qualité originale conservée.' }),
+      h('div.fx-info', { text: 'Ce nom sert aussi au projet créé par une importation ci-dessous, à la place du nom du dossier source.' }),
+      h('div.lt-row', field('Dossier source', folder), tbtn('Parcourir…', async () => { const p = await N.pickFolder('Dossier d\'images'); if (p) { folder.value = p; S.folder = p; } }),
+        tbtn('Importer les images', () => { if (!folder.value.trim()) return msg('project', 'Indiquez un dossier, ou déposez des images.'); importFrom({ folder: folder.value.trim() }).catch(() => {}); }, '.primary')),
+      h('div.fx-info', { text: 'Pour de gros lots haute résolution : indiquez le dossier puis « Importer les images ». Copie locale ; qualité originale conservée.' }),
       drop,
       h('div.fx-outbtns', h('span.fx-info', { text: 'Depuis KaneApp :' }), tbtn('Image du document', () => addFromKanevas('doc')), tbtn('Sélection', () => addFromKanevas('sel')), tbtn('Documents ouverts', () => addFromKanevas('all'))),
       msgBox('project'), on ? gallery : null);
     // carte Preset
     const kinds = Object.entries(I.presets);
     const hint = h('div.fx-info', { text: (I.presets[f.lora_type] || {}).hint || '' });
-    const preset = h('div.fx-panel.lt-card', h('div.fx-h', { text: 'Preset' }),
-      h('div.fx-info', { text: 'Sets network dim, learning rate, repeats, epochs and resolution from the type AND from how many images this project has. Every preset except Style also auto-cleans the captions. Always editable afterwards.' }),
-      h('div.lt-row', F().radio('LoRA type', kinds.map(([k, v]) => [k, v.label]), f, 'lora_type', '', v => { hint.textContent = (I.presets[v] || {}).hint || ''; saveForm(); }), tbtn('Apply preset', () => applyPreset().catch(() => {}), '.primary')),
+    const preset = h('div.fx-panel.lt-card', h('div.fx-h', { text: 'Préréglage' }),
+      h('div.fx-info', { text: 'Règle la dimension du réseau, le taux d’apprentissage, les répétitions, les époques et la résolution selon le type ET le nombre d’images du projet. Tous les préréglages sauf Style nettoient aussi les légendes. Tout reste modifiable ensuite.' }),
+      h('div.lt-row', F().radio('Type de LoRA', kinds.map(([k, v]) => [k, v.label]), f, 'lora_type', '', v => { hint.textContent = (I.presets[v] || {}).hint || ''; saveForm(); }), tbtn('Appliquer le préréglage', () => applyPreset().catch(() => {}), '.primary')),
       hint, msgBox('preset'));
     // carte Captions
     const rows = h('div.lt-caps');
@@ -326,34 +326,34 @@
       ta.addEventListener('input', () => { S.caps[im.file] = ta.value; });
       rows.appendChild(h('div.lt-caprow', img(im.preview || im.path, 120), h('div.fx-col', h('span.fx-info', { text: im.file }), ta)));
     }
-    const captions = h('div.fx-panel.lt-card', h('div.fx-h', { text: 'Captions' }),
-      h('div.lt-row', slider('Tag confidence threshold', f, 'threshold', 0.1, 0.9, 0.05, '', saveForm), tbtn('Auto-caption all images', () => autoCaption().catch(() => {}), '.primary')),
+    const captions = h('div.fx-panel.lt-card', h('div.fx-h', { text: 'Légendes' }),
+      h('div.lt-row', slider('Seuil de confiance des tags', f, 'threshold', 0.1, 0.9, 0.05, '', saveForm), tbtn('Légender toutes les images', () => autoCaption().catch(() => {}), '.primary')),
       on ? rows : null,
-      h('div.lt-row', tbtn('Save caption edits', () => saveCaptions().catch(() => {}), '.primary'), msgBox('captions')));
+      h('div.lt-row', tbtn('Enregistrer les légendes', () => saveCaptions().catch(() => {}), '.primary'), msgBox('captions')));
     // carte Training settings
-    const lr = h('input.fx-in', { value: String(f.learning_rate), spellcheck: false, title: 'presets place this between 2e-5 and 1e-4' });
+    const lr = h('input.fx-in', { value: String(f.learning_rate), spellcheck: false, title: 'les préréglages le placent entre 2e-5 et 1e-4' });
     lr.addEventListener('change', () => { const v = parseFloat(lr.value); if (v > 0) { f.learning_rate = v; saveForm(); } lr.value = String(f.learning_rate); });
     const scopeHint = h('div.fx-info', { html: F().md(I.scopes[f.scope] ? `**${I.scopes[f.scope].summary}** · ${I.scopes[f.scope].hint}` : '') });
     const dit = I.dits.find(d => d.path === f.base_model);
     const ditNote = h('div.fx-info', { text: dit ? dit.note : '' });
     const qwen = h('input.fx-in', { value: S.qwen3 || I.qwen3 || '', spellcheck: false }); qwen.addEventListener('change', () => { S.qwen3 = qwen.value; });
     const vae = h('input.fx-in', { value: S.vae || I.vae || '', spellcheck: false }); vae.addEventListener('change', () => { S.vae = vae.value; });
-    const adv = h('details.fx-acc.lt-acc', h('summary.fx-acc-h', h('span.fx-acc-t', { text: 'Advanced training techniques' })), h('div.fx-acc-b',
-      h('div.fx-info', { text: 'All opt-in: left at 0 / 1 they reproduce the exact recipe above.' }),
-      F().row3(slider('Network dropout', f, 'network_dropout', 0, 0.5, 0.05, 'drops a fraction of LoRA neurons each step', saveForm), slider('Caption dropout rate', f, 'caption_dropout_rate', 0, 0.5, 0.05, '', saveForm), slider('LR restarts (cosine_with_restarts)', f, 'lr_scheduler_num_cycles', 1, 6, 1, '', saveForm)),
+    const adv = h('details.fx-acc.lt-acc', h('summary.fx-acc-h', h('span.fx-acc-t', { text: 'Techniques avancées' })), h('div.fx-acc-b',
+      h('div.fx-info', { text: 'Toutes facultatives : laissées à 0 / 1, elles reproduisent exactement la recette ci-dessus.' }),
+      F().row3(slider('Network dropout', f, 'network_dropout', 0, 0.5, 0.05, 'éteint une part des neurones du LoRA à chaque étape', saveForm), slider('Caption dropout rate', f, 'caption_dropout_rate', 0, 0.5, 0.05, '', saveForm), slider('Redémarrages du taux (cosine_with_restarts)', f, 'lr_scheduler_num_cycles', 1, 6, 1, '', saveForm)),
       row2(slider('Rank dropout', f, 'rank_dropout', 0, 0.5, 0.05, '', saveForm), slider('Module dropout', f, 'module_dropout', 0, 0.5, 0.05, '', saveForm))));
-    const paths = h('details.fx-acc.lt-acc', h('summary.fx-acc-h', h('span.fx-acc-t', { text: 'Model paths (auto-detected)' })), h('div.fx-acc-b', row2(field('Qwen3 text encoder', qwen), field('Qwen-Image VAE', vae))));
-    const settings = h('div.fx-panel.lt-card', h('div.fx-h', { text: 'Training settings' }),
-      h('div.lt-grid4', text('Trigger word', f, 'trigger', { rows: 1, placeholder: 'mystyle', tip: 'the token you put in a prompt to summon the style; also the output filename', onInput: saveForm }),
-        slider('Training steps', f, 'steps', 100, 4000, 100, 'only used if Epochs is 0', saveForm), slider('Epochs', f, 'epochs', 0, 40, 1, '0 = off. Else: exact steps from images x repeats', saveForm),
-        slider('Repeats per image', f, 'repeats', 1, 60, 1, 'images x this = 1 epoch', saveForm)),
-      h('div.fx-info', { text: 'Epochs, when set above 0, adapts automatically to how many images the project has (sd-scripts computes the exact step count from images x repeats) and overrides Training steps.' }),
-      h('div.lt-grid4', select('Training resolution', I.resolutions.map(r => [String(r), String(r)]), { get v() { return String(f.resolution); }, set v(x) { f.resolution = +x; saveForm(); } }, 'v', 'ANIMA works at 1024; drop to 768 only if it runs out of VRAM'),
-        slider('Network dim / alpha', f, 'dim', 4, 128, 4, '', saveForm), field('Learning rate', lr),
-        select('Optimizer', Object.entries(I.optimizers), f, 'optimizer', '', saveForm)),
-      h('div.lt-grid3', select('Trainable modules', Object.entries(I.scopes).map(([k, v]) => [k, v.label]), f, 'scope', 'which parts of the DiT the LoRA may touch at all', v => { scopeHint.innerHTML = F().md(`**${I.scopes[v].summary}** · ${I.scopes[v].hint}`); saveForm(); }),
-        check('Resolution ladder', f, 'multires', `train over ${I.fewshot_resolutions.join(' / ')}px instead of one size`, saveForm),
-        check('Mirror images', f, 'flip_aug', 'a second view of every image for free. Wrong for a subject with a deliberate asymmetry', saveForm)),
+    const paths = h('details.fx-acc.lt-acc', h('summary.fx-acc-h', h('span.fx-acc-t', { text: 'Chemins des modèles (détectés)' })), h('div.fx-acc-b', row2(field('Encodeur de texte Qwen3', qwen), field('VAE Qwen-Image', vae))));
+    const settings = h('div.fx-panel.lt-card', h('div.fx-h', { text: 'Réglages de l’entraînement' }),
+      h('div.lt-grid4', text('Mot déclencheur', f, 'trigger', { rows: 1, placeholder: 'monstyle', tip: 'le mot à écrire dans l’invite pour appeler le LoRA ; aussi le nom du fichier créé', onInput: saveForm }),
+        slider('Étapes', f, 'steps', 100, 4000, 100, 'utilisé seulement si Époques vaut 0', saveForm), slider('Époques', f, 'epochs', 0, 40, 1, '0 = désactivé. Sinon : nombre d’étapes exact = images × répétitions', saveForm),
+        slider('Répétitions par image', f, 'repeats', 1, 60, 1, 'images × cette valeur = 1 époque', saveForm)),
+      h('div.fx-info', { text: 'Au-dessus de 0, Époques s’adapte au nombre d’images du projet (sd-scripts calcule le nombre d’étapes exact : images × répétitions) et remplace Étapes.' }),
+      h('div.lt-grid4', select('Résolution d’entraînement', I.resolutions.map(r => [String(r), String(r)]), { get v() { return String(f.resolution); }, set v(x) { f.resolution = +x; saveForm(); } }, 'v', 'ANIMA travaille en 1024 ; ne descendez à 768 que si la VRAM manque'),
+        slider('Dimension / alpha du réseau', f, 'dim', 4, 128, 4, '', saveForm), field('Taux d’apprentissage', lr),
+        select('Optimiseur', Object.entries(I.optimizers), f, 'optimizer', '', saveForm)),
+      h('div.lt-grid3', select('Modules entraînés', Object.entries(I.scopes).map(([k, v]) => [k, v.label]), f, 'scope', 'les parties du modèle que le LoRA a le droit de modifier', v => { scopeHint.innerHTML = F().md(`**${I.scopes[v].summary}** · ${I.scopes[v].hint}`); saveForm(); }),
+        check('Plusieurs résolutions', f, 'multires', `entraîne en ${I.fewshot_resolutions.join(' / ')} px au lieu d’une seule taille`, saveForm),
+        check('Images en miroir', f, 'flip_aug', 'une seconde vue de chaque image, gratuitement. À éviter pour un sujet volontairement asymétrique', saveForm)),
       scopeHint, adv,
       select('Modèle de base pour l\'entraînement', I.dits.map(d => [d.path, d.name + (d.kind === 'base' ? ' (Base, conseillé)' : d.kind === 'tuned' ? ' (affiné)' : '')]), f, 'base_model', 'Pour Anima : la version Base (la LoRA marchera ensuite sur Aesthetic et Turbo)', v => { const d = I.dits.find(x => x.path === v); ditNote.textContent = d ? d.note : ''; saveForm(); }),
       ditNote, paths);
@@ -365,18 +365,18 @@
       results.append(h('div.fx-lbl', { text: 'LoRA produits' }));
       for (const ck of run.checkpoints.slice().reverse()) {
         const stem = ck.split(/[\\/]/).pop().replace(/\.safetensors$/i, '');
-        results.append(h('div.lt-ck', h('span', { text: stem }), tbtn('Essayer dans txt2img', () => KS.studioApi && KS.studioApi.addToPrompt(`<lora:${stem}:1>` + (f.trigger ? ' ' + f.trigger : '')), '.sm', 'Ajoute le LoRA et son déclencheur à l\'invite de txt2img')));
+        results.append(h('div.lt-ck', h('span', { text: stem }), tbtn('Essayer dans Créer', () => KS.studioApi && KS.studioApi.addToPrompt(`<lora:${stem}:1>` + (f.trigger ? ' ' + f.trigger : '')), '.sm', 'Ajoute le LoRA et son déclencheur à l\'invite de Créer')));
       }
       results.append(tbtn('Ouvrir le dossier', () => N.openFolder(run.output.replace(/[\\/][^\\/]+$/, '')), '.sm'));
     }
     const samples = run && (run.samples || []).length ? h('div.lt-samples', ...run.samples.slice(-8).map(s => img(s, 220))) : null;
     const train = h('div.fx-panel.lt-card',
-      row2(slider('Preview every N steps', f, 'sample_every', 0, 1000, 50, '0 disables; previews land next to the LoRA so you can tell early whether it is working', saveForm),
-        text('Preview prompt', f, 'sample_prompt', { rows: 1, placeholder: 'defaults to the trigger word alone', onInput: saveForm })),
-      h('div.lt-row', check('Free VRAM before training', freeFirst, 'v', 'sd-scripts loads its own copy of the weights; whatever Forge still holds is taken away from training', v => { S.freeFirst = v; }),
-        tbtn('Free VRAM now', async () => { try { msg('vram', await freeVram()); } catch (e) { msg('vram', '⚠️ ' + e.message); } })),
+      row2(slider('Aperçu toutes les N étapes', f, 'sample_every', 0, 1000, 50, '0 = aucun ; les aperçus sont rangés à côté du LoRA, pour voir tôt s’il fonctionne', saveForm),
+        text('Invite des aperçus', f, 'sample_prompt', { rows: 1, placeholder: 'par défaut : le mot déclencheur seul', onInput: saveForm })),
+      h('div.lt-row', check('Libérer la VRAM avant l’entraînement', freeFirst, 'v', 'sd-scripts charge sa propre copie du modèle ; ce que Forge garde en mémoire est retiré à l’entraînement', v => { S.freeFirst = v; }),
+        tbtn('Libérer la VRAM maintenant', async () => { try { msg('vram', await freeVram()); } catch (e) { msg('vram', '⚠️ ' + e.message); } })),
       msgBox('vram'),
-      h('div.lt-row.lt-go', tbtn(running ? 'Training…' : 'Start training', () => start(), '.primary.lt-start'), tbtn('Stop', () => stop()), tbtn('Actualiser', () => refreshAll())),
+      h('div.lt-row.lt-go', tbtn(running ? 'Entraînement en cours…' : 'Lancer l’entraînement', () => start(), '.primary.lt-start'), tbtn('Arrêter', () => stop()), tbtn('Actualiser', () => refreshAll())),
       h('div.lt-row', check('Éteindre le PC quand l\'entraînement est terminé', power, 'v', '2 min après la fin, réussi ou en échec ; pas si vous l\'arrêtez vous-même. KaneApp doit rester ouvert.', v => { S.power = v; msg('power', v ? '⏻ Le PC s\'éteindra 2 minutes après la fin de l\'entraînement (réussi ou en échec). Pas d\'extinction si vous l\'arrêtez vous-même.' : 'Le PC restera allumé à la fin de l\'entraînement.'); }),
         tbtn('Annuler l\'extinction', async () => { S.power = false; await N.loraShutdown(false); msg('power', 'Extinction annulée : le PC restera allumé.'); render(); })),
       msgBox('power'),
@@ -386,8 +386,8 @@
       samples, results);
     train.addEventListener('contextmenu', e => { if (e.target.closest('input, textarea, select')) return; e.preventDefault(); contextMenu(e.clientX, e.clientY); });
     train.title = 'Clic droit : arrêter / relancer l\'entraînement';
-    const intro = h('div.fx-panel.lt-intro', { html: '<b>Train an ANIMA LoRA</b> with kohya-ss/sd-scripts, on the recipe read from a working reference LoRA, resized for the type you pick and for how many images you gave it.<br>Import images → caption them → pick a preset or set your own numbers → train. The result is loaded like any other LoRA in txt2img / img2img.' + (I.sd_scripts ? '' : '<br><b>sd-scripts (avec ANIMA) est introuvable à côté du dossier de Forge.</b>') + (I.tagger ? '' : '<br>Légendes automatiques indisponibles : ' + (I.tagger_error || '')) });
-    intro.append(h('div.lt-row', tbtn('Actualiser', () => refreshAll()), h('span.fx-note', { text: 'Recharge les projets et l’état de l’entraînement, et libère un entraînement bloqué : à utiliser si « Start training » ne repart pas.' })));
+    const intro = h('div.fx-panel.lt-intro', { html: '<b>Entraîner un LoRA ANIMA</b> avec kohya-ss/sd-scripts, d’après la recette d’un LoRA de référence qui fonctionne, adaptée au type choisi et au nombre d’images.<br>Importer les images → les légender → choisir un préréglage ou régler soi-même → entraîner. Le résultat s’utilise comme tout autre LoRA dans Créer et Transformer.' + (I.sd_scripts ? '' : '<br><b>sd-scripts (avec ANIMA) est introuvable à côté du dossier de Forge.</b>') + (I.tagger ? '' : '<br>Légendes automatiques indisponibles : ' + (I.tagger_error || '')) });
+    intro.append(h('div.lt-row', tbtn('Actualiser', () => refreshAll()), h('span.fx-note', { text: 'Recharge les projets et l’état de l’entraînement, et libère un entraînement bloqué : à utiliser si « Lancer l’entraînement » ne repart pas.' })));
     // deux colonnes sur grand écran : données à gauche (projet, preset, légendes), réglages et entraînement à droite
     const colL = h('div.lt-col'), colR = h('div.lt-col');
     colL.append(...[project, on ? preset : null, on ? captions : null].filter(Boolean));
@@ -410,7 +410,7 @@
         if (!S.run) { try { const st = (await call('status')).status; if (st && st.running) { S.run = st; S.msgs.train = st.text; startPoll(); } } catch { /* rien */ } }
         const want = S.cur || KS.prefs.loraProject || '';
         if (want && S.projects.some(p => p.name === want)) await openProject(want); else render();
-      } catch (e) { el.replaceChildren(h('div.fx-panel', h('div.fx-note', { text: 'Train LoRA : ' + e.message }), KS.fxui.tbtn('Réessayer', () => KS.trainTab.render(el)))); }
+      } catch (e) { el.replaceChildren(h('div.fx-panel', h('div.fx-note', { text: 'Atelier LoRA : ' + e.message }), KS.fxui.tbtn('Réessayer', () => KS.trainTab.render(el)))); }
     },
     // nom du projet qui s'entraîne, sinon '' (les générations attendent sa fin, comme dans Forge)
     async running() {

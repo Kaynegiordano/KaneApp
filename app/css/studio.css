@@ -227,6 +227,20 @@
 .fx-srcfoot .fx-btn2.sm { height: 30px; border-radius: 8px; }
 .fx-i2i-stage > .fx-stage { min-height: 0; }
 
+/* ------------------------------------------------------------ place réduite (tiroir ouvert, Transformer) : tout reste sur une ligne */
+.fx-v3 .fx-stage { container: fxstage / inline-size; }
+.fx-v3 .fx-dock { container: fxdock / inline-size; }
+@container fxstage (max-width: 1060px) {
+  .fx-output-actions .fx-abtn:not(.primary) { padding: 0 9px; }
+  .fx-output-actions .fx-abtn:not(.primary) > span { display: none; }
+}
+@container fxdock (max-width: 1220px) {
+  .fx-dock > .fx-composer { grid-template-columns: minmax(0, 1fr) 112px; }
+  .fx-pill[data-id="kd"], .fx-pill[data-id="hires"], .fx-pill[data-id="neg"], .fx-pill[data-id="drawer"] { padding: 0 9px; }
+  .fx-pill[data-id="kd"] > span:last-child, .fx-pill[data-id="hires"] > span:last-child, .fx-pill[data-id="neg"] > span:last-child, .fx-pill[data-id="drawer"] > span:last-child { display: none; }
+  .fx-pill[data-id="model"] { max-width: 170px; }
+}
+
 /* ------------------------------------------------------------ fenêtres étroites */
 @media (max-width: 1550px) {
   .fx-drawer { width: 340px; }

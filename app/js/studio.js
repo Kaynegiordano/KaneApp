@@ -391,7 +391,7 @@
   function dock(composer) {
     const d = h('div.fx-dock', composer);
     const sync = () => { if (!composer.querySelector('textarea:focus') && composer.offsetHeight) d.style.height = (composer.offsetHeight + 26) + 'px'; };
-    new ResizeObserver(sync).observe(composer);
+    new ResizeObserver(() => requestAnimationFrame(sync)).observe(composer);
     composer.addEventListener('focusout', () => setTimeout(sync, 0));
     return d;
   }
@@ -1258,7 +1258,7 @@
     const setPv = async c => { preview = await pngBytes(c); pv.replaceChildren(h('img', { src: c.toDataURL('image/png'), alt: '' })); };
     const it = selItem('t2i');
     const pvBtns = h('div.fx-outbtns',
-      tbtn('Image sélectionnée du txt2img', () => it ? setPv(it.canvas) : KS.toast('Aucune image générée', 'info'), '', 'Comme « Replace preview » de Forge'),
+      tbtn('Image sélectionnée dans Créer', () => it ? setPv(it.canvas) : KS.toast('Aucune image générée', 'info'), '', 'Comme « Replace preview » de Forge'),
       tbtn('Image du document', () => D() ? setPv(D().composite()) : KS.toast('Aucun document ouvert', 'info')),
       tbtn('Choisir…', async () => { const files = await N.openDialog({ title: 'Aperçu du LoRA', multi: false, filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }] }); if (files && files[0]) setPv(await KS.io.canvasFromEntry(files[0])); }));
     const body = h('div.fx.fx-meta',
@@ -1291,7 +1291,7 @@
   /* ---------------------------------------------------------------- source img2img et outils du Studio */
   const I2I_MODES = [['img2img', 'img2img'], ['sketch', 'Sketch'], ['inpaint', 'Inpaint'], ['inpaint_sketch', 'Inpaint sketch'], ['inpaint_upload', 'Inpaint upload'], ['batch', 'Batch']];
   const I2I_HELP = {
-    img2img: 'Toute l\'image (les calques visibles du document) est refaite selon l\'invite. Denoising Strength règle l\'écart à l\'original.',
+    img2img: 'Toute l\'image (les calques visibles du document) est refaite selon l\'invite. La force règle l\'écart à l\'original.',
     sketch: 'Peignez des formes et des couleurs sur le calque « Croquis IA » : l\'image, croquis compris, est refaite selon l\'invite.',
     inpaint: 'Peignez en rouge sur le calque « Zone IA » ce qui doit changer (ou faites une sélection), décrivez le résultat, Generate : le reste ne bouge pas.',
     inpaint_sketch: 'Peignez en couleur ce qui doit changer : seule la partie peinte est refaite, en partant de vos couleurs.',
@@ -1385,10 +1385,10 @@
       { head: 'Envoyer une copie du document' },
       { label: 'Envoyer vers Img2Img — transformer l’image', icon: 'image', action: () => C.sendToStudio('img2img') },
       { label: 'Envoyer vers Inpaint — retoucher une zone', icon: 'brush', action: () => C.sendToStudio('inpaint') },
-      { label: 'Agrandir dans Extras', icon: 'upscale', action: () => C.sendToStudio('extras') },
+      { label: 'Agrandir (onglet Agrandir)', icon: 'upscale', action: () => C.sendToStudio('extras') },
       { label: 'Lire les paramètres dans PNG Info', icon: 'info', action: () => C.sendToStudio('pnginfo') },
-      { label: 'Agrandir avec Hires dans txt2img', icon: 'file-plus', action: () => C.sendToStudio('txt2img') },
-      { label: 'Réutiliser les réglages dans txt2img', icon: 'history', action: () => C.sendToStudio('params'), disabled: !(D() && (D().genInfo || D().genParams)) },
+      { label: 'Agrandir avec le hires fix (Créer)', icon: 'file-plus', action: () => C.sendToStudio('txt2img') },
+      { label: 'Réutiliser les réglages dans Créer', icon: 'history', action: () => C.sendToStudio('params'), disabled: !(D() && (D().genInfo || D().genParams)) },
     ], r.left, r.bottom + 4);
   }
 
@@ -1681,7 +1681,7 @@
         key === 't2i' ? { label: 'Refaire avec un autre modèle…', icon: 'compare', action: () => remakeWithModel(it), disabled: !it.info || !!BUSY } : null,
         { label: 'Voir les zones (Kane Detailer)', icon: 'grid', action: () => detectItem(key, it) },
         { sep: true },
-        key !== 'ex' ? { label: 'Agrandir dans Extras', icon: 'upscale', action: () => sendTo('extras', it) } : null,
+        key !== 'ex' ? { label: 'Agrandir (onglet Agrandir)', icon: 'upscale', action: () => sendTo('extras', it) } : null,
         key === 't2i' ? { label: 'Agrandir avec le hires fix', icon: 'maximize', action: () => upscaleHires(it) } : key === 'i2i' ? { label: 'Agrandir avec le hires fix (Créer)', icon: 'maximize', action: () => C.sendToStudioItem(it) } : null,
         { sep: true },
         { label: 'Tout enregistrer…', icon: 'export', action: () => saveAll(items), disabled: items.length < 2 },
@@ -1752,7 +1752,7 @@
         board.style.gridTemplateColumns = `repeat(${best.cols}, minmax(0, 1fr))`;
         board.style.gridTemplateRows = `repeat(${best.rows}, minmax(0, 1fr))`;
       };
-      new ResizeObserver(fit).observe(board);
+      fit(); new ResizeObserver(() => requestAnimationFrame(fit)).observe(board);
     } else if (it) {
       main = h('div.fx-view');
       const im = h('img', { src: it.url, alt: '' });
@@ -1952,7 +1952,7 @@
   async function trainingRuns() {
     if (!KS.trainTab || !KS.trainTab.running) return false;
     const r = await KS.trainTab.running();
-    if (r) KS.toast('Un entraînement LoRA est en cours (' + r + ') : la carte graphique est prise. Attendez sa fin ou arrêtez-le dans Train LoRA.', 'info', 6000);
+    if (r) KS.toast('Un entraînement LoRA est en cours (' + r + ') : la carte graphique est prise. Attendez sa fin ou arrêtez-le dans l’onglet Lora.', 'info', 6000);
     return !!r;
   }
   async function generate(k) {
@@ -2068,21 +2068,21 @@
     };
     if (src) KS.preview.mount(zone, zone.firstElementChild, { identity: src, width: src.canvas.width, height: src.canvas.height }); else zone.addEventListener('click', pick);
     dropTo(zone, async f => { OUT.exSrc = { canvas: await KS.io.canvasFromEntry(f), name: f.name }; render(); });
-    const srcBtns = h('div.fx-outbtns', tbtn('Importer une image…', pick), tbtn('Image du document (Édition)', () => { if (!d) return KS.toast('Aucun document ouvert', 'info'); OUT.exSrc = { canvas: d.composite(), name: d.name }; render(); }),
+    const srcBtns = h('div.fx-outbtns', tbtn('Importer une image…', pick), tbtn('Depuis Retouche', () => { if (!d) return KS.toast('Aucun document ouvert', 'info'); OUT.exSrc = { canvas: d.composite(), name: d.name }; render(); }),
       src ? h('span.fx-info', { text: `${src.name} · ${src.canvas.width} × ${src.canvas.height}` }) : null);
     const ups = ['None', ...(cat ? cat.upscalers : [])];
-    const sizeTabs = tabs([['by', 'Scale by'], ['to', 'Scale to']], ex.mode, v => { ex.mode = v; save(); render(); }, '.fx-subtabs');
+    const sizeTabs = tabs([['by', 'Par facteur'], ['to', 'Taille précise']], ex.mode, v => { ex.mode = v; save(); render(); }, '.fx-subtabs');
     const sizeBody = ex.mode === 'to'
-      ? h('div.fx-col', row2(slider('Width', ex, 'w', 64, 8192, 8), slider('Height', ex, 'h', 64, 8192, 8)), check('Crop to fit', ex, 'crop'))
-      : h('div.fx-col', slider('Resize', ex, 'resize', 1, 8, 0.05), src ? h('div.fx-info', { text: `${src.canvas.width}x${src.canvas.height} → ${Math.round(src.canvas.width * ex.resize)}x${Math.round(src.canvas.height * ex.resize)}` }) : null);
+      ? h('div.fx-col', row2(slider('Largeur', ex, 'w', 64, 8192, 8), slider('Hauteur', ex, 'h', 64, 8192, 8)), check('Recadrer pour remplir', ex, 'crop'))
+      : h('div.fx-col', slider('Agrandissement (×)', ex, 'resize', 1, 8, 0.05), src ? h('div.fx-info', { text: `${src.canvas.width} × ${src.canvas.height} → ${Math.round(src.canvas.width * ex.resize)} × ${Math.round(src.canvas.height * ex.resize)}` }) : null);
     const left = h('div.fx-left',
-      tabs([['single', 'Single Image'], ['batch', 'Batch Process']], ex.batch ? 'batch' : 'single', v => { ex.batch = v === 'batch'; save(); render(); }),
+      tabs([['single', 'Une image'], ['batch', 'Plusieurs images']], ex.batch ? 'batch' : 'single', v => { ex.batch = v === 'batch'; save(); render(); }),
       ex.batch
         ? h('div.fx-panel', tbtn('Choisir des images…', async () => { const files = await N.openDialog({ title: 'Images à agrandir', multi: true, filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp'] }] }); if (files && files.length) { OUT.exBatch = files; render(); } }, '.primary'),
           h('div.fx-info', { text: OUT.exBatch && OUT.exBatch.length ? OUT.exBatch.length + ' image(s) : ' + OUT.exBatch.map(f => f.name).slice(0, 5).join(', ') : 'Aucune image choisie' }))
         : h('div.fx-panel', zone, srcBtns),
-      h('div.fx-panel', h('div.fx-acc.open.active', h('div.fx-acc-h', h('span.fx-acc-t', { text: 'Upscale' })), h('div.fx-acc-b', sizeTabs, sizeBody,
-        row2(select('Upscaler 1', ups, ex, 'up1'), select('Upscaler 2', ups, ex, 'up2')), slider('Upscaler 2 visibility', ex, 'vis2', 0, 1, 0.001)))));
+      h('div.fx-panel', h('div.fx-acc.open.active', h('div.fx-acc-h', h('span.fx-acc-t', { text: 'Agrandissement' })), h('div.fx-acc-b', sizeTabs, sizeBody,
+        row2(select('Modèle d’agrandissement', ups, ex, 'up1'), select('Second modèle (mélange)', ups, ex, 'up2')), slider('Part du second modèle', ex, 'vis2', 0, 1, 0.001)))));
     els.exGen = h('div.fx-genbox');
     els.exOut = h('div.fx-exout');
     const wrap = h('div.fx-gen', h('div.fx-cols', left, h('div.fx-out', els.exGen, els.exOut)));
@@ -2104,7 +2104,7 @@
     else if (it) KS.preview.mount(view, h('img', { src: it.url, alt: '' }), { identity: it, width: it.canvas.width, height: it.canvas.height, clickOpen: true });
     else view.append(h('div.fx-ph', { html: KS.icon('upscale') }));
     const thumbs = o.items.length > 1 ? h('div.fx-thumbs', ...o.items.map((x, i) => { const t = h('img' + (i === o.sel ? '.on' : ''), { src: x.url, alt: '' }); t.addEventListener('click', () => { o.sel = i; renderExOut(); }); return t; })) : null;
-    fillEl(box, view, thumbs, outButtons('ex', it), it ? h('div.fx-outinfo', { text: `${it.canvas.width} × ${it.canvas.height}` + (it.info ? '\n' + it.info : '') + (o.time ? `\nTime taken: ${o.time}` : '') }) : null);
+    fillEl(box, view, thumbs, outButtons('ex', it), it ? h('div.fx-outinfo', { text: `${it.canvas.width} × ${it.canvas.height}` + (it.info ? '\n' + it.info : '') + (o.time ? `\nDurée : ${o.time}` : '') }) : null);
   }
   const stamp = () => { const t = new Date(), p = n => String(n).padStart(2, '0'); return `${t.getFullYear()}${p(t.getMonth() + 1)}${p(t.getDate())}-${p(t.getHours())}${p(t.getMinutes())}${p(t.getSeconds())}`; };
   async function runExtras() {
@@ -2163,12 +2163,12 @@
     };
     if (!o) zone.addEventListener('click', pick);
     dropTo(zone, loadPng);
-    const fromDoc = tbtn('Image du document (Édition)', () => { if (!d) return KS.toast('Aucun document ouvert', 'info'); OUT.png = { canvas: d.composite(), name: d.name, text: d.genInfo || '', chunks: d.genInfo ? { parameters: d.genInfo } : {} }; render(); });
+    const fromDoc = tbtn('Depuis Retouche', () => { if (!d) return KS.toast('Aucun document ouvert', 'info'); OUT.png = { canvas: d.composite(), name: d.name, text: d.genInfo || '', chunks: d.genInfo ? { parameters: d.genInfo } : {} }; render(); });
     const it = o && { canvas: o.canvas, info: o.text, bytes: o.bytes };
     const others = o ? Object.entries(o.chunks).filter(([k2]) => k2 !== 'parameters') : [];
     const right = h('div.fx-out',
       h('div.fx-outinfo.fx-pnginfo', { text: o ? (o.text || 'Aucun paramètre de génération dans cette image.') + others.map(([k2, v]) => `\n\n${k2}:\n${v}`).join('') : 'Les paramètres de génération de l\'image (Prompt, Negative prompt, Steps, Sampler…) apparaîtront ici.' }),
-      h('div.fx-outbtns', ...[['txt2img', 'Réutiliser les réglages dans txt2img'], ['img2img', 'Envoyer vers Img2Img'], ['inpaint', 'Envoyer vers Inpaint'], ['extras', 'Agrandir dans Extras']].map(([t, l]) => {
+      h('div.fx-outbtns', ...[['txt2img', 'Réutiliser les réglages dans Créer'], ['img2img', 'Envoyer vers Img2Img'], ['inpaint', 'Envoyer vers Inpaint'], ['extras', 'Agrandir']].map(([t, l]) => {
         const b = tbtn(l, () => { if (!o) return; if (t === 'txt2img' && !o.text) return KS.toast('Aucun paramètre à envoyer', 'info'); sendTo(t, it); }); b.disabled = !o; return b;
       }), o && o.text ? tbtn('Copier', () => { navigator.clipboard.writeText(o.text); KS.toast('Copié', 'ok', 900); }) : null));
     return h('div.fx-gen', h('div.fx-cols', h('div.fx-left', h('div.fx-panel', zone, h('div.fx-outbtns', tbtn('Importer une image…', pick), fromDoc))), right));
@@ -2217,7 +2217,7 @@
           { label: 'Ajouter comme calque', icon: 'layers', action: use(addAsLayer), disabled: !D() },
           { label: 'Envoyer vers Img2Img', icon: 'image', action: use(x2 => sendTo('img2img', x2)) },
           { label: 'Envoyer vers Inpaint', icon: 'brush', action: use(x2 => sendTo('inpaint', x2)) },
-          { label: 'Réutiliser ces réglages (txt2img)', icon: 'history', action: () => sendTo('txt2img', it), disabled: !it.info },
+          { label: 'Réutiliser ces réglages (Créer)', icon: 'history', action: () => sendTo('txt2img', it), disabled: !it.info },
           { label: 'Copier l’image', icon: 'copy', action: () => it.blob ? KS.preview.copy(it.blob) : KS.preview.copy(it.canvas) },
         ], x, y);
       };
