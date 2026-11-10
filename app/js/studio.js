@@ -2436,7 +2436,8 @@
     send.addEventListener('click', () => sendMenu(send));
     KS.on('doc', () => { send.disabled = !D(); });
     box.prepend(send, sw);
-    if (KS.prefs.studio) setTimeout(() => C.toggleStudio(true), 300);
+    // au lancement : Projet par défaut ; le Studio ne rouvre que si c'est l'écran choisi dans les Préférences
+    if (KS.prefs.startPage === 'studio' && !D()) setTimeout(() => C.toggleStudio(true), 300);
   });
   // l'état du moteur est relu toutes les 15 s : seuls le voyant et la colonne bougent (jamais l'invite en cours de frappe)
   KS.on('engine', E => {

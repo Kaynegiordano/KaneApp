@@ -421,7 +421,7 @@
       if (S.project.name === 'Mon atelier') S.project = await call('rename', { name: 'KaneApp' });
       KS.prefs.suiteProject = S.project.id; KS.prefs.save(); S.selected = S.project.items[0]?.id;
       render(); resolveReady();
-      if (!KS.state.doc && !KS.prefs.studio && KS.prefs.startPage !== 'edit') await S.home();
+      if (!KS.state.doc && !KS.studio?.on && (KS.prefs.startPage || 'project') === 'project') await S.home();
     } catch (err) { resolveReady(); KS.toast('Projet indisponible : ' + err.message, 'err', 8000); }
   }, 0));
 })();

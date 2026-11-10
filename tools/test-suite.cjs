@@ -283,6 +283,20 @@ app.whenReady().then(async () => {
       console.log('OK Mise en page Projet à ' + width + ' px');
       if (process.env.KANEVAS_TEST_SCREENSHOT) fs.writeFileSync(process.env.KANEVAS_TEST_SCREENSHOT.replace('.png', '-' + width + '.png'), (await win.webContents.capturePage()).toPNG());
     }
+    // Écran d'ouverture : Projet par défaut, même quand KaneApp a été quitté dans le Studio IA ; sinon l'écran choisi
+    const screenAfterRestart = async prefs => {
+      await win.webContents.executeJavaScript(`(()=>{const p=JSON.parse(localStorage.getItem('kanevas.prefs')||'{}');Object.assign(p,${JSON.stringify(prefs)});localStorage.setItem('kanevas.prefs',JSON.stringify(p));})()`);
+      await win.loadFile(path.join(root, 'app', 'index.html'));
+      await win.webContents.executeJavaScript('KS.suite.ready');
+      await new Promise(r => setTimeout(r, 900));
+      return win.webContents.executeJavaScript(`document.body.classList.contains('suite-home') ? 'project' : KS.studio.on ? 'studio' : 'edit'`);
+    };
+    assert.equal(await screenAfterRestart({ studio: true, startPage: 'project' }), 'project');
+    console.log('OK Quitté dans le Studio IA, KaneApp rouvre sur Projet');
+    assert.equal(await screenAfterRestart({ studio: false, startPage: 'studio' }), 'studio');
+    assert.equal(await screenAfterRestart({ studio: true, startPage: 'edit' }), 'edit');
+    assert.equal(await screenAfterRestart({ studio: false, startPage: 'project' }), 'project');
+    console.log('OK Préférences › Écran au lancement : Studio IA et Retouche respectés');
     if (errors.length) throw new Error(errors.join('\n'));
     console.log('Profil de test : ' + tmp); app.exit(0);
   } catch (e) { console.error(e); console.error(errors.join('\n')); console.log('Profil : ' + tmp); app.exit(1); }

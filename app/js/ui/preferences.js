@@ -36,7 +36,7 @@
   const spaceColor = () => KS.appearance.controls();
 
   // Général
-  add({ tab: 'general', group: 'Démarrage', key: 'startPage', def: 'project', label: 'Écran au lancement', desc: 'Ce que KaneApp affiche à l’ouverture, quand aucun document n’est repris.', type: 'seg', opts: [['project', 'Projet'], ['edit', 'Retouche']] });
+  add({ tab: 'general', group: 'Démarrage', key: 'startPage', def: 'project', label: 'Écran au lancement', desc: 'Ce que KaneApp affiche à l’ouverture, quand aucun document n’est repris.', type: 'seg', opts: [['project', 'Projet'], ['edit', 'Retouche'], ['studio', 'Studio IA']] });
   on('general', 'Protection du travail', 'autoRecovery', 'Sauvegardes de secours automatiques', 'Copies locales séparées du projet, après 5 secondes d’inactivité puis à intervalle régulier. La récupération est proposée au lancement.', true, { after: () => KS.recovery?.configure() });
   add({ tab: 'general', group: 'Protection du travail', key: 'recoveryInterval', def: 30, label: 'Intervalle de secours', type: 'seg', num: true, opts: [['15', '15 s'], ['30', '30 s'], ['60', '1 min'], ['120', '2 min']], after: () => KS.recovery?.configure() });
   add({ tab: 'general', group: 'Retouche', key: 'historySize', def: 60, label: 'États d’historique', desc: 'Nombre d’étapes que l’on peut annuler. Plus il est élevé, plus la mémoire est sollicitée.', type: 'scrub', min: 5, max: 300 });

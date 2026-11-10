@@ -18,7 +18,7 @@ for (const dir of ['KaneShop', 'Kanevas']) {
 const imgs = (process.env.SHOT_IMAGES || '').split(';').filter(Boolean).map(f => fs.readFileSync(f).toString('base64'));
 const preload = path.join(tmp, 'preload.cjs');
 fs.writeFileSync(preload, `
-localStorage.setItem('kanevas.prefs', JSON.stringify({ studio: true, kanevasPalette: true, theme: ${JSON.stringify(process.env.SHOT_THEME || 'dark')}, fx: { v: 1, tab: 'txt2img' } }));
+localStorage.setItem('kanevas.prefs', JSON.stringify({ studio: true, startPage: 'studio', kanevasPalette: true, theme: ${JSON.stringify(process.env.SHOT_THEME || 'dark')}, fx: { v: 1, tab: 'txt2img' } }));
 const CAT = ${JSON.stringify(catalog)};
 const IMGS = ${JSON.stringify(imgs)};
 const png = (() => { const c = document.createElement('canvas'); return c; })();
