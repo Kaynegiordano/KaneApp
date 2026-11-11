@@ -1038,6 +1038,14 @@ body.studio .ws-to-studio { display: none; }
 .lt-samples { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
 .lt-samples img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; }
 .lt-results { display: flex; flex-direction: column; gap: 6px; }
+.lt-epochs { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.lt-ep { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
+.lt-ep.final { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.lt-ep.before { opacity: .85; }
+.lt-ep-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.lt-ep-h .fx-info { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lt-ep-imgs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.lt-ep-imgs img { width: 100%; aspect-ratio: 832 / 1216; object-fit: cover; border-radius: 8px; cursor: zoom-in; }
 .lt-results:empty { display: none; }
 .lt-ck { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 8px; font: 12px var(--mono); }
 .gp-studio { gap: 8px; }

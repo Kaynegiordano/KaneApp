@@ -158,9 +158,9 @@
       await call('save', { name: S.cur, patch });
       const r = await busy('train', 'Préparation du jeu de données et démarrage de sd-scripts…', () => call('start', { name: S.cur, dit: f.base_model, qwen3: S.qwen3 || S.info.qwen3, vae: S.vae || S.info.vae, sample_every: f.sample_every, sample_prompt: f.sample_prompt }));
       const hh = Math.floor(r.estimate_s / 3600), mm = Math.floor(r.estimate_s % 3600 / 60);
-      S.msgs.train = `Started (pid ${r.pid}). ${r.count} image(s) x ${f.repeats} repeats${r.resolutions.length > 1 ? ` x ${r.resolutions.length} resolutions` : ''} = ${r.per_epoch} per epoch, `
-        + `${+f.epochs > 0 ? f.epochs + ' epochs' : f.steps + ' steps set directly'} = ${r.total} steps total at ${r.resolutions.map(x => x + 'px').join(' x ')}, dim/alpha ${f.dim}, `
-        + `${f.optimizer === 'prodigy' ? 'lr adaptive' : 'lr ' + (+f.learning_rate).toPrecision(2)}.\n\nBudget roughly **${hh}h${String(mm).padStart(2, '0')}**. The result lands in \`${r.output}\`.\n\n`
+      S.msgs.train = `Démarré (pid ${r.pid}). ${r.count} image(s) × ${f.repeats} répétitions${r.resolutions.length > 1 ? ` × ${r.resolutions.length} résolutions` : ''} = ${r.per_epoch} pas par époque, `
+        + `${+f.epochs > 0 ? f.epochs + ' époques' : f.steps + ' pas fixés à la main'} = ${r.total} pas en ${r.resolutions.map(x => x + ' px').join(' × ')}, dimension ${f.dim}, `
+        + `${f.optimizer === 'prodigy' ? 'taux adaptatif' : 'taux ' + (+f.learning_rate).toPrecision(2)}.\n\nDurée estimée : **${hh} h ${String(mm).padStart(2, '0')}**. Dans vos invites : **${r.token || f.trigger}**. Le résultat arrive dans \`${r.output}\`.\n\n`
         + 'KaneApp attendra la fin de cet entraînement pour les nouvelles générations.' + note;
       S.run = { run: r.run, project: S.cur, running: true, state: 'running', pct: 0, text: S.msgs.train, checkpoints: [], samples: [] };
       startPoll(); render();
@@ -361,18 +361,44 @@
     const run = S.run, running = !!(run && run.running);
     const freeFirst = { v: S.freeFirst !== false }, power = { v: S.power };
     const results = h('div.lt-results');
-    if (run && !running && (run.checkpoints || []).length) {
+    const token = run && run.token || f.trigger || '';
+    const eps = run && run.epochs || [];
+    if (eps.length || (run && (run.before || []).length)) {
+      // Choisir l'époque : la dernière n'est pas toujours la meilleure. Mêmes images (même graine) d'une sauvegarde à l'autre.
+      results.append(h('div.fx-lbl', { text: running ? 'Versions déjà sauvegardées (les suivantes arrivent)' : 'Choisissez la version à garder' }),
+        h('div.fx-info', { text: 'Mêmes invites et même graine à chaque sauvegarde : comparez, puis gardez celle où le style est là sans abîmer le reste. Dans vos invites : ' + (token || 'le déclencheur') + '.' }));
+      const grid = h('div.lt-epochs');
+      if ((run.before || []).length) grid.append(h('div.lt-ep.before', h('div.lt-ep-h', h('b', { text: 'Sans le LoRA' }), h('span.fx-info', { text: 'référence' })), h('div.lt-ep-imgs', ...run.before.map(s => img(s, 260)))));
+      for (const c of eps.slice().reverse()) {
+        const tryIt = tbtn('Essayer', () => KS.studioApi && KS.studioApi.addToPrompt(`<lora:${c.name}:1>` + (token ? ' ' + token : '')), '.sm', 'Ajoute cette version et son déclencheur à l\'invite de Créer');
+        const keep = tbtn('Garder cette version', async () => {
+          try {
+            const r = await call('install', { path: c.path, name: (f.trigger || c.name).replace(/^@/, ''), token, weight: 1, preview: c.samples[c.samples.length - 1] || '',
+              notes: `KaneApp, ${c.final ? 'dernière époque' : 'époque ' + c.epoch}, préréglage ${f.lora_type || 'style'}` });
+            KS.toast(`LoRA installé : ${r.name} — poids conseillé 1`, 'ok', 5000);
+            KS.studioApi?.reloadCat?.();
+          } catch (e) { KS.toast('Installation impossible : ' + e.message, 'err', 6000); }
+        }, '.primary.sm', 'Copie cette version dans vos LoRA (dossier Anima), avec sa fiche et son image');
+        grid.append(h('div.lt-ep' + (c.final ? '.final' : ''),
+          h('div.lt-ep-h', h('b', { text: c.final ? `Époque ${c.epoch} · finale` : `Époque ${c.epoch}` }), h('span.fx-info', { text: c.name })),
+          c.samples.length ? h('div.lt-ep-imgs', ...c.samples.map(s => img(s, 260))) : h('div.fx-info', { text: 'Pas d’image d’aperçu pour cette version.' }),
+          h('div.lt-row', tryIt, keep)));
+      }
+      results.append(grid);
+      if (run.output) results.append(tbtn('Ouvrir le dossier', () => N.openFolder(run.output.replace(/[\\/][^\\/]+$/, '')), '.sm'));
+    } else if (run && !running && (run.checkpoints || []).length) {
       results.append(h('div.fx-lbl', { text: 'LoRA produits' }));
       for (const ck of run.checkpoints.slice().reverse()) {
         const stem = ck.split(/[\\/]/).pop().replace(/\.safetensors$/i, '');
-        results.append(h('div.lt-ck', h('span', { text: stem }), tbtn('Essayer dans Créer', () => KS.studioApi && KS.studioApi.addToPrompt(`<lora:${stem}:1>` + (f.trigger ? ' ' + f.trigger : '')), '.sm', 'Ajoute le LoRA et son déclencheur à l\'invite de Créer')));
+        results.append(h('div.lt-ck', h('span', { text: stem }), tbtn('Essayer dans Créer', () => KS.studioApi && KS.studioApi.addToPrompt(`<lora:${stem}:1>` + (token ? ' ' + token : '')), '.sm', 'Ajoute le LoRA et son déclencheur à l\'invite de Créer')));
       }
       results.append(tbtn('Ouvrir le dossier', () => N.openFolder(run.output.replace(/[\\/][^\\/]+$/, '')), '.sm'));
     }
-    const samples = run && (run.samples || []).length ? h('div.lt-samples', ...run.samples.slice(-8).map(s => img(s, 220))) : null;
+    const samples = !eps.length && run && (run.samples || []).length ? h('div.lt-samples', ...run.samples.slice(-8).map(s => img(s, 220))) : null;
     const train = h('div.fx-panel.lt-card',
-      row2(slider('Aperçu toutes les N étapes', f, 'sample_every', 0, 1000, 50, '0 = aucun ; les aperçus sont rangés à côté du LoRA, pour voir tôt s’il fonctionne', saveForm),
-        text('Invite des aperçus', f, 'sample_prompt', { rows: 1, placeholder: 'par défaut : le mot déclencheur seul', onInput: saveForm })),
+      row2(check('Images d’aperçu à chaque sauvegarde', { get v() { return +f.sample_every > 0; }, set v(x) { f.sample_every = x ? 250 : 0; } }, 'v',
+          'Deux images (une scène du jeu d’images, une nouvelle) avant l’entraînement puis à chaque version sauvegardée, même graine : pour choisir la meilleure époque', saveForm),
+        text('Invite des aperçus', f, 'sample_prompt', { rows: 1, placeholder: 'automatique : tirée de vos légendes, plus une scène nouvelle', onInput: saveForm })),
       h('div.lt-row', check('Libérer la VRAM avant l’entraînement', freeFirst, 'v', 'sd-scripts charge sa propre copie du modèle ; ce que Forge garde en mémoire est retiré à l’entraînement', v => { S.freeFirst = v; }),
         tbtn('Libérer la VRAM maintenant', async () => { try { msg('vram', await freeVram()); } catch (e) { msg('vram', '⚠️ ' + e.message); } })),
       msgBox('vram'),

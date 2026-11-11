@@ -1,11 +1,8 @@
-# 1.28.0 — Retouche : encore plus de Photoshop
+# 1.29.0 — Atelier Lora : plus rapide, mieux réglé
 
-- **Clic droit avec un pinceau, la gomme, Suppression…** : le sélecteur de forme s'ouvre sous le curseur. Il propose la taille, la dureté, six formes rondes (de dure à douce) et six tailles courantes. « Autres actions… » ouvre le menu habituel ; Maj + clic droit l'ouvre directement.
-- **Alt + clic sur la vignette d'un masque** : le masque s'affiche seul, en noir et blanc, et vous pouvez le peindre. Alt + clic à nouveau pour revenir à l'image.
-- **Chiffres = opacité du calque** quand l'outil n'a pas d'opacité (Déplacement, sélections…) : 5 = 50 %, 3 puis 5 vite = 35 %, 0 = 100 %. Ctrl+Z l'annule.
-- **Ctrl+H** : masque les fourmis de la sélection, la grille et les repères (la sélection reste active).
-- **Maj+Tab** : masque les panneaux de droite et garde les outils.
-- **F** : passe d'un mode d'écran à l'autre. Il y en a trois : standard, plein écran avec menus, image seule. Échap revient au standard.
-- **Maj + Retour arrière** : ouvre Remplir…
-- **Double-clic sur l'icône Main** : taille écran ; **sur la Loupe** : 100 %.
-- Aide (F1) mise à jour.
+- **Des LoRA justes au poids 1** : tous les LoRA entraînés ici s'utilisaient à 0,2–0,35, signe d'une recette environ trois fois trop forte. Le taux d'apprentissage est divisé par deux environ (comme le conseille la fiche d'ANIMA) et le nombre de passages par image baisse de 40 %. Essai sur votre style n1x3u (24 images) : **24 minutes au lieu de 41**, image propre au poids 1.
+- **Légendes dans l'ordre d'ANIMA** : note de contenu (safe, sensitive, nsfw, explicit), nombre de personnages, personnages, déclencheur, puis le reste. La note est ajoutée aux anciennes légendes quand vous appliquez le préréglage, sans toucher au reste.
+- **« @nom » pour les styles** (Style, Technique, Peinture numérique) : ANIMA reconnaît un artiste à son « @ ». Écrivez par exemple **@n1x3u** dans vos invites.
+- **Une version par époque, à comparer** : deux images d'aperçu (une scène de votre jeu d'images, une scène nouvelle) avant l'entraînement puis à chaque sauvegarde, même graine. Chaque époque a sa carte avec **Essayer** et **Garder cette version**, qui l'installe dans vos LoRA avec sa fiche (déclencheur, poids 1) et son image, sans jamais écraser un fichier.
+- **Anciens projets** : un message signale les réglages calculés avec l'ancienne recette ; « Appliquer le préréglage » les recalcule.
+- Préréglages et messages de l'atelier en français.

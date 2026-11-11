@@ -27,7 +27,8 @@ window.ksNative = {
       resolutions: [512,1024], optimizers: { adamw8bit: 'AdamW' }, dits: [], fewshot_resolutions: [512,1024], sd_scripts: 'C:/training', tagger: true };
     if (cmd === 'list') return { ok: true, projects: window.loraImages.length ? [{ name: 'Import-test', count: window.loraImages.length }] : [] };
     if (cmd === 'import') { window.loraImages.push(...args.paths.map(p => ({file: p.split('/').pop(),path:p}))); return {ok:true,name:'Import-test',added:args.paths.length,count:window.loraImages.length}; }
-    if (cmd === 'load') return { ok:true,manifest:{},images:window.loraImages,runs:[] };
+    if (cmd === 'load') return { ok:true,manifest:{ trigger: 'n1x3u', lora_type: 'style' },images:window.loraImages,runs:window.loraRun ? [window.loraRun] : [] };
+    if (cmd === 'install') { (window.loraInstalls ||= []).push(args); return { ok: true, installed: 'C:/Lora/Anima/' + args.name + '.safetensors', name: args.name }; }
     return {ok:true,status:null};
   },
   forgeStatus: async () => { if (window.holdStatus) await new Promise(resolve => { window.releaseStatus = resolve; }); return { ok: true }; },
@@ -562,6 +563,18 @@ async function scenario() {
   window.dispatchEvent(new DragEvent('drop', { dataTransfer:loraDrop, bubbles:true, cancelable:true }));
   await new Promise(r => setTimeout(r,100));
   assert(KS.state.docs.length === beforeLoraDocs, 'Un dépôt ailleurs dans le Studio ne passe pas implicitement dans Edition');
+  // Atelier Lora : une carte par époque (images d'aperçu), « Garder cette version » installe avec le déclencheur @
+  window.loraRun = { run: 'C:/runs/r1', project: 'Import-test', running: false, state: 'done', pct: 100, text: 'Terminé', output: 'C:/out/n1x3u.safetensors', token: '@n1x3u',
+    checkpoints: ['C:/out/n1x3u-000002.safetensors', 'C:/out/n1x3u.safetensors'], samples: [], before: ['C:/out/sample/n1x3u_000000_00_1.png'],
+    epochs: [{ epoch: 2, path: 'C:/out/n1x3u-000002.safetensors', name: 'n1x3u-000002', final: false, samples: ['C:/out/sample/n1x3u_e000002_00_1.png', 'C:/out/sample/n1x3u_e000002_01_1.png'] },
+      { epoch: 4, path: 'C:/out/n1x3u.safetensors', name: 'n1x3u', final: true, samples: ['C:/out/sample/n1x3u_e000004_00_1.png'] }] };
+  KS.trainTab.invalidate(); await wait(() => document.querySelectorAll('.lt-ep').length === 3);
+  const eps = [...document.querySelectorAll('.lt-ep')];
+  assert(eps.length === 3 && eps[0].classList.contains('before') && eps[1].classList.contains('final') && eps[2].querySelectorAll('.lt-ep-imgs img').length === 2, 'Lora : référence sans LoRA, puis une carte par époque (la finale en premier) avec ses images');
+  [...eps[2].querySelectorAll('button')].find(b => b.textContent === 'Garder cette version').click();
+  await wait(() => window.loraInstalls?.length === 1);
+  assert(window.loraInstalls[0].path.endsWith('n1x3u-000002.safetensors') && window.loraInstalls[0].token === '@n1x3u' && window.loraInstalls[0].weight === 1 && window.loraInstalls[0].preview.includes('e000002_01'), 'Garder une époque l’installe avec @n1x3u, poids 1 et son image');
+  window.loraRun = null; KS.trainTab.invalidate();
   await KS.cmd.openStudioTab('txt2img');
   // Chercher / remplacer, nettoyer et historique des invites
   const pta = document.querySelector('.fx-prompts textarea.fx-prompt'), fbar = document.querySelector('.fx-prompts .kf-bar');

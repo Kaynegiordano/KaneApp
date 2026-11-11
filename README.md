@@ -20,6 +20,16 @@ et les trois copies ICO utilisées par la fenêtre, les raccourcis et l'installa
 dix tailles de 16 à 256 pixels ; le symbole reste transparent et indépendant du thème de l'interface.
 
 ## Outils récents
+### Atelier Lora recalibré (1.29.0)
+
+- **Constat** : les 19 LoRA entraînés par l'atelier avaient tous un poids conseillé de 0,2 à 0,35 (fiches `.json`), contre 0,85 pour les LoRA de la communauté. La recette (taux 1e-4, ~70 passages par image) était environ 3 fois trop forte ; la fiche d'ANIMA conseille 2e-5 pour un rang 32.
+- **Recette** (`forge_lora_trainer/lib_trainer/presets.py`, fork Forge `perso-anima`) : taux ×0,5 environ (bande 1e-5…6e-5), passages ×0,6. Style, 24 images : 4,7e-5 et 44 passages au lieu de 9,5e-5 et 70.
+- **Légendes** (`caption.py`) : ordre d'ANIMA `[sécurité] [compte] [personnages] [déclencheur] [reste]`, note de contenu tirée du classement WD14, `@nom` pour Style / Technique / Peinture. Plus de mélange de légendes : l'encodeur de texte reste en cache (1,39 s/pas contre 1,48, mesuré).
+- **Mesures de vitesse** (RTX 5080, 1024 px) : sans gradient checkpointing, la mémoire déborde (45 s/pas) ; un lot de 4 ne gagne rien par image (1,56 s) ; seul le cache de l'encodeur aide. Le gain vient surtout du nombre de passages.
+- **Aperçus par époque** : `--sample_every_n_epochs` + `--sample_at_first`, deux invites (une légende « safe » du jeu, une scène nouvelle), 832×1216, CFG 4. `lora_bridge.epoch_cards()` relie `<nom>-<époque>.safetensors` et `<nom>_e<époque>_…png` ; `cmd_install` copie la version choisie dans `Lora/Anima` (suffixe `_2` plutôt qu'écraser) avec fiche et image.
+- **Anciens projets** : `recipe` < 2 → message à l'ouverture ; « Appliquer le préréglage » recalcule et ajoute la note de contenu (`caption.add_safety`).
+- **Tests** : `tools/test-lora-bridge.py` (Python du Studio, 14 vérifications, dossier temporaire) et `test-studio.cjs` (cartes d'époque, installation).
+
 ### Studio IA 3 : l'image d'abord (1.26.0)
 
 Après la 1.24 (« tout est trop serré, on ne voit pas si l'image est réussie sans cliquer »), le Studio est repensé autour de l'image.
@@ -606,3 +616,4 @@ Maintenir Alt + bouton droit dans la zone de travail : glisser horizontalement p
 - **1.27.0** : Retouche à la Photoshop : Alt + clic gauche glissé = taille / dureté (clic simple = pipette), Ctrl + Alt + clic droit glissé = opacité / flux, Maj + Alt + clic droit = sélecteur de couleur au curseur (`brush-gesture.js`), opacité à deux chiffres, outils à ressort (`T.spring`), vue d'ensemble H, Alt + [ ] calques, Maj + / − modes de fusion, bulle `G.flash`. Test : `tools/test-retouche.cjs` (vrais événements souris / clavier, 19 vérifications).
 - **1.27.1** : geste de taille pour tous les outils à empreinte (`brushGesture.sizeable` : taille + curseur rond, au lieu d'une liste figée qui oubliait Suppression et le pinceau de réglage) ; Alt + clic gauche glissé pour les outils sans pipette (un Alt + clic simple est rejoué tel quel : source du tampon) ; `altPaints` pour les outils qui peignent avec Alt.
 - **1.28.0** : sélecteur de forme au clic droit (`brushGesture.picker`), masque seul (`doc.maskView`, Alt+clic vignette), chiffres = opacité du calque (`C.layerOpacityKey`), Ctrl+H (`V.hideExtras`), Maj+Tab (`no-dock`), F modes d'écran (`C.screenMode`), Maj+Retour arrière = Remplir, double-clic Main / Loupe. test-retouche : 37 vérifications.
+- **1.29.0** : atelier Lora recalibré (LoRA justes au poids 1, ~40 % plus court), légendes dans l'ordre d'ANIMA avec note de contenu et `@nom` pour les styles, aperçus et carte par époque avec « Garder cette version ».

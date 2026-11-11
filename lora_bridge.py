@@ -80,12 +80,13 @@ def run_state(run_file: Path) -> dict:
     if info["state"] == "error" and code == 0 and not (output and output.is_file()):
         info = {"state": "done", "pct": 100, "text": "Entraînement terminé (le fichier final a été déplacé ou renommé depuis)."}
     out_dir = output.parent if output else None
-    ckpts, samples = [], []
+    ckpts, samples, epochs = [], [], []
     if out_dir and out_dir.is_dir():
         ckpts = [str(p) for p in sorted(out_dir.glob("*.safetensors"), key=lambda p: p.stat().st_mtime)]
         sdir = out_dir / "sample"
-        if sdir.is_dir():
-            samples = [str(p) for p in sorted(sdir.glob("*.png"), key=lambda p: p.stat().st_mtime)][-12:]
+        pngs = sorted(sdir.glob("*.png"), key=lambda p: p.stat().st_mtime) if sdir.is_dir() else []
+        samples = [str(p) for p in pngs][-12:]
+        epochs = epoch_cards(out_dir, output, pngs, data)
     tail = ""
     if log.is_file():
         try:
@@ -96,7 +97,29 @@ def run_state(run_file: Path) -> dict:
     return {"run": str(run_file.parent), "id": data.get("id"), "project": data.get("project"), "pid": pid,
             "running": running, "state": info["state"], "pct": info["pct"], "text": info["text"],
             "output": str(output) if output else "", "checkpoints": ckpts, "samples": samples, "tail": tail,
-            "started_at": data.get("started_at")}
+            "started_at": data.get("started_at"), "epochs": epochs, "token": data.get("token") or "",
+            "before": [str(p) for p in pngs if re.search(r"_000000_\d{2}_", p.name)] if out_dir and out_dir.is_dir() else []}
+
+
+def epoch_cards(out_dir: Path, output: Path | None, pngs: list, data: dict) -> list[dict]:
+    """Une carte par sauvegarde : le fichier de l'époque et les images d'aperçu faites avec lui.
+
+    sd-scripts nomme les sauvegardes <nom>-<époque:06d>.safetensors (la dernière : <nom>.safetensors) et les
+    aperçus <nom>_e<époque:06d>_<n>_<date>.png : le numéro d'époque relie les deux.
+    """
+    by_epoch: dict[int, list[str]] = {}
+    for p in pngs:
+        m = re.search(r"_e(\d{6})_\d{2}_", p.name)
+        if m:
+            by_epoch.setdefault(int(m.group(1)), []).append(str(p))
+    cards = []
+    total = int((data.get("settings") or {}).get("epochs") or 0)
+    for f in sorted(out_dir.glob("*.safetensors")):
+        m = re.search(r"-(\d{6})$", f.stem)
+        ep = int(m.group(1)) if m else (total or (max(by_epoch) if by_epoch else 0))
+        cards.append({"epoch": ep, "path": str(f), "name": f.stem, "final": not m, "samples": by_epoch.get(ep, [])})
+    cards.sort(key=lambda c: (c["epoch"], c["final"]))
+    return cards
 
 
 def effective_captions(name: str, threshold: float) -> tuple[dict, list]:
@@ -116,7 +139,7 @@ def effective_captions(name: str, threshold: float) -> tuple[dict, list]:
 
 EDITABLE = {"trigger", "steps", "epochs", "repeats", "resolution", "dim", "learning_rate", "threshold", "shuffle_caption",
             "network_dropout", "caption_dropout_rate", "lr_scheduler_num_cycles", "optimizer", "base_model", "scope",
-            "rank_dropout", "module_dropout", "flip_aug", "multires", "lora_type", "captions", "sample_prompt", "sample_every"}
+            "rank_dropout", "module_dropout", "flip_aug", "multires", "lora_type", "captions", "sample_prompt", "sample_every", "recipe"}
 
 
 # --------------------------------------------------------------------------- commandes
@@ -201,7 +224,16 @@ def cmd_load(a):
         except Exception:
             pass
     note = LIB.presets.fewshot_note(m.get("lora_type", "style"), len(images)) if images else ""
+    if images and m.get("lora_type") and int(m.get("recipe") or 1) < RECIPE:
+        old = f"taux {float(m.get('learning_rate') or 0):.2g}, {int(m.get('repeats') or 0)} répétitions" if m.get("learning_rate") else "anciens réglages"
+        note = ("**Réglages calculés avec l'ancienne recette** (" + old + ") : elle donnait des LoRA environ trois fois trop forts, "
+                "qu'il fallait utiliser à 0,3. Cliquez **Appliquer le préréglage** pour les recalculer (plus court, prévu pour un poids de 1).") + ("\n\n" + note if note else "")
     return {"manifest": m, "images": images, "dir": str(s.dir_for(name)), "runs": runs, "note": note}
+
+
+# Version des réglages calculés par les préréglages : 2 = recette recalibrée de KaneApp 1.29 (taux et passages plus bas,
+# légendes dans l'ordre d'ANIMA, @déclencheur pour les styles). Un projet plus ancien est signalé à l'ouverture.
+RECIPE = 2
 
 
 def cmd_save(a):
@@ -282,28 +314,39 @@ def cmd_preset(a):
     except Exception as exc:
         print(f"[Kanevas] légendes automatiques indisponibles : {exc}")
         caps = s.load(name).get("captions", {})
+    try:
+        caps, rated = LIB.caption.add_safety(images, caps)      # anciennes légendes : la note de contenu d'ANIMA en tête
+    except Exception as exc:
+        print(f"[Kanevas] note de contenu indisponible : {exc}")
+        rated = 0
     r = p.apply(kind, len(images), caps)
     multires = len(r["resolutions"]) > 1
     m = s.load(name)
     m.update(steps=r["steps"], epochs=r["epochs"], dim=r["dim"], repeats=r["repeats"], learning_rate=r["learning_rate"],
              resolution=r["resolution"], shuffle_caption=r["shuffle_caption"], lora_type=kind, captions=r["captions"],
              rank_dropout=r["rank_dropout"], module_dropout=r["module_dropout"], flip_aug=r["flip_aug"], multires=multires,
-             caption_dropout_rate=r["caption_dropout_rate"])
+             caption_dropout_rate=r["caption_dropout_rate"], recipe=RECIPE)
     s.save(name, m)
     note = p.fewshot_note(kind, len(images))
     where = " x ".join(f"{x}px" for x in r["resolutions"]) if multires else f"{r['resolution']}px"
-    status = (f"**{p.PRESETS[kind]['label']}** preset, sized for {len(images)} image(s): dim/alpha {r['dim']}, "
-              f"learning rate {r['learning_rate']:.2g}, {r['repeats']} repeats x {r['epochs']} epochs = {r['steps']} steps "
-              f"at {where} ({r['passes_per_image']} passes over each image).")
+    pace = LIB.train.DEFAULT_PACE * 0.94   # encodeur de texte en cache : mesuré 1,39 s/pas contre 1,48
+    status = (f"Préréglage **{p.PRESETS[kind]['label']}** pour {len(images)} image(s) : dimension {r['dim']}, "
+              f"taux {r['learning_rate']:.2g}, {r['repeats']} répétitions × {r['epochs']} époques = {r['steps']} pas "
+              f"en {where} ({r['passes_per_image']} passages par image), environ {max(1, round(r['steps'] * pace / 60))} min.")
     if r["few_shot"]:
-        status += f" Dropout {r['rank_dropout']:.2f}{', mirrored' if r['flip_aug'] else ''}."
+        status += f" Dropout {r['rank_dropout']:.2f}{', images en miroir' if r['flip_aug'] else ''}."
     elif r["caption_dropout_rate"]:
-        status += f" Caption dropout {r['caption_dropout_rate']:.2f}."
+        status += f" Légendes retirées au hasard : {r['caption_dropout_rate']:.0%}."
+    token = LIB.caption.trigger_token(m.get("trigger") or "nom", kind)
+    if token.startswith("@"):
+        status += f" Dans vos invites, écrivez **{token}** (le « @ » des noms d'artiste d'ANIMA)."
+    if rated:
+        status += f" Note de contenu ANIMA (safe, sensitive, nsfw, explicit) ajoutée à {rated} légende(s)."
     if note:
         status += "\n\n" + note
     if r["removed_tags"]:
-        more = "" if len(r["removed_tags"]) <= 12 else f" (+{len(r['removed_tags']) - 12} more)"
-        status += "\n\nRemoved from captions so they bind to the trigger instead: " + ", ".join(r["removed_tags"][:12]) + more
+        more = "" if len(r["removed_tags"]) <= 12 else f" (+{len(r['removed_tags']) - 12} autres)"
+        status += "\n\nRetirés des légendes pour se lier au déclencheur : " + ", ".join(r["removed_tags"][:12]) + more
     return {"manifest": m, "removed_tags": r["removed_tags"], "passes": r["passes_per_image"],
             "resolutions": r["resolutions"], "note": note, "status": status}
 
@@ -340,16 +383,21 @@ def cmd_start(a):
     prev_log = Path(m["last_run_log"]) if m.get("last_run_log") else root / "train.log"
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:8]
     work = root / "runs" / run_id
-    subset, count = t.build_dataset(name, trigger, caps, repeats, work / "dataset")
+    kind = m.get("lora_type") or "style"
+    token = LIB.caption.trigger_token(trigger, kind)
+    subset, count = t.build_dataset(name, trigger, caps, repeats, work / "dataset", kind=kind)
     resolutions = list(p.FEWSHOT_RESOLUTIONS) if multires else [resolution]
+    # Légendes dans l'ordre d'ANIMA, jamais mélangées : l'ordre a un sens pour le modèle, et des légendes fixes
+    # permettent de garder l'encodeur de texte en cache (environ 12 % plus rapide, mesuré sur une RTX 5080).
     toml = t.write_dataset_toml(subset, resolution, 1, repeats, work / "dataset.toml",
-                                shuffle=bool(m.get("shuffle_caption")), caption_dropout_rate=float(m.get("caption_dropout_rate", 0)),
+                                shuffle=False, caption_dropout_rate=float(m.get("caption_dropout_rate", 0)),
                                 resolutions=resolutions, flip_aug=bool(m.get("flip_aug")))
     sample_every = int(a.get("sample_every", m.get("sample_every", 250)) or 0)
+    save_every = 1 if len(images) <= p.FEWSHOT_MAX else 2
     sample_file = None
     if sample_every > 0:
-        text = (a.get("sample_prompt") or m.get("sample_prompt") or "").strip() or trigger
-        sample_file = t.write_sample_prompts(text, resolution, work / "sample_prompts.txt")
+        sample_file = t.write_sample_prompts(sample_prompts(m, caps, token, kind, a.get("sample_prompt")), resolution,
+                                             work / "sample_prompts.txt")
     per_epoch = max(1, count * repeats * len(resolutions))
     total = epochs * per_epoch if epochs > 0 else int(m.get("steps") or 2000)
     out_dir = (Path(a["output_dir"]) if a.get("output_dir") else LIB.lora_dir / "forge-mine") / s.sanitize(name) / run_id
@@ -362,15 +410,15 @@ def cmd_start(a):
                   "optimizer": m.get("optimizer") if m.get("optimizer") in t.OPTIMIZERS else "adamw8bit",
                   "lr_warmup_steps": min(100, max(1, total // 20)), "network_dropout": float(m.get("network_dropout") or 0),
                   "lr_scheduler_num_cycles": int(m.get("lr_scheduler_num_cycles") or 1),
-                  "save_every_n_epochs": 1 if len(images) <= p.FEWSHOT_MAX else 2},
-        sample_prompts=sample_file, sample_every=sample_every, shuffle_caption=bool(m.get("shuffle_caption")), scope=scope,
+                  "save_every_n_epochs": save_every},
+        sample_prompts=sample_file, sample_every_epochs=save_every if sample_file else 0, shuffle_caption=False, scope=scope,
         rank_dropout=float(m.get("rank_dropout") or 0), module_dropout=float(m.get("module_dropout") or 0))
     log = work / "train.log"
     pace = t.measured_pace(prev_log) or t.DEFAULT_PACE
     (work / "command.txt").write_text("\n".join(command), encoding="utf-8")
     record = {"id": run_id, "project": name, "started_at": datetime.now(timezone.utc).isoformat(), "settings": m,
               "command": command, "output": str(out_dir / f"{trigger}.safetensors"), "stopped": False, "pid": None,
-              "launched_by": "kanevas"}
+              "launched_by": "kanevas", "token": token, "kind": kind}
     s.atomic_json(work / "run.json", record)
     proc = t.launch(command, cwd=sd, log_path=log)
     record["pid"] = proc.pid
@@ -378,7 +426,68 @@ def cmd_start(a):
     m["last_run_log"] = str(log)
     s.save(name, m)
     return {"pid": proc.pid, "run": str(work), "total": total, "per_epoch": per_epoch, "resolutions": resolutions,
-            "estimate_s": int(total * pace), "output": record["output"], "count": count}
+            "estimate_s": int(total * pace), "output": record["output"], "count": count, "token": token}
+
+
+# Deux images d'aperçu par sauvegarde : une scène tirée du jeu d'images, une autre qui n'y est pas.
+# La première dit si le LoRA a appris ; la seconde s'il sait faire autre chose que recopier ses images.
+NEW_SCENE = {
+    "style": "1girl, solo, {t}, upper body, looking at viewer, smile, outdoors, cherry blossoms, wind, day",
+    "character": "1girl, solo, {t}, full body, standing, city street, night, neon lights",
+    "concept": "1girl, solo, {t}, holding, indoors, table, window, day",
+    "clothing": "1girl, solo, {t}, cowboy shot, standing, park, day",
+    "background": "no humans, {t}, scenery, wide shot, day",
+}
+
+
+UNSAFE = {"nude", "completely nude", "nipples", "pussy", "penis", "sex", "nsfw", "explicit", "topless", "bottomless", "naked"}
+
+
+def sample_prompts(m: dict, caps: dict, token: str, kind: str, asked: str | None) -> list[str]:
+    asked = (asked or m.get("sample_prompt") or "").strip()
+    if asked:
+        return [asked if token.lstrip("@") in asked else f"{token}, {asked}"]
+    cap = LIB.caption
+    # seulement des légendes « safe » (ou sans note et sans tag explicite) : l'aperçu s'affiche dans l'atelier
+    def tags_of(c):
+        return {t.strip().lower() for t in c.split(",")}
+    known = [c for c in caps.values() if c and ("safe" in tags_of(c) or not (tags_of(c) & (cap.SAFETY_TAGS | UNSAFE)))]
+    first = ""
+    if known:
+        # la légende la plus « moyenne » du jeu : ni la plus courte ni la plus longue
+        known.sort(key=lambda c: len(c.split(",")))
+        tags = cap.anima_order(known[len(known) // 2], token).split(", ")
+        first = ", ".join(tags[:24])
+        if not tags_of(first) & cap.SAFETY_TAGS:
+            first = "safe, " + first
+    scene = NEW_SCENE.get(kind, NEW_SCENE["style"] if kind in cap.ARTIST_LIKE or kind in ("lighting", "weather", "effects", "composition") else "1girl, solo, {t}, upper body, outdoors, day")
+    safety = "safe, "
+    return [p for p in (first, safety + scene.format(t=token)) if p]
+
+
+def cmd_install(a):
+    """« Garder cette version » : copie une sauvegarde dans les LoRA (sous-dossier Anima s'il existe), avec sa fiche.
+
+    Ne remplace jamais un fichier existant : un suffixe _2, _3… est ajouté.
+    """
+    import shutil
+    src = Path(a["path"])
+    if not src.is_file() or src.suffix.lower() != ".safetensors":
+        raise ValueError("Fichier de LoRA introuvable : " + str(src))
+    base = LIB.lora_dir / "Anima" if (LIB.lora_dir / "Anima").is_dir() else LIB.lora_dir
+    stem = LIB.store.sanitize(a.get("name") or src.stem).replace(" ", "_") or "lora"
+    dest, n = base / f"{stem}.safetensors", 2
+    while dest.exists() or dest.with_suffix(".json").exists():
+        dest, n = base / f"{stem}_{n}.safetensors", n + 1
+    shutil.copyfile(src, dest)
+    token = (a.get("token") or "").strip()
+    sidecar = {"description": a.get("description") or "", "sd version": "Unknown", "activation text": token,
+               "preferred weight": float(a.get("weight") or 1.0), "negative text": "", "notes": a.get("notes") or ""}
+    dest.with_suffix(".json").write_text(json.dumps(sidecar, ensure_ascii=False, indent=4), encoding="utf-8")
+    preview = Path(a["preview"]) if a.get("preview") else None
+    if preview and preview.is_file():
+        shutil.copyfile(preview, dest.with_suffix(".png"))
+    return {"installed": str(dest), "name": dest.stem}
 
 
 def cmd_status(a):
