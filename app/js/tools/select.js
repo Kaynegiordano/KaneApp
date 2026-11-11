@@ -401,7 +401,7 @@
 
   /* ---------------------------------------------------------------- sélection rapide */
   T.register({
-    id: 'quick-select', name: 'Sélection rapide', icon: 'quick-select', shortcut: 'W', cursor: 'none',
+    id: 'quick-select', name: 'Sélection rapide', icon: 'quick-select', shortcut: 'W', cursor: 'none', altPaints: true,
     defaults: { size: 30, all: true, mode: 'add', tolerance: 26 },
     options: () => [
       { type: 'seg', id: 'mode', options: [['new', 'marquee-rect', 'Nouvelle'], ['add', 'plus', 'Ajouter (Maj)'], ['sub', 'minus', 'Soustraire (Alt)']] },

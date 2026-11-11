@@ -129,6 +129,27 @@ app.whenReady().then(async () => {
     await key('H', 'up');
     const v1 = await js(`({ z: KS.view.zoom, ox: KS.view.ox, oy: KS.view.oy, tool: KS.tools.current.id })`);
     check(zoomDuring < v0.z / 2 && v1.z === v0.z && (v1.ox !== v0.ox || v1.oy !== v0.oy) && v1.tool === 'brush', `Vue d’ensemble : zoom ${v0.z} → ${zoomDuring.toFixed(2)} pendant l’appui → ${v1.z}, vue déplacée, retour au pinceau`);
+    // 11. Tous les outils qui ont une taille : Alt + clic gauche glissé et Alt + clic droit glissé
+    await js(`KS.view.setZoom(1); KS.view.center()`); await pause(100);
+    const ids = await js(`Object.values(KS.tools.byId).filter(t => KS.tools.brushGesture.sizeable(t) && !t.hidden).map(t => t.id)`);
+    check(['eraser', 'remove', 'clone', 'heal-spot', 'dodge', 'blur', 'adjust-brush'].every(id => ids.includes(id)), 'Outils à taille reconnus : ' + ids.join(', '));
+    for (const id of ids) {
+      const size = () => js(`KS.tools.byId[${JSON.stringify(id)}].o.size`);
+      await js(`KS.tools.select(${JSON.stringify(id)}); KS.tools.byId[${JSON.stringify(id)}].o.size = 40`); await pause(40);
+      const h0 = await js('KS.state.doc.history.items.length'), altPaints = await js(`!!KS.tools.byId[${JSON.stringify(id)}].altPaints`);
+      await drag(c.x, c.y, c.x - 30, c.y, { button: 'right', modifiers: ['alt'] });
+      const sRight = await size();
+      await js(`KS.tools.byId[${JSON.stringify(id)}].o.size = 40`);
+      let sLeft = 40;
+      if (!altPaints) { await drag(c.x, c.y, c.x + 60, c.y, { modifiers: ['alt'] }); sLeft = await size(); }
+      const h1 = await js('KS.state.doc.history.items.length');
+      check(sRight < 40 && (altPaints || sLeft > 40) && h1 === h0, `${id} : Alt + clic droit glissé 40 → ${sRight} px` + (altPaints ? ' (Alt + clic gauche garde son rôle : peindre en retirant)' : `, Alt + clic gauche glissé 40 → ${sLeft} px`) + ', document intact');
+    }
+    await js(`KS.tools.select('clone'); KS.tools.byId.clone.src = null`);
+    send({ type: 'mouseMove', x: c.x, y: c.y, modifiers: ['alt'] });
+    send({ type: 'mouseDown', x: c.x, y: c.y, button: 'left', clickCount: 1, modifiers: ['alt'] }); await pause(30);
+    send({ type: 'mouseUp', x: c.x, y: c.y, button: 'left', clickCount: 1, modifiers: ['alt'] }); await pause(60);
+    check(await js(`!!KS.tools.byId.clone.src`), 'Tampon : Alt + clic sans bouger définit toujours la source');
     const visibleErrors = errors.filter(e => !/favicon|ResizeObserver/.test(e));
     check(!visibleErrors.length, 'Aucune erreur dans la console' + (visibleErrors.length ? ' : ' + visibleErrors.slice(0, 3).join(' | ') : ''));
     if (process.env.RETOUCHE_SHOT) {

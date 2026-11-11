@@ -282,7 +282,9 @@
       T.temp = t !== T.current ? t : null;
       drag = { tool: t, id: e.pointerId, last: ev };
       // Alt + clic : pipette ; Alt + clic glissé : taille / dureté du pinceau (la couleur prise est rendue)
-      if (t.id === 'eyedropper' && T.temp && T.brushGesture?.compatible.has(T.current.id)) drag.altFrom = { x: e.clientX, y: e.clientY };
+      if (t.id === 'eyedropper' && T.temp && T.brushGesture?.altLeft(T.current)) drag.altFrom = { x: e.clientX, y: e.clientY };
+      // outils sans pipette (gomme, Suppression, correcteur, tampon…) : on attend de savoir si c'est un clic (geste de l'outil) ou un glissé (taille)
+      else if (e.button === 0 && ev.alt && !ev.shift && !ev.ctrl && t === T.current && T.brushGesture?.altLeft(t)) { drag.altFrom = { x: e.clientX, y: e.clientY }; drag.pending = ev; KS.requestRender(); return; }
       t.down && t.down(ev, doc);
       KS.requestRender();
     });
@@ -297,12 +299,12 @@
       if (drag && drag.guide) { T.moveGuideDrag(doc, ev); return; }
       if (drag && drag.altFrom && Math.hypot(e.clientX - drag.altFrom.x, e.clientY - drag.altFrom.y) > 6) {
         const pick = drag.tool, from = drag.altFrom;
-        if (pick.prevFg) KS.setFG(pick.prevFg);
-        pick.up && pick.up(ev, doc);
+        if (!drag.pending) { if (pick.prevFg) KS.setFG(pick.prevFg); pick.up && pick.up(ev, doc); }
         drag = null; T.temp = null;
         T.brushGesture.beginFromDrag(e, doc, from);
         return;
       }
+      if (drag && drag.pending) return;
       if (drag) {
         const list = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
         for (const ce of (list.length ? list : [e])) { const cev = evOf(ce, drag.last); drag.tool.move && drag.tool.move(cev, doc); drag.last = cev; }
@@ -322,6 +324,7 @@
       if (d.pan) { T.panning = false; T.updateCursor(); return; }
       if (d.guide) { T.endGuideDrag(doc, evOf(e), d); return; }
       const ev = evOf(e, d.last);
+      if (d.pending && doc) d.tool.down && d.tool.down(d.pending, doc); // Alt + clic sans glisser : le clic de l'outil (source du tampon…)
       d.tool.up && doc && d.tool.up(ev, doc);
       T.temp = null;
       if (T.springBack) { const id = T.springBack; T.springBack = null; if (T.byId[id]) T.select(id); }

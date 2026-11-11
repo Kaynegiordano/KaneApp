@@ -5,12 +5,15 @@
 'use strict';
 (() => {
   const T = KS.tools, V = KS.view, U = KS.util;
-  const compatible = new Set(['brush', 'pencil', 'eraser', 'clone', 'heal', 'heal-spot', 'blur', 'sharpen', 'smudge', 'dodge', 'burn', 'sponge', 'quick-select']);
+  // Tout outil à empreinte ronde qui a une taille : pinceaux, gomme, Suppression, correcteurs, tampon, densité, pinceau de réglage…
+  const sizeable = t => !!t && !!t.o && Number.isFinite(t.o.size) && t.cursor === 'none';
   const SQ = 200, BAR = 26, GAP = 10; // sélecteur de couleur : carré saturation/luminosité + bande de teinte
   let gesture = null, suppressUntil = 0;
   const G = T.brushGesture = {};
   Object.defineProperty(G, 'active', { get: () => !!gesture });
-  G.compatible = compatible;
+  G.sizeable = sizeable;
+  // Alt + clic gauche glissé : sauf les outils qui peignent déjà avec Alt (sélection rapide, pinceau de réglage)
+  G.altLeft = t => sizeable(t) && !t.altPaints;
 
   const hudEl = () => { const el = KS.h('div.brush-hud', { 'aria-label': 'Réglage du pinceau' }); KS.$('#overlay-ui').appendChild(el); return el; };
   function placeHud(el, sx, sy) {
@@ -56,14 +59,14 @@
     const tool = T.current;
     if (gesture || T.isDragging() || KS.modalOpen() || KS.pickingColor || T.spaceDown || e.button !== 2 || !e.altKey) return false;
     const mode = e.shiftKey ? 'color' : (e.ctrlKey || e.metaKey) ? 'opacity' : 'size';
-    if (mode === 'color' ? !tool : !compatible.has(tool?.id)) return false;
+    if (mode === 'color' ? !tool : !sizeable(tool)) return false;
     if (mode === 'opacity' && !Number.isFinite(tool.o.opacity)) return false;
     e.preventDefault();
     return start(e, doc, mode);
   };
   // Alt + clic gauche glissé : la pipette du simple clic laisse la place au réglage de taille dès que le pointeur bouge
   G.beginFromDrag = (e, doc, from) => {
-    if (gesture || !compatible.has(T.current?.id)) return false;
+    if (gesture || !sizeable(T.current)) return false;
     return start(e, doc, 'size', from);
   };
   G.move = e => {

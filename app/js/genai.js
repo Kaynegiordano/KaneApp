@@ -690,7 +690,7 @@
   };
   G.adjustBrushPresets = AB;
   T.register({
-    id: 'adjust-brush', name: 'Pinceau de réglage', icon: 'adjust-brush', shortcut: 'B', cursor: 'none',
+    id: 'adjust-brush', name: 'Pinceau de réglage', icon: 'adjust-brush', shortcut: 'B', cursor: 'none', altPaints: true,
     defaults: { size: 80, hardness: 30, opacity: 100, flow: 60, preset: 'lighten', amount: 50 },
     options() {
       return [

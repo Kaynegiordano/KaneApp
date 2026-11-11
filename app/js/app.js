@@ -189,7 +189,7 @@
     zoom: 'Clic : zoom avant · Alt+clic : zoom arrière · glisser : zoom continu',
     eyedropper: 'Clic : premier plan · Alt+clic : arrière-plan',
   };
-  const hintFor = t => t && ['brush', 'pencil', 'eraser', 'clone', 'heal', 'heal-spot', 'blur', 'sharpen', 'smudge', 'dodge', 'burn', 'sponge', 'quick-select'].includes(t.id) ? (t.altPicks ? 'Alt + clic glissé' : 'Alt + clic droit glissé') + ' : taille / dureté · ' + (HINTS[t.id] || '') : t ? (HINTS[t.id] || (t.id.startsWith('shape') ? 'Maj : proportions · Alt : depuis le centre' : '')) : '';
+  const hintFor = t => t && KS.tools.brushGesture?.sizeable(t) ? (KS.tools.brushGesture.altLeft(t) ? 'Alt + clic glissé' : 'Alt + clic droit glissé') + ' : taille / dureté · ' + (HINTS[t.id] || '') : t ? (HINTS[t.id] || (t.id.startsWith('shape') ? 'Maj : proportions · Alt : depuis le centre' : '')) : '';
 
   /* ---------------------------------------------------------------- actions de la barre de titre */
   function buildTitleActions() {
