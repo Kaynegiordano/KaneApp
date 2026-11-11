@@ -209,6 +209,17 @@
         if (E.frame?.contentWindow === e.source) e.source.postMessage({ kv:'suite-native-response', id:m.id, ...result }, e.origin);
         return;
       }
+      if (m.kv === 'suite-native-request' && id === 'wallpaper' && m.op === 'animation-open-document') {
+        let result;
+        try {
+          const found = await N.animationDocument(String(m.dossier || ''));
+          if (!found.ok) throw new Error(found.error);
+          go(null); await KS.io.openPath(found.path); result = { ok: true };
+          KS.toast('Document en calques ouvert : enregistrez (Ctrl+S), puis « Recharger » dans Animation.', 'ok', 5000);
+        } catch (err) { result = { ok: false, error: err.message }; }
+        if (E.frame?.contentWindow === e.source) e.source.postMessage({ kv: 'suite-native-response', id: m.id, ...result }, e.origin);
+        return;
+      }
       if (m.kv === 'suite-native-request' && id === 'wallpaper' && m.op === 'animation-run') {
         let result;
         if (KS.studioApi.isBusy()) result = { ok: false, error: 'Le Studio génère encore une image. Attendez sa fin avant Animation.' };

@@ -44,9 +44,22 @@ try:
         else:
             raise AssertionError('Erreur attendue')
         assert events == ['empty', 'unload']
+    # Découpe en calques (Animation 2.4) : plusieurs passes Forge, un seul déchargement à la fin de la tâche
+    events.clear(); forge.rebouche = rebuild; forge.assure_forge = lambda: events.append('ready'); wetools._cache.update(lama=object(), vm=object())
+
+    def decoupe(*a, **kw):
+        forge.assure_forge()
+        assert forge.rebouche() == 'fond' and forge.rebouche() == 'fond'
+    with patch.dict(sys.modules, wetools=wetools, forge_rebouche=forge, torch=torch), patch.object(runtime.runpy, 'run_path', decoupe):
+        runtime.worker('C:/fixture/decoupe.py', [])
+        assert events == ['empty', 'ready', 'empty', 'diffusion', 'empty', 'diffusion', 'unload'], events
+    events.clear()
+    with patch.dict(sys.modules, wetools=wetools, forge_rebouche=forge, torch=torch), patch.object(runtime.runpy, 'run_path', lambda *a, **kw: None):
+        runtime.worker('C:/fixture/decoupe.py', [])
+        assert 'unload' not in events                            # Forge jamais employé : rien à décharger
 finally:
     sys.argv[:], sys.path[:] = original_argv, original_path
-print('OK LaMa et ViTMatte libérés avant diffusion, ANIMATION_INPAINT recherché (repli : checkpoint du Studio), décharge même après erreur')
+print('OK LaMa et ViTMatte libérés avant diffusion, ANIMATION_INPAINT recherché (repli : checkpoint du Studio), décharge même après erreur, une fois après la découpe en calques')
 
 # Le serveur conserve ses routes et passe les workers par le même adaptateur.
 import threading
@@ -61,6 +74,8 @@ def serve_forever():
     assert not context['_sam']
     runtime.subprocess.Popen(['python', '-u', 'C:/tools/auto_anim.py', '--titre', 'Test'])
     assert commands[-1][2:5] == [str(Path(runtime.__file__).resolve()), '--worker', 'C:/tools/auto_anim.py']
+    runtime.subprocess.Popen(['python', '-u', 'C:/tools/decoupe.py'])
+    assert commands[-1][2:5] == [str(Path(runtime.__file__).resolve()), '--worker', 'C:/tools/decoupe.py']
     runtime.subprocess.Popen(['python', '-u', 'C:/tools/depth.py'])
     assert commands[-1] == ['python', '-u', 'C:/tools/depth.py']
 

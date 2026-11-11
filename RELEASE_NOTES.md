@@ -1,3 +1,9 @@
+# 1.31.0 — Animation : découper une image en calques
+
+- Dans Animation, **« ✂ Découper en calques »** transforme une image plate en document en calques complet (fond, décor, cheveux derrière et devant, corps, visage, robe, manches, bras, bijoux…), avec les parties cachées repeintes (Animation 2.4).
+- La découpe réserve la carte graphique comme les autres tâches d'Animation, et le moteur IA n'est déchargé qu'une fois à la fin.
+- **« Ouvrir le document »** ouvre `calques.psd` dans l'Édition : corrigez un calque ou repeignez une partie cachée, enregistrez (Ctrl+S), puis **« Recharger »** dans Animation. Chaque calque garde son rôle.
+
 # 1.30.2 — Animation Vidéo : les extensions de ComfyUI se mettent à jour
 
 - À chaque ouverture de l'atelier Animation Vidéo, KaneApp met à jour **ComfyUI** (comme avant) **et maintenant ses extensions** (KJNodes, rgthree, Easy-Use, DaSiWa…).

@@ -88,7 +88,12 @@ module.exports = function installSuiteBridge(kind) {
     }
     window.fetch = async (input, init) => {
       const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url, location.href);
-      const route = /^\/p\/([^/]+)\/(super|animer|video|sam|ia)$/.exec(url.pathname);
+      const document_ = /^\/p\/([^/]+)\/ouvrirdocument$/.exec(url.pathname);
+      if (url.origin === location.origin && document_) {                 // calques.psd s'ouvre dans Retouche, pas dans l'application du système
+        const response = await request('animation-open-document', { dossier: decodeURIComponent(document_[1]) });
+        return new Response(response.ok ? JSON.stringify({ ok: true }) : response.error, { status: response.ok ? 200 : 409, headers: { 'Content-Type': response.ok ? 'application/json' : 'text/plain' } });
+      }
+      const route = /^\/p\/([^/]+)\/(super|animer|video|sam|ia|decouper)$/.exec(url.pathname);
       if (url.origin !== location.origin || !route || (init?.method || input.method || 'GET').toUpperCase() !== 'POST') return fetchOriginal(input, init);
       let body;
       try { body = JSON.parse(init?.body || (input instanceof Request ? await input.clone().text() : '{}')); }
@@ -101,7 +106,7 @@ module.exports = function installSuiteBridge(kind) {
       });
       if (!response.ok) {
         if (typeof statut === 'function') statut(response.error);
-        for (const name of ['animer', 'superBtn', 'videoBtn', 'iaBtn']) { const button = document.getElementById(name); if (button) button.disabled = false; }
+        for (const name of ['animer', 'superBtn', 'videoBtn', 'iaBtn', 'decoupeBtn']) { const button = document.getElementById(name); if (button) button.disabled = false; }
       }
       return new Response(JSON.stringify(response.ok ? response.value : { lance: false, error: response.error }), { status: response.ok ? 200 : 409, headers: { 'Content-Type': 'application/json' } });
     };

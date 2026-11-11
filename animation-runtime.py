@@ -19,11 +19,20 @@ def release_local(module):
 
 def worker(script, args):
     sys.path.insert(0, os.path.dirname(script))
-    if os.path.basename(script) == 'auto_anim.py':
+    name = os.path.basename(script)
+    finish = None
+    if name in ('auto_anim.py', 'decoupe.py'):
         import wetools
         import forge_rebouche as forge
         original = forge.rebouche
         original_ready = forge.assure_forge
+        used = []
+
+        def unload_studio():
+            try:
+                forge._json(forge.FORGE + '/sdapi/v1/unload-checkpoint', {}, timeout=60)
+            except Exception as exc:
+                print('>> Libération du Studio : ' + str(exc), flush=True)
 
         def ready(*a, **kw):
             release_local(wetools)
@@ -37,16 +46,23 @@ def worker(script, args):
             try:
                 return original(*a, **kw)
             finally:
-                try:
-                    forge._json(forge.FORGE + '/sdapi/v1/unload-checkpoint', {}, timeout=60)
-                except Exception as exc:
-                    print('>> Libération du Studio : ' + str(exc), flush=True)
+                # La découpe en calques repasse plusieurs calques : le modèle reste chargé jusqu'à la fin de la tâche.
+                if name == 'auto_anim.py':
+                    unload_studio()
+                else:
+                    used.append(True)
 
         forge.rebouche = rebuild
         # ANIMATION_INPAINT (tout-en-un, créé dans Merge) s'il est dans Forge ; sinon le checkpoint du Studio reste la référence, sans substitution d'INPAINT_Kane.
         forge.CHECKPOINTS = ('ANIMATION_INPAINT',)
+        if name == 'decoupe.py':
+            finish = lambda: used and unload_studio()
     sys.argv = [script, *args]
-    runpy.run_path(script, run_name='__main__')
+    try:
+        runpy.run_path(script, run_name='__main__')
+    finally:
+        if finish:
+            finish()
     if os.path.basename(script) == 'auto_anim.py' and os.path.isfile('anim.json') and os.path.isfile('assets.js'):
         from animation_web import configure
         # Web interactions change the assembled preview only. Preserve the neutral
@@ -71,7 +87,7 @@ def server(script, args):
         def __init__(self, command, *a, **kw):
             if isinstance(command, list):
                 for i, part in enumerate(command[1:], 1):
-                    if os.path.basename(str(part)) in ('auto_anim.py', 'super_magique.py'):
+                    if os.path.basename(str(part)) in ('auto_anim.py', 'super_magique.py', 'decoupe.py'):
                         command = command[:i] + [os.path.abspath(__file__), '--worker', part] + command[i + 1:]
                         break
             super().__init__(command, *a, **kw)

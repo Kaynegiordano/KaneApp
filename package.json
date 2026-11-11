@@ -1,7 +1,7 @@
 {
   "name": "kanevas",
   "productName": "KaneApp",
-  "version": "1.30.2",
+  "version": "1.31.0",
   "description": "Kanevas — éditeur d'images inspiré de Photoshop",
   "main": "main.js",
   "private": true,

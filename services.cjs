@@ -223,11 +223,22 @@ module.exports = function services({ getWin, root, engine, managed = () => ({ ac
     mainOnly(event);
     try {
       if (typeof dossier !== 'string' || !dossier || dossier.length > 240 || /[\\/\x00]/.test(dossier) || ['.', '..'].includes(dossier)) throw new Error('Projet Animation invalide');
-      if (!['super', 'animer', 'video', 'sam'].includes(operation)) throw new Error('Opération Animation inconnue');
+      if (!['super', 'animer', 'video', 'sam', 'decouper'].includes(operation)) throw new Error('Opération Animation inconnue');
       if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Paramètres Animation invalides');
       if ((await animationStatus(dossier)).etat === 'en cours') throw new Error('Une tâche Animation est déjà en cours.');
       const value = await gpu.run(dossier, () => post(8780, '/p/' + encodeURIComponent(dossier) + '/' + operation, body, {}, operation === 'sam' ? 600000 : 120000), { synchronous: operation === 'sam' });
       return { ok: true, value };
+    } catch (e) { return { ok: false, error: e.message }; }
+  });
+  // Animation 2.4 : le document en calques d'un projet (calques.psd), à ouvrir dans Retouche
+  ipcMain.handle('animation-document', async (event, dossier) => {
+    mainOnly(event);
+    try {
+      if (typeof dossier !== 'string' || !dossier || dossier.length > 240 || /[\\/\x00]/.test(dossier) || ['.', '..'].includes(dossier)) throw new Error('Projet Animation invalide');
+      const base = path.resolve(await weaProjects()), file = path.resolve(base, dossier, 'calques.psd');
+      if (!file.startsWith(base + path.sep)) throw new Error('Projet Animation invalide');
+      await fs.promises.access(file).catch(() => { throw new Error('Ce projet n’a pas encore de document en calques.'); });
+      return { ok: true, path: file };
     } catch (e) { return { ok: false, error: e.message }; }
   });
   // ComfyUI : l'image va dans son dossier input (nœud « Load Image »)
