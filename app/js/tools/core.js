@@ -260,6 +260,7 @@
       if (document.activeElement && document.activeElement !== document.body && !document.activeElement.closest('.text-editor')) document.activeElement.blur();
       if (!doc) return;
       if (T.brushGesture?.begin(e, doc)) return;
+      if (T.spring) T.spring.used = true;
       const ev = evOf(e);
       if (KS.pickingColor) {
         KS.pickingColor = false;
@@ -280,6 +281,8 @@
       if (KS.prefs.showGuides && (t.id === 'move' || ev.ctrl) && T.guideAt(doc, ev)) { T.startGuideDrag(doc, T.guideAt(doc, ev), e); return; }
       T.temp = t !== T.current ? t : null;
       drag = { tool: t, id: e.pointerId, last: ev };
+      // Alt + clic : pipette ; Alt + clic glissé : taille / dureté du pinceau (la couleur prise est rendue)
+      if (t.id === 'eyedropper' && T.temp && T.brushGesture?.compatible.has(T.current.id)) drag.altFrom = { x: e.clientX, y: e.clientY };
       t.down && t.down(ev, doc);
       KS.requestRender();
     });
@@ -292,6 +295,14 @@
       if (T.brushGesture?.move(e)) return;
       if (drag && drag.pan) { V.pan(ev.sx - drag.sx, ev.sy - drag.sy); drag.sx = ev.sx; drag.sy = ev.sy; return; }
       if (drag && drag.guide) { T.moveGuideDrag(doc, ev); return; }
+      if (drag && drag.altFrom && Math.hypot(e.clientX - drag.altFrom.x, e.clientY - drag.altFrom.y) > 6) {
+        const pick = drag.tool, from = drag.altFrom;
+        if (pick.prevFg) KS.setFG(pick.prevFg);
+        pick.up && pick.up(ev, doc);
+        drag = null; T.temp = null;
+        T.brushGesture.beginFromDrag(e, doc, from);
+        return;
+      }
       if (drag) {
         const list = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
         for (const ce of (list.length ? list : [e])) { const cev = evOf(ce, drag.last); drag.tool.move && drag.tool.move(cev, doc); drag.last = cev; }
@@ -312,7 +323,9 @@
       if (d.guide) { T.endGuideDrag(doc, evOf(e), d); return; }
       const ev = evOf(e, d.last);
       d.tool.up && doc && d.tool.up(ev, doc);
-      T.temp = null; T.updateCursor();
+      T.temp = null;
+      if (T.springBack) { const id = T.springBack; T.springBack = null; if (T.byId[id]) T.select(id); }
+      T.updateCursor();
       KS.requestRender();
     };
     cv.addEventListener('pointerup', end);

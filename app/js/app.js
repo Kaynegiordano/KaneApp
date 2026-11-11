@@ -175,8 +175,8 @@
     wand: 'Clic : sélectionner les couleurs proches · Maj : ajouter · Alt : soustraire',
     'quick-select': 'Peindre sur l\'objet · Alt : retirer · [ ] : taille',
     crop: 'Ajuster le cadre puis Entrée · Maj : garder les proportions',
-    brush: '[ ] : taille · Maj+[ ] : dureté · 1…0 : opacité · Alt : pipette · Maj+clic : ligne droite',
-    pencil: '[ ] : taille · Alt : pipette · Maj+clic : ligne droite',
+    brush: 'Alt+clic : pipette · Ctrl+Alt+clic droit glissé : opacité / flux · 4 puis 5 : 45 % · Maj+clic : ligne droite',
+    pencil: 'Alt+clic : pipette · Maj+Alt+clic droit : couleur · Maj+clic : ligne droite',
     eraser: '[ ] : taille · Maj+clic : ligne droite',
     clone: 'Alt+clic : définir la source, puis peindre',
     patch: 'Entourer la zone, puis la faire glisser · Source : réparée depuis l\'endroit d\'arrivée · Destination : recopiée',
@@ -185,11 +185,11 @@
     gradient: 'Glisser pour tracer · Maj : angles de 45°',
     text: 'Clic : nouveau texte · clic sur un texte : le modifier · Ctrl+Entrée : valider · Échap : annuler',
     transform: 'Coins : échelle (Maj : libre, Alt : depuis le centre) · hors du cadre : rotation · Entrée : valider · Échap : annuler',
-    hand: 'Glisser pour faire défiler · double-clic : taille écran',
+    hand: 'Glisser pour faire défiler · double-clic : taille écran · H maintenu + clic : vue d’ensemble',
     zoom: 'Clic : zoom avant · Alt+clic : zoom arrière · glisser : zoom continu',
     eyedropper: 'Clic : premier plan · Alt+clic : arrière-plan',
   };
-  const hintFor = t => t && ['brush', 'pencil', 'eraser', 'clone', 'heal', 'heal-spot', 'blur', 'sharpen', 'smudge', 'dodge', 'burn', 'sponge', 'quick-select'].includes(t.id) ? 'Alt + clic droit glissé : taille / dureté · ' + (HINTS[t.id] || '') : t ? (HINTS[t.id] || (t.id.startsWith('shape') ? 'Maj : proportions · Alt : depuis le centre' : '')) : '';
+  const hintFor = t => t && ['brush', 'pencil', 'eraser', 'clone', 'heal', 'heal-spot', 'blur', 'sharpen', 'smudge', 'dodge', 'burn', 'sponge', 'quick-select'].includes(t.id) ? (t.altPicks ? 'Alt + clic glissé' : 'Alt + clic droit glissé') + ' : taille / dureté · ' + (HINTS[t.id] || '') : t ? (HINTS[t.id] || (t.id.startsWith('shape') ? 'Maj : proportions · Alt : depuis le centre' : '')) : '';
 
   /* ---------------------------------------------------------------- actions de la barre de titre */
   function buildTitleActions() {

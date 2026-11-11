@@ -572,6 +572,8 @@ body.cursor-hidden #view { cursor: none !important; }
 .layer-row .kind-badge svg { width: 10px; height: 10px; }
 
 .brush-hud { position: absolute; z-index: 10; pointer-events: none !important; padding: 9px 12px; border: 1px solid var(--border-2); border-radius: 9px; background: var(--panel); color: var(--text); box-shadow: var(--shadow); font: 500 12px var(--ui); white-space: nowrap; }
+.brush-hud.flash { padding: 6px 10px; font-variant-numeric: tabular-nums; animation: hud-in .12s ease-out; }
+@keyframes hud-in { from { opacity: 0; transform: translateY(3px); } }
 
 /* Barre des tâches contextuelle (façon Photoshop) */
 .ctx-bar { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; align-items: center; gap: 4px; padding: 5px; max-width: calc(100% - 40px);

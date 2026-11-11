@@ -5,17 +5,21 @@
 
   // Touches communes aux pinceaux : [ ] taille, Maj+[ ] dureté, chiffres = opacité
   function brushKeys(tool, e) {
-    if (e.key === '[' || e.key === ']' || e.key === '{' || e.key === '}') {
+    if (!e.altKey && (e.key === '[' || e.key === ']' || e.key === '{' || e.key === '}')) {
       const up = e.key === ']' || e.key === '}';
       if (e.shiftKey && tool.o.hardness != null) T.setOpt(tool, 'hardness', U.clamp(tool.o.hardness + (up ? 25 : -25), 0, 100));
       else { const s = tool.o.size; T.setOpt(tool, 'size', U.clamp(Math.round(up ? (s < 10 ? s + 1 : s * 1.15) : (s < 10 ? s - 1 : s / 1.15)), 1, 2500)); }
       T.refreshBrushCtl(tool); KS.requestRender();
+      T.brushGesture?.flash(e.shiftKey && tool.o.hardness != null ? `Dureté : ${tool.o.hardness} %` : `Taille : ${tool.o.size} px`);
       return true;
     }
     if (/^[0-9]$/.test(e.key) && !e.ctrlKey && !e.altKey && tool.o.opacity != null) {
-      const v = e.key === '0' ? 100 : +e.key * 10;
-      const k = e.shiftKey && tool.o.flow != null ? 'flow' : 'opacity';
-      T.setOpt(tool, k, v); T.renderOptions(); KS.toast(`${k === 'flow' ? 'Flux' : 'Opacité'} : ${v} %`, 'info', 900);
+      // comme Photoshop : un chiffre = dizaines (0 = 100 %), deux chiffres tapés vite = valeur exacte (4 puis 5 = 45 %, 0 puis 0 = 0 %)
+      const k = e.shiftKey && tool.o.flow != null ? 'flow' : 'opacity', now = performance.now(), prev = tool._digit;
+      let v = e.key === '0' ? 100 : +e.key * 10;
+      if (prev && prev.k === k && now - prev.t < 700) { v = Math.max(k === 'flow' ? 1 : 0, +(prev.key + e.key)); tool._digit = null; }
+      else tool._digit = { k, key: e.key, t: now };
+      T.setOpt(tool, k, v); T.renderOptions(); T.brushGesture?.flash(`${k === 'flow' ? 'Flux' : 'Opacité'} : ${v} %`);
       return true;
     }
     return false;

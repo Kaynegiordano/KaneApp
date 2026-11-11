@@ -307,9 +307,26 @@
       { type: 'button', text: 'Taille écran', action: () => KS.view.fit(KS.state.doc, true) },
       { type: 'button', text: 'Remplir l\'écran', action: () => { const d = KS.state.doc; KS.view.setZoom(Math.max(V.w / d.width, V.h / d.height)); KS.view.center(d); } },
     ],
-    down(ev) { this.p = ev; V.canvas.style.cursor = 'grabbing'; },
-    move(ev) { if (this.p) { V.pan(ev.sx - this.p.sx, ev.sy - this.p.sy); this.p = ev; } },
-    up() { this.p = null; T.updateCursor(); },
+    // H maintenu + clic : vue d'ensemble (toute l'image, cadre de la vue actuelle) ; au relâchement, retour au zoom d'avant, là où est le cadre
+    down(ev, doc) {
+      if (KS.keys?.h && doc && V.zoom > Math.min((V.w - 80) / doc.width, (V.h - 80) / doc.height) * 1.05) {
+        this.bird = { zoom: V.zoom, w: V.w / V.zoom, h: V.h / V.zoom }; V.fit(doc, true); this.birdAt(ev); return;
+      }
+      this.p = ev; V.canvas.style.cursor = 'grabbing';
+    },
+    birdAt(ev) { this.bird.x = ev.x; this.bird.y = ev.y; KS.requestRender(); },
+    move(ev) { if (this.bird) return this.birdAt(ev); if (this.p) { V.pan(ev.sx - this.p.sx, ev.sy - this.p.sy); this.p = ev; } },
+    up() {
+      const b = this.bird; this.bird = null;
+      if (b) { V.zoom = b.zoom; V.ox = V.w / 2 - b.x * b.zoom; V.oy = V.h / 2 - b.y * b.zoom; V.store(); KS.requestRender(); }
+      this.p = null; T.updateCursor();
+    },
+    overlay(ctx) {
+      const b = this.bird; if (!b) return;
+      const p = V.toScreen(b.x - b.w / 2, b.y - b.h / 2), w = b.w * V.zoom, hh = b.h * V.zoom;
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.strokeRect(p.x, p.y, w, hh);
+      ctx.lineWidth = 1.5; ctx.strokeStyle = '#fff'; ctx.strokeRect(p.x, p.y, w, hh);
+    },
     dblclick(ev, doc) { V.fit(doc, true); },
   });
   T.register({

@@ -1,7 +1,7 @@
 // Barre de menus et raccourcis clavier.
 'use strict';
 (() => {
-  const ui = KS.ui, C = KS.cmd, T = KS.tools;
+  const ui = KS.ui, C = KS.cmd, T = KS.tools, U = KS.util;
   const D = () => KS.state.doc;
   const noDoc = () => !D();
   const noSel = () => !D() || !D().selection.active;
@@ -384,7 +384,33 @@
     return k === 'dead' ? e.code.toLowerCase() : k;
   };
   const isTyping = t => t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
-  KS.keys = { alt: false, space: false };
+  KS.keys = { alt: false, space: false, h: false };
+  // Outils à ressort (Photoshop) : une touche d'outil maintenue puis utilisée revient à l'outil d'avant au relâchement
+  const springTo = (k, e) => {
+    const before = T.current?.id;
+    if (!T.byKey(k.toUpperCase(), e.shiftKey)) return false;
+    T.spring = before && T.current?.id !== before ? { code: e.code, prev: before, tool: T.current.id, t: performance.now(), used: false } : null;
+    return true;
+  };
+  // Maj + / Maj − : mode de fusion suivant / précédent (outil qui a un mode, sinon calque actif)
+  const cycleBlend = dir => {
+    const doc = D(), tool = T.current, modes = KS.BLENDS.filter(Boolean).map(b => b[0]);
+    const name = id => (KS.BLENDS.find(b => b && b[0] === id) || [, id])[1];
+    const step = cur => modes[(modes.indexOf(cur) + dir + modes.length) % modes.length];
+    if (tool && tool.o && typeof tool.o.blend === 'string') { T.setOpt(tool, 'blend', step(tool.o.blend)); T.renderOptions(); T.brushGesture?.flash('Mode : ' + name(tool.o.blend)); return; }
+    const L = doc?.active; if (!L || L.kind === 'adjust' && !L.blend) return;
+    const v = step(L.blend || 'normal');
+    KS.Hist.structure(doc, 'Mode de fusion', () => { L.blend = v; }, 'layers');
+    T.brushGesture?.flash('Calque : ' + name(v));
+  };
+  // Alt + [ / ] : calque inférieur / supérieur ; Alt + Maj + [ / ] : tout en bas / tout en haut
+  const stepLayer = (dir, end) => {
+    const doc = D(); if (!doc || !doc.layers.length) return;
+    const list = doc.layers, i = Math.max(0, list.indexOf(doc.active));
+    const j = end ? (dir > 0 ? list.length - 1 : 0) : U.clamp(i + dir, 0, list.length - 1);
+    if (j === i) return;
+    doc.setActive(list[j]); KS.emit('layers', doc); T.brushGesture?.flash('Calque : ' + list[j].name);
+  };
 
   M.attach = () => {
     M.collect();
@@ -392,6 +418,7 @@
       KS.keys.alt = e.altKey;
       if (e.key === 'Alt') { e.preventDefault(); T.updateCursor(); }
       if (KS.modalOpen()) return;
+      if (e.code === 'KeyH' && !e.ctrlKey && !e.altKey && !isTyping(e.target)) KS.keys.h = true;
       if (isTyping(e.target)) return;
       const doc = D();
       const tool = T.current;
@@ -399,6 +426,10 @@
       if (tool && tool.key && doc && !e.ctrlKey) {
         const tk = e.code === 'BracketLeft' ? (e.shiftKey ? '{' : '[') : e.code === 'BracketRight' ? (e.shiftKey ? '}' : ']') : /^Digit\d$/.test(e.code) ? e.code.slice(5) : e.key;
         if (tool.key({ key: tk, code: e.code, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey, repeat: e.repeat }, doc)) { e.preventDefault(); return; }
+      }
+      if (doc && !e.ctrlKey && !e.metaKey && e.altKey && (e.code === 'BracketLeft' || e.code === 'BracketRight')) { e.preventDefault(); stepLayer(e.code === 'BracketRight' ? 1 : -1, e.shiftKey); return; }
+      if (doc && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && (e.key === '+' || e.key === '=' || e.code === 'NumpadAdd' || e.key === '-' || e.key === '_' || e.code === 'NumpadSubtract')) {
+        e.preventDefault(); cycleBlend(e.key === '+' || e.key === '=' || e.code === 'NumpadAdd' ? 1 : -1); return;
       }
       if (e.key === ' ' && !e.repeat) { T.spaceDown = true; T.updateCursor(); e.preventDefault(); return; }
       if (e.key === ' ') { e.preventDefault(); return; }
@@ -419,6 +450,7 @@
       // touches simples
       if (e.key === 'Tab') { e.preventDefault(); C.togglePanels(); return; }
       if (e.key === 'F11') { e.preventDefault(); C.fullscreen(); return; }
+      if (/^[a-z]$/.test(k) && e.repeat && T.spring && T.spring.code === e.code) { e.preventDefault(); return; }
       if (!doc && !['d', 'x'].includes(k)) { if (/^[a-z]$/.test(k)) T.byKey(k.toUpperCase(), e.shiftKey); return; }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
@@ -433,14 +465,21 @@
       if (k === 'd') return KS.resetColors();
       if (k === 'x') return KS.swapColors();
       if (k === 'q') return C.quickMask();
-      if (/^[a-z]$/.test(k) && T.byKey(k.toUpperCase(), e.shiftKey)) { e.preventDefault(); return; }
+      if (/^[a-z]$/.test(k) && !e.repeat && springTo(k, e)) { e.preventDefault(); return; }
     }, true);
     window.addEventListener('keyup', e => {
       KS.keys.alt = e.altKey;
+      if (e.code === 'KeyH') KS.keys.h = false;
+      const sp = T.spring;
+      if (sp && sp.code === e.code) {
+        T.spring = null;
+        // maintenue assez longtemps ou utilisée pendant l'appui : retour à l'outil d'avant (un appui bref garde le nouvel outil)
+        if (T.current?.id === sp.tool && T.byId[sp.prev] && (sp.used || performance.now() - sp.t > 400)) { if (T.isDragging()) T.springBack = sp.prev; else T.select(sp.prev); }
+      }
       if (e.key === ' ') { T.spaceDown = false; T.updateCursor(); }
       if (e.key === 'Alt') { e.preventDefault(); T.updateCursor(); }
     });
-    window.addEventListener('blur', () => { T.spaceDown = false; KS.keys.alt = false; });
+    window.addEventListener('blur', () => { T.spaceDown = false; KS.keys.alt = false; KS.keys.h = false; });
     // Ctrl+Backspace (remplir avec l'arrière-plan)
     window.addEventListener('keydown', e => { if (!KS.modalOpen() && !isTyping(e.target) && e.ctrlKey && e.key === 'Backspace') { e.preventDefault(); C.fillBG(); } });
     // Coller
