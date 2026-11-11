@@ -55,6 +55,7 @@ window.ksNative = {
       const ep = n => eps.filter(f => f.includes('_e0000' + String(n).padStart(2, '0')));
       return { ok: true, manifest: { trigger: 'n1x3u', lora_type: 'style', epochs: 11, repeats: 4, dim: 20, learning_rate: 4.7e-5, captions: caps, recipe: 2, sample_every: 250 },
         images: imgs.map(f => ({ file: path.basename(f), path: f, preview: f })),
+        suggest: { kind: 'painterly', label: 'Peinture numérique', why: 'la même ambiance revient sur la plupart des 12 images (backlighting, depth of field) : elle fait partie du rendu.' },
         runs: [{ run: 'C:/runs/r', project: 'project', running: false, state: 'done', pct: 100, text: 'Entraînement terminé.', output: 'C:/out/n1x3u.safetensors', token: '@n1x3u', checkpoints: [], samples: [], before: [],
           epochs: [4, 6, 8, 10].map(n => ({ epoch: n, path: 'C:/out/n1x3u-' + n + '.safetensors', name: n === 10 ? 'n1x3u' : 'n1x3u-0000' + String(n).padStart(2, '0'), final: n === 10, samples: ep(n) })) }] };
     }

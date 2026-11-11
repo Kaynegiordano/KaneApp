@@ -228,7 +228,35 @@ def cmd_load(a):
         old = f"taux {float(m.get('learning_rate') or 0):.2g}, {int(m.get('repeats') or 0)} répétitions" if m.get("learning_rate") else "anciens réglages"
         note = ("**Réglages calculés avec l'ancienne recette** (" + old + ") : elle donnait des LoRA environ trois fois trop forts, "
                 "qu'il fallait utiliser à 0,3. Cliquez **Appliquer le préréglage** pour les recalculer (plus court, prévu pour un poids de 1).") + ("\n\n" + note if note else "")
-    return {"manifest": m, "images": images, "dir": str(s.dir_for(name)), "runs": runs, "note": note}
+    return {"manifest": m, "images": images, "dir": str(s.dir_for(name)), "runs": runs, "note": note,
+            "suggest": suggest_look(m.get("captions") or {})}
+
+
+def suggest_look(caps: dict) -> dict | None:
+    """Parmi Style / Technique / Peinture numérique, celui que les légendes du projet désignent, avec la raison.
+
+    Technique : un même tag de procédé (monochrome, aquarelle, encre, croquis…) sur au moins 60 % des images.
+    Peinture numérique : au moins deux tags de lumière ou d'optique (contre-jour, flou, particules…) sur 60 % des images.
+    Sinon Style, le cas général. Rien tant que le projet a moins de 4 légendes.
+    """
+    p = LIB.presets
+    texts = {k: v for k, v in caps.items() if v}
+    if len(texts) < 4:
+        return None
+    rec = {t.lower() for t in p.detect_recurring_tags(texts, min_fraction=0.6)}
+    n = len(texts)
+    medium = sorted(rec & {t.lower() for t in p.MEDIUM_TAGS})
+    look = sorted(rec & {t.lower() for t in p.LOOK_RECURRING_TAGS})
+    if medium:
+        return {"kind": "medium", "label": p.PRESETS["medium"]["label"],
+                "why": f"« {', '.join(medium[:3])} » revient sur la plupart des {n} images : c'est le procédé qui fait l'unité du projet."}
+    if len(look) >= 2:
+        return {"kind": "painterly", "label": p.PRESETS["painterly"]["label"],
+                "why": f"la même ambiance revient sur la plupart des {n} images ({', '.join(look[:4])}) : elle fait partie du rendu."}
+    why = "aucun procédé ni aucune ambiance lumineuse ne revient sur la plupart des images : c'est la main de l'artiste qui fait l'unité."
+    if look:
+        why = f"seule « {look[0]} » revient souvent ; le reste varie : c'est la main de l'artiste qui fait l'unité."
+    return {"kind": "style", "label": p.PRESETS["style"]["label"], "why": why}
 
 
 # Version des réglages calculés par les préréglages : 2 = recette recalibrée de KaneApp 1.29 (taux et passages plus bas,

@@ -192,6 +192,14 @@
     S.capsMsg = `${label} : ${changed} légende(s).`;
     render();
   }
+  // « Conseillé : … » parmi Style / Technique / Peinture numérique, d'après les légendes du projet
+  function suggestion(f) {
+    const sg = S.data && S.data.suggest, look = ['style', 'medium', 'painterly'];
+    if (!sg || !look.includes(f.lora_type || 'style')) return null;
+    const same = (f.lora_type || 'style') === sg.kind;
+    const pick = !same ? F().tbtn('Choisir ' + sg.label, () => { f.lora_type = sg.kind; saveForm(); render(); }, '.sm') : null;
+    return h('div.lt-suggest' + (same ? '.ok' : ''), h('span', { html: F().md(`${same ? '✓ ' : ''}**Conseillé : ${sg.label}** — ${sg.why}`) }), pick);
+  }
   function tagManager() {
     const { tbtn } = F();
     queueMicrotask(() => { const d = root && root.querySelector('.lt-tagbox'); if (d && !d._kw) { d._kw = true; d.addEventListener('toggle', () => { S.tagsOpen = d.open; }); } });
@@ -427,7 +435,7 @@
     const preset = h('div.fx-panel.lt-card', h('div.fx-h', { text: 'Préréglage' }),
       h('div.fx-info', { text: 'Règle la dimension du réseau, le taux d’apprentissage, les répétitions, les époques et la résolution selon le type ET le nombre d’images du projet. Tous les préréglages sauf Style nettoient aussi les légendes. Tout reste modifiable ensuite.' }),
       h('div.lt-row', F().radio('Type de LoRA', kinds.map(([k, v]) => [k, v.label]), f, 'lora_type', '', v => { hint.textContent = (I.presets[v] || {}).hint || ''; saveForm(); }), tbtn('Appliquer le préréglage', () => applyPreset().catch(() => {}), '.primary')),
-      hint, msgBox('preset'));
+      hint, suggestion(f), msgBox('preset'));
     // carte Captions
     const rows = h('div.lt-caps');
     for (const im of (S.data ? S.data.images : [])) {

@@ -69,6 +69,14 @@ ps = B.sample_prompts({}, {"a.png": "safe, 1girl, frieren, smile", "b.png": "saf
 check(len(ps) == 2 and all("@n1x3u" in p for p in ps) and "cherry blossoms" in ps[1], "Aperçus automatiques : une scène du jeu + une scène nouvelle, avec @n1x3u")
 check(B.sample_prompts({"sample_prompt": "1girl, beach"}, {}, "@n1x3u", "style", None) == ["@n1x3u, 1girl, beach"], "Invite d'aperçu choisie : le déclencheur est ajouté s'il manque")
 
+# préréglage conseillé parmi Style / Technique / Peinture numérique
+base = ["1girl, solo, long hair, smile", "1girl, solo, short hair, sitting", "1boy, solo, armor", "1girl, solo, dress, outdoors", "1girl, solo, night"]
+check(B.suggest_look({f"{i}.png": c for i, c in enumerate(base)})["kind"] == "style", "Conseillé : Style quand rien ne revient")
+check(B.suggest_look({f"{i}.png": c + ", monochrome, greyscale" for i, c in enumerate(base)})["kind"] == "medium", "Conseillé : Technique quand « monochrome » est partout")
+s2 = B.suggest_look({f"{i}.png": c + (", backlighting, depth of field, light particles" if i < 4 else "") for i, c in enumerate(base)})
+check(s2["kind"] == "painterly" and "backlighting" in s2["why"], "Conseillé : Peinture numérique quand la même lumière revient (avec la raison)")
+check(B.suggest_look({"a.png": "1girl", "b.png": "1boy"}) is None, "Pas de conseil avec moins de 4 légendes")
+
 # cartes par époque
 out = tmp / "run"; (out / "sample").mkdir(parents=True)
 for f in ("n1x3u-000002.safetensors", "n1x3u-000004.safetensors", "n1x3u.safetensors"):

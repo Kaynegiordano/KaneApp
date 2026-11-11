@@ -1040,6 +1040,9 @@ body.studio .ws-to-studio { display: none; }
 .lt-samples { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
 .lt-samples img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; }
 .lt-results { display: flex; flex-direction: column; gap: 6px; }
+.lt-suggest { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); border-radius: 8px; background: var(--accent-soft, transparent); font-size: 12.5px; }
+.lt-suggest.ok { border-color: var(--border); background: transparent; color: var(--text-2); }
+.lt-suggest p { margin: 0; }
 .lt-tags { display: flex; flex-wrap: wrap; gap: 5px; max-height: 220px; overflow: auto; margin: 6px 0; }
 .lt-tag { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text-2); font-size: 12px; cursor: pointer; }
 .lt-tag:hover { border-color: var(--accent); color: var(--text); }

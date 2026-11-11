@@ -27,7 +27,7 @@ window.ksNative = {
       resolutions: [512,1024], optimizers: { adamw8bit: 'AdamW' }, dits: [], fewshot_resolutions: [512,1024], sd_scripts: 'C:/training', tagger: true };
     if (cmd === 'list') return { ok: true, projects: window.loraImages.length ? [{ name: 'Import-test', count: window.loraImages.length }] : [] };
     if (cmd === 'import') { window.loraImages.push(...args.paths.map(p => ({file: p.split('/').pop(),path:p}))); return {ok:true,name:'Import-test',added:args.paths.length,count:window.loraImages.length}; }
-    if (cmd === 'load') return { ok:true,manifest:{ trigger: 'n1x3u', lora_type: 'style', captions: window.loraCaps || {} },images:window.loraImages,runs:window.loraRun ? [window.loraRun] : [] };
+    if (cmd === 'load') return { ok:true,manifest:{ trigger: 'n1x3u', lora_type: 'style', captions: window.loraCaps || {} },images:window.loraImages,runs:window.loraRun ? [window.loraRun] : [], suggest: window.loraSuggest || null };
     if (cmd === 'save') { (window.loraSaves ||= []).push(args); if (args.patch && args.patch.captions) window.loraCaps = { ...args.patch.captions }; return { ok: true }; }
     if (cmd === 'start') { (window.loraStarts ||= []).push(args); return { ok: true, pid: 7, run: 'C:/runs/' + args.name, total: 100, per_epoch: 10, resolutions: [1024], estimate_s: 600, output: 'C:/out/x.safetensors', count: 2, token: '@n1x3u' }; }
     if (cmd === 'install') { (window.loraInstalls ||= []).push(args); return { ok: true, installed: 'C:/Lora/Anima/' + args.name + '.safetensors', name: args.name }; }
@@ -590,6 +590,14 @@ async function scenario() {
   [...document.querySelectorAll('.lt-tagbox button')].find(b => b.textContent.startsWith('Annuler la dernière')).click();
   await wait(() => window.loraCaps['training-b.png'] === 'safe, 1girl, patreon username');
   assert(window.loraCaps['training-b.png'] === 'safe, 1girl, patreon username', 'Annuler la dernière modification des tags');
+  // Préréglage conseillé : affiché avec sa raison, « Choisir » change le type
+  window.loraSuggest = { kind: 'painterly', label: 'Peinture numérique', why: 'la même ambiance revient' };
+  KS.trainTab.invalidate(); await wait(() => !!document.querySelector('.lt-suggest'));
+  assert(document.querySelector('.lt-suggest').textContent.includes('Conseillé : Peinture numérique') && document.querySelector('.lt-suggest').textContent.includes('la même ambiance revient'), 'Lora : préréglage conseillé affiché avec sa raison');
+  [...document.querySelectorAll('.lt-suggest button')].find(b => b.textContent === 'Choisir Peinture numérique').click();
+  await wait(() => (window.loraSaves || []).some(x => x.patch && x.patch.lora_type === 'painterly'));
+  assert(document.querySelector('.lt-suggest.ok') && !document.querySelector('.lt-suggest button'), '« Choisir » applique le type conseillé et l’enregistre');
+  window.loraSuggest = null;
   // File d'attente : ajouter, puis démarrer la file
   KS.prefs.loraQueue = [];
   [...document.querySelectorAll('.lt-go button')].find(b => b.textContent === 'Ajouter à la file').click();
