@@ -86,6 +86,40 @@ module.exports = function services({ getWin, root, engine, managed = () => ({ ac
     } catch (e) { log(id, '[Kane OS] Mise à jour de ComfyUI ignorée : ' + String((e && (e.out || e.message)) || e).slice(0, 300)); }
   }
 
+  // Extensions (custom_nodes) : même principe, dépôt par dépôt. Les fetch partent ensemble (20 s au plus), les mises à
+  // jour se font l'une après l'autre (un seul venv). Une extension modifiée ou avec des commits locaux n'est pas touchée ;
+  // l'état d'avant est gardé sous refs/kaneapp/avant/<date> et rétabli si ses paquets Python échouent. Un sous-module
+  // absent (ComfyUI-Easy-Use-Frontend, source de son interface déjà compilée) ne compte pas comme une modification.
+  async function updateNodes(d, id) {
+    const root = path.join(d, 'custom_nodes');
+    let dirs = [];
+    try { dirs = fs.readdirSync(root, { withFileTypes: true }).filter(e => e.isDirectory() && fs.existsSync(path.join(root, e.name, '.git'))).map(e => e.name); } catch { return; }
+    if (!dirs.length) return;
+    log(id, `[Kane OS] Recherche de mises à jour pour ${dirs.length} extension(s)…`);
+    const fetched = await Promise.all(dirs.map(n => run('git', ['fetch', '--quiet'], path.join(root, n), 20000).then(() => true, () => false)));
+    const py = path.join(d, 'venv', 'Scripts', 'python.exe'), done = [];
+    for (const [i, n] of dirs.entries()) {
+      if (!fetched[i]) continue;
+      const nd = path.join(root, n), git = (...a) => run('git', a, nd, 120000);
+      try {
+        const behind = +(await git('rev-list', '--count', 'HEAD..@{u}'));
+        if (!behind) continue;
+        if (+(await git('rev-list', '--count', '@{u}..HEAD'))) { log(id, `[Kane OS] ${n} : commits locaux, pas de mise à jour.`); continue; }
+        if (await git('status', '--porcelain', '--untracked-files=no', '--ignore-submodules=all')) { log(id, `[Kane OS] ${n} : fichiers modifiés, pas de mise à jour.`); continue; }
+        const avant = await git('rev-parse', 'HEAD');
+        await git('update-ref', `refs/kaneapp/avant/${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}`, avant);
+        await git('merge', '--ff-only', '@{u}');
+        const req = path.join(nd, 'requirements.txt');
+        if (fs.existsSync(req) && !(await git('diff', '--quiet', avant, 'HEAD', '--', 'requirements.txt').then(() => true, () => false))) {
+          try { await run(py, ['-m', 'pip', 'install', '--quiet', '-r', req], d, 1800000); }
+          catch (e) { await git('reset', '--hard', avant).catch(() => {}); log(id, `[Kane OS] ${n} : paquets en échec, retour à la version précédente. ` + String(e.out || e.message).slice(-300)); continue; }
+        }
+        done.push(`${n} (+${behind})`);
+      } catch (e) { log(id, `[Kane OS] ${n} : mise à jour ignorée. ` + String((e && (e.out || e.message)) || e).slice(0, 200)); }
+    }
+    log(id, done.length ? '[Kane OS] Extensions mises à jour : ' + done.join(', ') + '.' : '[Kane OS] Extensions à jour.');
+  }
+
   async function start(id) {
     const S = st[id], D = SV[id];
     if (S.state === 'ready' || S.state === 'external' || S.state === 'starting') return status(id);
@@ -94,7 +128,7 @@ module.exports = function services({ getWin, root, engine, managed = () => ({ ac
     if (!D.check(d)) { S.state = 'error'; S.error = D.name + ' introuvable ou incomplet : ' + d; emit(id); return status(id); }
     if (id === 'wallpaper') startRelay();
     S.log = []; S.error = ''; S.state = 'starting'; S.ours = true; emit(id);
-    if (id === 'comfyui') await updateComfy(d, id);       // mise à jour à chaque lancement, puis démarrage sur le code à jour
+    if (id === 'comfyui') { await updateComfy(d, id); if (S.state === 'starting') { emit(id); await updateNodes(d, id); } }   // à chaque lancement, puis démarrage sur le code à jour
     if (S.state !== 'starting') return status(id);         // arrêté pendant la mise à jour
     const [py, args] = D.cmd(d);
     const env = { ...environment(id), PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1', ...(D.env ? await D.env() : {}) };

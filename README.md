@@ -627,3 +627,4 @@ Maintenir Alt + bouton droit dans la zone de travail : glisser horizontalement p
 - **1.29.0** : atelier Lora recalibré (LoRA justes au poids 1, ~40 % plus court), légendes dans l'ordre d'ANIMA avec note de contenu et `@nom` pour les styles, aperçus et carte par époque avec « Garder cette version ».
 - **1.30.0** : atelier Lora : entraînement à la taille réelle des images pour les styles (texture mieux rendue à 1856 × 1024), gestion des tags du projet, file d'attente d'entraînements.
 - **1.30.1** : préréglage conseillé parmi Style / Technique / Peinture numérique (`lora_bridge.suggest_look` : tags de procédé ou ≥ 2 tags de lumière sur 60 % des légendes), affiché avec sa raison et un bouton « Choisir ».
+- **1.30.2** : Animation Vidéo — les extensions de ComfyUI (custom_nodes) se mettent aussi à jour à chaque lancement (`services.cjs` `updateNodes` : fetch en parallèle, fast-forward si propre, sous-modules ignorés, retour arrière si pip échoue).
