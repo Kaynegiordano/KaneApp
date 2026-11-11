@@ -150,6 +150,58 @@ app.whenReady().then(async () => {
     send({ type: 'mouseDown', x: c.x, y: c.y, button: 'left', clickCount: 1, modifiers: ['alt'] }); await pause(30);
     send({ type: 'mouseUp', x: c.x, y: c.y, button: 'left', clickCount: 1, modifiers: ['alt'] }); await pause(60);
     check(await js(`!!KS.tools.byId.clone.src`), 'Tampon : Alt + clic sans bouger définit toujours la source');
+    // 12. Clic droit avec un pinceau : sélecteur de forme ; « Autres actions… » ouvre le menu habituel
+    await js(`KS.tools.select('eraser'); Object.assign(KS.tools.byId.eraser.o, { size: 40, hardness: 70 })`); await pause(40);
+    send({ type: 'mouseMove', x: c.x, y: c.y }); send({ type: 'mouseDown', x: c.x, y: c.y, button: 'right', clickCount: 1 }); await pause(20);
+    send({ type: 'mouseUp', x: c.x, y: c.y, button: 'right', clickCount: 1 }); await pause(120);
+    check(await js(`!!document.querySelector('.brush-picker') && !document.querySelector('.menu')`), 'Clic droit avec la gomme : sélecteur de forme (pas le menu)');
+    await js(`document.querySelector('.brush-picker [data-h="0"]').click(); document.querySelector('.brush-picker [data-s="100"]').click()`);
+    check(await js(`KS.tools.byId.eraser.o.hardness === 0 && KS.tools.byId.eraser.o.size === 100 && document.querySelector('.brush-picker [data-s="100"]').classList.contains('on')`), 'Forme « rond doux » et taille 100 px choisies d’un clic');
+    await key('Escape');
+    check(await js(`!document.querySelector('.brush-picker')`), 'Échap ferme le sélecteur de forme');
+    send({ type: 'mouseDown', x: c.x, y: c.y, button: 'right', clickCount: 1 }); await pause(20); send({ type: 'mouseUp', x: c.x, y: c.y, button: 'right', clickCount: 1 }); await pause(120);
+    await js(`[...document.querySelectorAll('.brush-picker button')].find(b => b.textContent.startsWith('Autres actions')).click()`); await pause(80);
+    check(await js(`!document.querySelector('.brush-picker') && !!document.querySelector('.menu')`), '« Autres actions… » ouvre le menu contextuel habituel');
+    await key('Escape'); await js(`KS.ui.closeMenus?.()`);
+    // 13. Chiffres avec l'outil de déplacement : opacité du calque (deux chiffres = valeur exacte)
+    await js(`KS.tools.select('move')`); await pause(40);
+    await key('3'); await key('5');
+    check(await js(`Math.round(KS.state.doc.active.opacity * 100) === 35`), 'Déplacement + 3 puis 5 : opacité du calque 35 %');
+    await key('0', 'both', ['control']); await pause(50);
+    await js(`KS.state.doc.history.undo(); KS.emit('layers', KS.state.doc)`);
+    check(await js(`Math.round(KS.state.doc.active.opacity * 100) === 30`), 'Ctrl+Z annule le dernier réglage d’opacité (35 → 30)');
+    // 14. Ctrl+H : extras masqués
+    await key('H', 'both', ['control']);
+    check(await js('KS.view.hideExtras === true'), 'Ctrl+H masque les extras');
+    await key('H', 'both', ['control']);
+    check(await js('!KS.view.hideExtras'), 'Ctrl+H les réaffiche');
+    // 15. Alt + clic sur la vignette d'un masque : le masque seul
+    await js(`(() => { const d = KS.state.doc; d.active.addMask(d, 'reveal'); KS.emit('layers', d); })()`); await pause(150);
+    const mt = await js(`(() => { const r = document.querySelector('.layer-row.active .thumb + .thumb, .layer.active .thumb:nth-of-type(2)')?.getBoundingClientRect() || [...document.querySelectorAll('[data-tip^="Masque"]')][0]?.getBoundingClientRect(); return r ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null; })()`);
+    if (mt) {
+      send({ type: 'mouseMove', x: mt.x, y: mt.y, modifiers: ['alt'] }); send({ type: 'mouseDown', x: mt.x, y: mt.y, button: 'left', clickCount: 1, modifiers: ['alt'] }); await pause(20);
+      send({ type: 'mouseUp', x: mt.x, y: mt.y, button: 'left', clickCount: 1, modifiers: ['alt'] }); await pause(120);
+    }
+    const px = async () => js(`(() => { const r = KS.view.canvas.getBoundingClientRect(); const d = KS.view.ctx.getImageData(Math.round(KS.view.canvas.width / 2), Math.round(KS.view.canvas.height / 2), 1, 1).data; return [d[0], d[1], d[2]].join(','); })()`);
+    const shown = await js('KS.state.doc.maskView === KS.state.doc.active');
+    await js('KS.view.render()'); const pxMask = await px();
+    check(!!mt && shown && pxMask === '255,255,255', 'Alt + clic sur la vignette du masque : masque seul à l’écran (pixel ' + pxMask + ')');
+    await js(`KS.cmd.viewMask(KS.state.doc.active); KS.view.render()`);
+    check(!(await js('KS.state.doc.maskView')) && (await px()) !== '255,255,255', 'Encore une fois : retour à l’image');
+    // 16. Maj+Tab, F, double-clic sur la main
+    await key('Tab', 'both', ['shift']);
+    check(await js(`document.body.classList.contains('no-dock') && getComputedStyle(document.querySelector('#dock')).display === 'none' && getComputedStyle(document.querySelector('#toolbar')).display !== 'none'`), 'Maj+Tab masque les panneaux de droite, garde les outils');
+    await key('Tab', 'both', ['shift']);
+    await key('F'); await key('F');
+    check(await js(`KS.state.screenMode === 2 && document.body.classList.contains('screen-full')`), 'F, F : plein écran, image seule');
+    // dans ce test le plein écran est celui du navigateur, qui garde Échap pour lui : on envoie Échap à la page (dans KaneApp, plein écran Electron, la vraie touche arrive)
+    await js(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true }))`);
+    check(await js(`!KS.state.screenMode && !document.body.classList.contains('screen-full')`), 'Échap : retour au mode standard');
+    await pause(150);
+    await js(`KS.view.setZoom(3)`);
+    const hb = await js(`(() => { const r = document.querySelector('.tool-btn[data-group="hand"]')?.getBoundingClientRect(); return r ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null; })()`);
+    if (hb) { send({ type: 'mouseMove', x: hb.x, y: hb.y }); for (const n of [1, 2]) { send({ type: 'mouseDown', x: hb.x, y: hb.y, button: 'left', clickCount: n }); send({ type: 'mouseUp', x: hb.x, y: hb.y, button: 'left', clickCount: n }); } await pause(100); }
+    check(!!hb && await js('KS.view.zoom < 3'), 'Double-clic sur la main : taille écran ' + JSON.stringify(hb) + ' ' + await js('KS.view.zoom'));
     const visibleErrors = errors.filter(e => !/favicon|ResizeObserver/.test(e));
     check(!visibleErrors.length, 'Aucune erreur dans la console' + (visibleErrors.length ? ' : ' + visibleErrors.slice(0, 3).join(' | ') : ''));
     if (process.env.RETOUCHE_SHOT) {
@@ -160,6 +212,10 @@ app.whenReady().then(async () => {
       send({ type: 'mouseMove', x: c.x + 40, y: c.y - 30, button: 'right', modifiers: ['shift', 'alt'] }); await pause(250);
       fs.writeFileSync(process.env.RETOUCHE_SHOT, (await win.webContents.capturePage()).toPNG());
       send({ type: 'mouseUp', x: c.x + 40, y: c.y - 30, button: 'right', clickCount: 1, modifiers: ['shift', 'alt'] }); await pause(60);
+      await js(`KS.tools.select('brush')`); await pause(60);
+      send({ type: 'mouseMove', x: c.x - 150, y: c.y - 120 }); send({ type: 'mouseDown', x: c.x - 150, y: c.y - 120, button: 'right', clickCount: 1 }); await pause(20);
+      send({ type: 'mouseUp', x: c.x - 150, y: c.y - 120, button: 'right', clickCount: 1 }); await pause(250);
+      fs.writeFileSync(process.env.RETOUCHE_SHOT.replace('.png', '-forme.png'), (await win.webContents.capturePage()).toPNG());
     }
   } catch (e) { console.log('ÉCHEC ' + (e.stack || e)); fails++; }
   console.log(fails ? fails + ' échec(s)' : 'Tout est bon');

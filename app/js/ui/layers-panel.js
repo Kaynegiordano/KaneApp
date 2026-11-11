@@ -95,13 +95,14 @@
         if (L.mask) {
           row.appendChild(h('span.link', { html: L.mask.linked ? KS.icon('link') : '' }));
           const mc = h('canvas', { width: 38, height: 34 });
-          const mt = h('div.thumb' + (L.editMask ? '.sel' : ''), { 'data-tip': 'Masque — clic : modifier, Ctrl+clic : sélectionner, Maj+clic : désactiver' }, mc);
+          const mt = h('div.thumb' + (L.editMask ? '.sel' : ''), { 'data-tip': 'Masque — clic : modifier, Alt+clic : le voir seul, Ctrl+clic : sélectionner, Maj+clic : désactiver' }, mc);
           if (!L.mask.enabled) mt.style.opacity = '0.35';
           L.drawThumb(mc, doc, 'mask');
           mt.addEventListener('click', e => {
             e.stopPropagation();
             if (e.ctrlKey) { KS.cmd.selectFromMask(L); return; }
             if (e.shiftKey) { doc.setActive(L); KS.cmd.toggleMask(); return; }
+            if (e.altKey) { KS.cmd.viewMask(L); return; }
             doc.setActive(L); L.editMask = true; KS.emit('layers', doc); KS.emit('active-layer', doc);
           });
           row._mc = mc;

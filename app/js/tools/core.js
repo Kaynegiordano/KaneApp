@@ -53,6 +53,8 @@
         if (!g) { bar.appendChild(h('div.tool-sep')); continue; }
         const b = h('button.tool-btn' + (g.length > 1 ? '.has-group' : ''), { 'data-group': g[0] });
         b.addEventListener('click', () => T.select(T.byId[T.groupCurrent[g[0]]] ? T.groupCurrent[g[0]] : g[0]));
+        // comme Photoshop : double-clic sur la main = taille écran, sur la loupe = 100 %
+        b.addEventListener('dblclick', () => { if (!KS.state.doc) return; if (g[0] === 'hand') V.fit(KS.state.doc, true); else if (g[0] === 'zoom') V.setZoom(1); else return; KS.requestRender(); });
         const flyout = e => { e.preventDefault(); T.flyout(g, b); };
         b.addEventListener('contextmenu', flyout);
         let lp = 0;

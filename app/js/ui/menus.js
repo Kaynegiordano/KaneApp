@@ -369,7 +369,7 @@
     M.defs().forEach(m => walk(m.items));
     // compléments
     const extra = { 'ctrl+shift+p': () => KS.palette?.open(), 'ctrl+alt+z': C.undo, 'shift+f6': C.feather, 'ctrl+shift+x': () => KS.liquify && KS.liquify(), 'ctrl+=': C.zoomIn, 'ctrl+shift+=': C.zoomIn, 'f1': KS.dialogs.shortcuts, 'ctrl+shift+f12': () => KS.native && KS.native.toggleDevTools(), 'ctrl+shift+a': C.cameraRaw, 'ctrl+enter': () => C.pathToSelection(), 'ctrl+2': () => C.selectChannel('rgb'), 'ctrl+3': () => C.selectChannel('r'), 'ctrl+4': () => C.selectChannel('g'), 'ctrl+5': () => C.selectChannel('b'),
-      'ctrl+6': () => D()?.alphas[0] && C.selectChannel(D().alphas[0].id), 'ctrl+7': () => D()?.alphas[1] && C.selectChannel(D().alphas[1].id), 'ctrl+g': C.groupLayers, 'ctrl+shift+g': C.ungroup, 'ctrl+alt+a': C.selectAllLayers };
+      'ctrl+6': () => D()?.alphas[0] && C.selectChannel(D().alphas[0].id), 'ctrl+7': () => D()?.alphas[1] && C.selectChannel(D().alphas[1].id), 'ctrl+g': C.groupLayers, 'ctrl+shift+g': C.ungroup, 'ctrl+alt+a': C.selectAllLayers, 'ctrl+h': C.toggleExtras };
     for (const k in extra) M.shortcuts.set(k, { action: extra[k] });
   };
   const keyName = e => {
@@ -422,6 +422,7 @@
       if (isTyping(e.target)) return;
       const doc = D();
       const tool = T.current;
+      if (e.key === 'Escape' && KS.state.screenMode === 2) { e.preventDefault(); C.screenMode(0); return; }
       // outil courant d'abord (Entrée, Échap, flèches, [ ]…)
       if (tool && tool.key && doc && !e.ctrlKey) {
         const tk = e.code === 'BracketLeft' ? (e.shiftKey ? '{' : '[') : e.code === 'BracketRight' ? (e.shiftKey ? '}' : ']') : /^Digit\d$/.test(e.code) ? e.code.slice(5) : e.key;
@@ -448,13 +449,16 @@
       }
       if (e.ctrlKey || e.metaKey) { if (['r', 'w', 'p', 'f', 'g', 'n', 't', 'j'].includes(k)) e.preventDefault(); return; }
       // touches simples
-      if (e.key === 'Tab') { e.preventDefault(); C.togglePanels(); return; }
+      if (e.key === 'Tab') { e.preventDefault(); if (e.shiftKey) C.toggleDock(); else C.togglePanels(); return; }
+      if (k === 'f' && !e.altKey && !e.shiftKey && !e.repeat) { e.preventDefault(); C.screenMode(); return; }
+      if (doc && !e.altKey && !e.shiftKey && /^(Digit|Numpad)\d$/.test(e.code) && C.layerOpacityKey(e.code.slice(-1))) { e.preventDefault(); return; }
       if (e.key === 'F11') { e.preventDefault(); C.fullscreen(); return; }
       if (/^[a-z]$/.test(k) && e.repeat && T.spring && T.spring.code === e.code) { e.preventDefault(); return; }
       if (!doc && !['d', 'x'].includes(k)) { if (/^[a-z]$/.test(k)) T.byKey(k.toUpperCase(), e.shiftKey); return; }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
         if (e.altKey) return C.fillFG();
+        if (e.shiftKey && e.key === 'Backspace') return C.fill();
         if (doc && doc.selection.active) return C.clear();
         if (tool?.id === 'move') return C.deleteLayer();
         return;

@@ -145,6 +145,46 @@
     }
     ctx.restore();
   };
+  // Sélecteur de forme (clic droit) : taille, dureté, formes rondes de dure à douce, tailles courantes
+  let picker = null;
+  G.closePicker = () => { if (picker) { picker.remove(); picker = null; document.removeEventListener('pointerdown', outside, true); } };
+  const outside = e => { if (picker && !picker.contains(e.target)) G.closePicker(); };
+  G.picker = (tool, x, y, more) => {
+    G.closePicker();
+    const h = KS.h, ui = KS.ui, hasH = Number.isFinite(tool.o.hardness);
+    const max = tool.id === 'quick-select' ? 800 : 2500;
+    const set = (k, v) => { T.setOpt(tool, k, v); T.refreshBrushCtl(tool); T.renderOptions(); sync(); KS.requestRender(); };
+    const size = ui.paramRow({ id: 'size', label: 'Taille', min: 1, max, unit: 'px', log: true }, tool.o.size, v => set('size', Math.round(v)));
+    const hard = hasH ? ui.paramRow({ id: 'hardness', label: 'Dureté', min: 0, max: 100, unit: '%' }, tool.o.hardness, v => set('hardness', Math.round(v))) : null;
+    // formes : rond dur → rond doux, dessinées avec leur vrai flou
+    const tips = hasH ? h('div.bp-tips', ...[100, 80, 60, 40, 20, 0].map(v => {
+      const b = h('button.bp-tip', { type: 'button', title: v === 100 ? 'Rond dur' : v === 0 ? 'Rond doux' : 'Dureté ' + v + ' %', 'data-h': v },
+        h('i', { style: { width: '20px', height: '20px', background: `radial-gradient(circle, var(--text) ${v * .7}%, transparent 71%)` } }));
+      b.addEventListener('click', () => { set('hardness', v); hard?.set(v); });
+      return b;
+    })) : null;
+    const sizes = h('div.bp-tips', ...[5, 10, 25, 50, 100, 200].map(v => {
+      const b = h('button.bp-tip', { type: 'button', title: v + ' px', 'data-s': v }, h('i', { style: { width: Math.max(3, Math.round(4 + Math.sqrt(v) * 1.5)) + 'px', height: Math.max(3, Math.round(4 + Math.sqrt(v) * 1.5)) + 'px', background: 'var(--text)' } }), h('small', { text: String(v) }));
+      b.addEventListener('click', () => { set('size', v); size.set(v); });
+      return b;
+    }));
+    const moreBtn = KS.ui.btn('Autres actions…', () => { G.closePicker(); more(); }, '.small.bp-more');
+    picker = h('div.brush-picker', { role: 'dialog', 'aria-label': 'Forme de ' + tool.name },
+      h('div.bp-head', h('span', { text: tool.name }), h('span.note', { text: 'Entrée / Échap : fermer' })), size, hard, tips, sizes, moreBtn);
+    function sync() {
+      picker?.querySelectorAll('[data-h]').forEach(b => b.classList.toggle('on', +b.dataset.h === tool.o.hardness));
+      picker?.querySelectorAll('[data-s]').forEach(b => b.classList.toggle('on', +b.dataset.s === tool.o.size));
+    }
+    picker.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); G.closePicker(); } });
+    document.body.appendChild(picker); sync();
+    const r = picker.getBoundingClientRect();
+    picker.style.left = U.clamp(x + 4, 8, innerWidth - r.width - 8) + 'px';
+    picker.style.top = U.clamp(y + 4, 8, innerHeight - r.height - 8) + 'px';
+    setTimeout(() => document.addEventListener('pointerdown', outside, true));
+    return picker;
+  };
+  window.addEventListener('keydown', e => { if (picker && (e.key === 'Escape' || e.key === 'Enter')) { e.preventDefault(); e.stopImmediatePropagation(); G.closePicker(); } }, true);
+  KS.on('tool', () => G.closePicker());
   // Bulle brève près du curseur (raccourcis [ ], chiffres, modes de fusion…) à la place d'une notification
   let flashEl = null, flashTimer = 0;
   G.flash = text => {

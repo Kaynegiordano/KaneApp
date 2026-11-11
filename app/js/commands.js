@@ -964,8 +964,38 @@
     KS.prefs.showGuides = true; KS.requestRender();
   });
   C.clearGuides = withDoc(d => KS.Hist.structure(d, 'Effacer les repères', () => { d.guides = { h: [], v: [] }; }, 'ruler'));
-  C.fullscreen = () => { if (KS.native) KS.native.toggleFullscreen(); else if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); };
-  C.togglePanels = () => { document.body.classList.toggle('no-panels'); setTimeout(() => V.resize(), 0); };
+  C.fullscreen = () => { if (KS.native?.toggleFullscreen) KS.native.toggleFullscreen(); else if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else document.documentElement.requestFullscreen().catch(() => {}); };
+  C.togglePanels = () => { document.body.classList.remove('no-dock'); document.body.classList.toggle('no-panels'); setTimeout(() => V.resize(), 0); };
+  // Maj+Tab : masquer les panneaux de droite seulement (outils et options restent)
+  C.toggleDock = () => { document.body.classList.remove('no-panels'); document.body.classList.toggle('no-dock'); setTimeout(() => V.resize(), 0); };
+  // F : modes d'écran comme Photoshop — standard, plein écran avec menus, plein écran (image seule)
+  C.screenMode = (next = ((KS.state.screenMode || 0) + 1) % 3) => {
+    const was = KS.state.screenMode || 0; KS.state.screenMode = next;
+    if (!!was !== !!next) C.fullscreen();
+    document.body.classList.toggle('screen-full', next === 2);
+    setTimeout(() => V.resize(), 60);
+    KS.tools.brushGesture?.flash(['Mode écran standard', 'Plein écran avec menus', 'Plein écran (F ou Échap pour revenir)'][next]);
+  };
+  // Ctrl+H : afficher / masquer les extras
+  C.toggleExtras = () => { V.hideExtras = !V.hideExtras; KS.tools.brushGesture?.flash(V.hideExtras ? 'Extras masqués (Ctrl+H)' : 'Extras affichés'); KS.requestRender(); };
+  // Alt + clic sur la vignette d'un masque : le voir seul ; encore une fois pour revenir
+  C.viewMask = L => {
+    const d = D(); if (!d || !L?.mask) return;
+    if (d.maskView === L) d.maskView = null;
+    else { d.maskView = L; d.setActive(L); L.editMask = true; KS.tools.brushGesture?.flash('Masque affiché seul — Alt+clic sur sa vignette pour revenir'); }
+    KS.emit('layers', d); KS.emit('active-layer', d); KS.requestRender();
+  };
+  // Chiffres avec un outil sans opacité (déplacement, sélection…) : opacité du calque, comme Photoshop ; deux chiffres vite = valeur exacte
+  let layerDigit = null;
+  C.layerOpacityKey = digit => {
+    const d = D(), L = d?.active; if (!L) return false;
+    const now = performance.now();
+    let v = digit === '0' ? 100 : +digit * 10;
+    if (layerDigit && now - layerDigit.t < 700 && layerDigit.L === L) { v = +(layerDigit.k + digit); layerDigit = null; } else layerDigit = { k: digit, t: now, L };
+    KS.Hist.structure(d, 'Opacité du calque', () => { L.opacity = v / 100; d.changed(); }, 'layers');
+    KS.tools.brushGesture?.flash('Opacité du calque : ' + v + ' %');
+    return true;
+  };
   C.resetWorkspace = () => { KS.prefs.panels = {}; KS.prefs.dockWidth = 300; KS.prefs.save(); KS.panels.groups = []; KS.panels.build(); };
 
   /* ================================================================ couleurs */
@@ -975,9 +1005,11 @@
   KS.resetColors = () => { KS.state.fg = { r: 0, g: 0, b: 0 }; KS.state.bg = { r: 255, g: 255, b: 255 }; KS.emit('color'); };
 
   /* ================================================================ menu contextuel de la toile */
-  C.canvasContextMenu = (e, ev) => {
+  // clic droit avec un outil de pinceau : le sélecteur de forme (Photoshop) ; « Autres actions… » ouvre le menu habituel
+  C.canvasContextMenu = (e, ev, menuOnly) => {
     const d = D(); if (!d) return;
     const t = T.current;
+    if (!menuOnly && !e.shiftKey && T.brushGesture?.sizeable(t)) { T.brushGesture.picker(t, e.clientX, e.clientY, () => C.canvasContextMenu(e, ev, true)); return; }
     const sel = d.selection.active;
     const items = [];
     if (t && t.contextItems) items.push(...t.contextItems(d), { sep: true });

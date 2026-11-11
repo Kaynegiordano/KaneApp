@@ -154,6 +154,14 @@
       if (d.quickMask) ctx.drawImage(d.quickMask.overlay, sx, sy, sw, sh, rx + sx * z, ry + sy * z, sw * z, sh * z);
       const ach = d.alphaEdit && !d.quickMask && d.alphas.find(a => a.id === d.alphaEdit);
       if (ach && ach.overlay) ctx.drawImage(ach.overlay, sx, sy, sw, sh, rx + sx * z, ry + sy * z, sw * z, sh * z);
+      // Alt + clic sur la vignette d'un masque : le masque seul, en niveaux de gris (comme Photoshop)
+      const mv = d.maskView && d.layers.includes(d.maskView) && d.maskView.mask;
+      if (mv) {
+        const g = mv.outside ?? 255; ctx.fillStyle = `rgb(${g},${g},${g})`; ctx.fillRect(rx, ry, rw, rh);
+        ctx.save(); ctx.beginPath(); ctx.rect(rx, ry, rw, rh); ctx.clip();
+        ctx.drawImage(mv.canvas, rx + mv.x * z, ry + mv.y * z, mv.canvas.width * z, mv.canvas.height * z);
+        ctx.restore();
+      }
       // grille de pixels
       if (z >= 10 && KS.prefs.pixelGrid) {
         ctx.save();
@@ -165,9 +173,12 @@
       }
     }
     ctx.imageSmoothingEnabled = true;
-    if (KS.prefs.showGrid) V.drawGrid(ctx, d);
-    if (KS.prefs.showGuides) V.drawGuides(ctx, d);
-    if (!d.quickMask) d.selection.drawAnts(ctx, V, V.phase);
+    // Ctrl+H : extras masqués (fourmis de sélection, grille, repères) ; la sélection reste active
+    if (!V.hideExtras) {
+      if (KS.prefs.showGrid) V.drawGrid(ctx, d);
+      if (KS.prefs.showGuides) V.drawGuides(ctx, d);
+      if (!d.quickMask) d.selection.drawAnts(ctx, V, V.phase);
+    }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (KS.tools.brushGesture?.active) KS.tools.brushGesture.draw(ctx);
     else if (tool && tool.overlay) { ctx.save(); tool.overlay(ctx, V, d); ctx.restore(); }

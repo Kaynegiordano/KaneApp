@@ -555,6 +555,21 @@ input[type=range].grad-range::-webkit-slider-runnable-track { background: transp
 .tip .k { color: var(--accent-2); margin-left: 6px; font-family: var(--mono); }
 
 body.no-panels #dock, body.no-panels #toolbar, body.no-panels #optionsbar { display: none; }
+body.no-dock #dock { display: none; }
+body.screen-full #dock, body.screen-full #toolbar, body.screen-full #optionsbar, body.screen-full #titlebar, body.screen-full #statusbar, body.screen-full #tabs { display: none; }
+/* sélecteur de forme (clic droit avec un outil de pinceau) */
+.brush-picker { position: fixed; z-index: 60; width: 270px; padding: 12px 12px 10px; border: 1px solid var(--border-2); border-radius: 12px; background: var(--panel); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 8px; }
+.brush-picker .bp-head { display: flex; align-items: center; justify-content: space-between; font: 600 12.5px var(--ui); }
+.brush-picker .bp-tips { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+.brush-picker .bp-tip { height: 38px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.brush-picker .bp-tip:hover { border-color: var(--accent); }
+.brush-picker .bp-tip.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.brush-picker .bp-tip i { display: block; border-radius: 50%; }
+.brush-picker .bp-tip small { font: 500 9.5px var(--ui); color: var(--muted); margin-top: -3px; }
+.brush-picker .bp-more { align-self: flex-start; font-size: 11.5px; }
+.brush-picker .param { grid-template-columns: 1fr 58px; gap: 2px 8px; margin: 0; }
+.brush-picker .param .pl { grid-column: 1 / -1; font-size: 11.5px; }
+.brush-picker .param input.field { width: 58px; }
 body.cursor-hidden #view { cursor: none !important; }
 
 /* paramètres empilés dans les panneaux étroits */
