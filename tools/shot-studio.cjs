@@ -31,7 +31,8 @@ window.ksNative = {
   forgeCatalogCache: async () => ({ ok: true, catalog: CAT }),
   forgeCatalog: async () => ({ ok: true, ...CAT }),
   forgeProgress: async () => ({ ok: true, progress: 0 }),
-  loraThumb: async () => ({ ok: false }),
+  // SHOT_LORA=<dossier> : un projet Lora factice dont les images (et les aperçus d'époque) sont les PNG/JPG de ce dossier
+  loraThumb: async file => { try { return { ok: true, data: new Uint8Array(require('fs').readFileSync(file)) }; } catch { return { ok: false }; } },
   forgeTxt2img: async (url, payload) => { const n = Math.max(1, (+payload.batch_size || 1) * (+payload.n_iter || 1));
     const images = Array.from({ length: n }, () => { const b = IMGS[(window.__n = (window.__n || 0) + 1) % Math.max(1, IMGS.length)]; return b ? Uint8Array.from(atob(b), c => c.charCodeAt(0)) : new Uint8Array(); });
     return { ok: true, images, info: { seed: 1000 + window.__n, infotexts: [payload.prompt + '\\nNegative prompt: ' + payload.negative_prompt + '\\nSteps: ' + payload.steps + ', Sampler: ' + payload.sampler_name + ', Schedule type: ' + payload.scheduler + ', CFG scale: ' + payload.cfg_scale + ', Seed: ' + (1000 + window.__n) + ', Size: ' + payload.width + 'x' + payload.height] } }; },
@@ -40,7 +41,25 @@ window.ksNative = {
   forgeSkip: async () => ({ ok: true }), forgeInterrupt: async () => ({ ok: true }),
   forgeSetOptions: async () => ({ ok: true }),
   openDialog: async () => [],
-  loraCall: async () => ({ ok: true, projects: [], presets: {}, scopes: {}, resolutions: [], optimizers: {}, dits: [], fewshot_resolutions: [] }),
+  loraCall: async (cmd, args = {}) => {
+    const dir = ${JSON.stringify(process.env.SHOT_LORA || '')};
+    if (!dir) return { ok: true, projects: [], presets: {}, scopes: {}, resolutions: [], optimizers: {}, dits: [], fewshot_resolutions: [] };
+    const fs = require('fs'), path = require('path');
+    const files = fs.readdirSync(dir).filter(f => /\.(png|jpe?g)$/i.test(f)).map(f => path.join(dir, f));
+    const imgs = files.filter(f => !/_e0000|_000000_/.test(f)).slice(0, 12), eps = files.filter(f => /_e0000/.test(f));
+    if (cmd === 'info') return { ok: true, presets: { style: { label: 'Style', hint: 'le trait d’un artiste' }, character: { label: 'Personnage', hint: '' } }, scopes: { full: { label: 'Tout le modèle', hint: '', summary: 'tout' } }, scope_default: 'full',
+      resolutions: [512, 768, 1024], optimizers: { adamw8bit: 'AdamW8bit' }, dits: [{ path: 'C:/m/anima_baseV10.safetensors', name: 'anima_baseV10.safetensors', kind: 'base', note: '' }], dit: 'C:/m/anima_baseV10.safetensors', fewshot_resolutions: [512, 1024, 1536], sd_scripts: 'C:/sd', tagger: true };
+    if (cmd === 'list') return { ok: true, projects: [{ name: 'project', trigger: 'n1x3u', count: imgs.length }, { name: 'decor', trigger: 'v1lle', count: 31 }] };
+    if (cmd === 'load') {
+      const caps = Object.fromEntries(imgs.map((f, i) => [path.basename(f), ['safe', '1girl', 'solo', i % 3 ? 'frieren' : 'makima (chainsaw man)', 'long hair', i % 2 ? 'smile' : 'looking at viewer', 'upper body', i % 4 ? 'white hair' : 'red hair', i === 2 ? 'patreon username' : 'simple background'].join(', ')]));
+      const ep = n => eps.filter(f => f.includes('_e0000' + String(n).padStart(2, '0')));
+      return { ok: true, manifest: { trigger: 'n1x3u', lora_type: 'style', epochs: 11, repeats: 4, dim: 20, learning_rate: 4.7e-5, captions: caps, recipe: 2, sample_every: 250 },
+        images: imgs.map(f => ({ file: path.basename(f), path: f, preview: f })),
+        runs: [{ run: 'C:/runs/r', project: 'project', running: false, state: 'done', pct: 100, text: 'Entraînement terminé.', output: 'C:/out/n1x3u.safetensors', token: '@n1x3u', checkpoints: [], samples: [], before: [],
+          epochs: [4, 6, 8, 10].map(n => ({ epoch: n, path: 'C:/out/n1x3u-' + n + '.safetensors', name: n === 10 ? 'n1x3u' : 'n1x3u-0000' + String(n).padStart(2, '0'), final: n === 10, samples: ep(n) })) }] };
+    }
+    return { ok: true, status: null };
+  },
 };
 `);
 

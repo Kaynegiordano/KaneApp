@@ -54,6 +54,8 @@ check(count == 2 and (subset / "a.txt").read_text(encoding="utf-8") == "safe, 1g
       "Jeu de données : « safe, 1girl, @n1x3u, smile » ; image sans légende = déclencheur seul")
 toml = tr.write_dataset_toml(subset, 1024, 1, 3, tmp / "ds.toml", shuffle=False).read_text(encoding="utf-8")
 check("keep_tokens" not in toml and "shuffle_caption = false" in toml, "Légendes non mélangées : pas de keep_tokens")
+nat = tr.write_dataset_toml(subset, 1024, 1, 3, tmp / "nat.toml", shuffle=False, native=True).read_text(encoding="utf-8")
+check("resolution = [1536, 1536]" in nat and "bucket_no_upscale = true" in nat and "skip_image_resolution" not in nat, "Taille réelle : jusqu'à 1536², images jamais agrandies")
 sp = tr.write_sample_prompts(["a, b", "c"], 1024, tmp / "s.txt").read_text(encoding="utf-8").splitlines()
 check(len(sp) == 2 and "--w 832 --h 1216" in sp[0] and "--d 42" in sp[0] and "--d 43" in sp[1] and "--l 4" in sp[0], "Invites d'aperçu : 832×1216, CFG 4, une graine par ligne")
 sd = tmp / "sd"; (sd / "venv" / "Scripts").mkdir(parents=True); (sd / "venv" / "Scripts" / "python.exe").write_bytes(b"")

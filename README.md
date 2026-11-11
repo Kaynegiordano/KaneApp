@@ -20,6 +20,14 @@ et les trois copies ICO utilisées par la fenêtre, les raccourcis et l'installa
 dix tailles de 16 à 256 pixels ; le symbole reste transparent et indépendant du thème de l'interface.
 
 ## Outils récents
+### Atelier Lora : taille réelle, tags, file d'attente (1.30.0)
+
+- **Taille réelle** (`write_dataset_toml(native=True)` : bloc 1536 + `bucket_no_upscale`) : activée par le préréglage pour Style / Technique / Peinture quand la surface médiane des images dépasse 1,1 × 1024² (`lora_bridge._median_area`). Mesuré : 1,96 s/pas contre 1,39 (RTX 5080). A/B n1x3u à 1856 × 1024 (le format le plus utilisé par l'utilisateur) : texture dessinée (hachures, mèches) mieux rendue ; même qualité d'ensemble.
+- Essai écarté : un score de « respect de l'invite » (tags WD14 retrouvés sur l'aperçu) ne départageait rien sur ce style (≈100 % partout).
+- **Tags du projet** (`tagManager` dans `lorastudio.js`) : fréquences, retirer / renommer / ajouter partout, annulation ; enregistré aussitôt.
+- **File d'attente** (`KS.prefs.loraQueue`, `startQueued`) : enchaîne à la fin de chaque entraînement non arrêté à la main ; l'extinction attend la file vide. KaneApp doit rester ouvert.
+- `tools/shot-studio.cjs` : `SHOT_LORA=<dossier>` crée un projet Lora factice (images, légendes, époques) pour les captures.
+
 ### Atelier Lora recalibré (1.29.0)
 
 - **Constat** : les 19 LoRA entraînés par l'atelier avaient tous un poids conseillé de 0,2 à 0,35 (fiches `.json`), contre 0,85 pour les LoRA de la communauté. La recette (taux 1e-4, ~70 passages par image) était environ 3 fois trop forte ; la fiche d'ANIMA conseille 2e-5 pour un rang 32.
@@ -617,3 +625,4 @@ Maintenir Alt + bouton droit dans la zone de travail : glisser horizontalement p
 - **1.27.1** : geste de taille pour tous les outils à empreinte (`brushGesture.sizeable` : taille + curseur rond, au lieu d'une liste figée qui oubliait Suppression et le pinceau de réglage) ; Alt + clic gauche glissé pour les outils sans pipette (un Alt + clic simple est rejoué tel quel : source du tampon) ; `altPaints` pour les outils qui peignent avec Alt.
 - **1.28.0** : sélecteur de forme au clic droit (`brushGesture.picker`), masque seul (`doc.maskView`, Alt+clic vignette), chiffres = opacité du calque (`C.layerOpacityKey`), Ctrl+H (`V.hideExtras`), Maj+Tab (`no-dock`), F modes d'écran (`C.screenMode`), Maj+Retour arrière = Remplir, double-clic Main / Loupe. test-retouche : 37 vérifications.
 - **1.29.0** : atelier Lora recalibré (LoRA justes au poids 1, ~40 % plus court), légendes dans l'ordre d'ANIMA avec note de contenu et `@nom` pour les styles, aperçus et carte par époque avec « Garder cette version ».
+- **1.30.0** : atelier Lora : entraînement à la taille réelle des images pour les styles (texture mieux rendue à 1856 × 1024), gestion des tags du projet, file d'attente d'entraînements.

@@ -27,9 +27,9 @@
   const img = (file, w) => { const i = h('img', { alt: '', loading: 'lazy' }); thumb(file, w).then(u => { if (u) i.src = u; }); return i; };
 
   /* ---------------------------------------------------------------- données */
-  const FORM_KEYS = ['trigger', 'lora_type', 'steps', 'epochs', 'repeats', 'resolution', 'dim', 'learning_rate', 'optimizer', 'scope', 'multires', 'flip_aug',
+  const FORM_KEYS = ['trigger', 'lora_type', 'steps', 'epochs', 'repeats', 'resolution', 'dim', 'learning_rate', 'optimizer', 'scope', 'multires', 'native_res', 'flip_aug',
     'network_dropout', 'caption_dropout_rate', 'lr_scheduler_num_cycles', 'rank_dropout', 'module_dropout', 'threshold', 'base_model', 'sample_every', 'sample_prompt'];
-  const DEF = { trigger: '', lora_type: 'style', steps: 2000, epochs: 0, repeats: 10, resolution: 1024, dim: 20, learning_rate: 1e-4, optimizer: 'adamw8bit', scope: 'full',
+  const DEF = { trigger: '', lora_type: 'style', steps: 2000, epochs: 0, repeats: 10, resolution: 1024, dim: 20, learning_rate: 5e-5, optimizer: 'adamw8bit', scope: 'full',
     multires: false, flip_aug: false, network_dropout: 0, caption_dropout_rate: 0, lr_scheduler_num_cycles: 1, rank_dropout: 0, module_dropout: 0, threshold: 0.35,
     base_model: '', sample_every: 250, sample_prompt: '' };
   const saveForm = U.debounce(async () => {
@@ -69,6 +69,12 @@
         if (was && !st.running) {
           stopPoll();
           KS.toast(st.state === 'done' ? 'Entraînement LoRA terminé' : 'Entraînement LoRA arrêté (' + st.state + ')', st.state === 'done' ? 'ok' : 'info', 6000);
+          const queue = KS.prefs.loraQueue || [];
+          if (!st.stopped && st.state !== 'stopped' && queue.length) {
+            // file d'attente : le projet suivant démarre tout seul ; l'extinction attend la fin de la file
+            const next = queue.shift(); KS.prefs.loraQueue = queue; KS.prefs.save();
+            if (await startQueued(next)) return;
+          }
           if (S.power && !st.stopped && st.state !== 'stopped') {
             const r = await N.loraShutdown(true, `KaneApp : entraînement LoRA ${st.state === 'done' ? 'terminé' : 'terminé avec une erreur'}. Le PC s'éteint dans 2 minutes. Pour annuler : bouton « Annuler l'extinction » de KaneApp, ou shutdown /a.`);
             msg('power', r.ok ? '⏻ Extinction programmée dans 2 minutes.' : 'Extinction impossible : ' + r.error);
@@ -81,6 +87,51 @@
     }, 5000);
   }
   function stopPoll() { clearInterval(S.poll); S.poll = null; }
+  // Démarre un projet de la file avec ses réglages enregistrés (ceux du formulaire au moment où il a été mis en file)
+  async function startQueued(name) {
+    try {
+      const d = await call('load', { name }), m = d.manifest || {};
+      const r = await call('start', { name, dit: m.base_model || S.info?.dit, qwen3: S.qwen3 || S.info?.qwen3, vae: S.vae || S.info?.vae,
+        sample_every: m.sample_every ?? 250, sample_prompt: m.sample_prompt || '' });
+      const hh = Math.floor(r.estimate_s / 3600), mm = Math.floor(r.estimate_s % 3600 / 60);
+      const left = (KS.prefs.loraQueue || []).length;
+      S.run = { run: r.run, project: name, running: true, state: 'running', pct: 0, checkpoints: [], samples: [],
+        text: `File d'attente : **${label({ name, trigger: m.trigger })}** démarré, environ ${hh} h ${String(mm).padStart(2, '0')}.` + (left ? ` Encore ${left} projet(s) ensuite.` : ' Dernier de la file.') };
+      S.msgs.train = S.run.text;
+      KS.toast('Entraînement suivant : ' + label({ name, trigger: m.trigger }), 'info', 5000);
+      startPoll(); if (root && root.isConnected) render();
+      return true;
+    } catch (e) {
+      KS.toast('File d’attente arrêtée : ' + e.message, 'err', 8000);
+      msg('train', '⚠️ File d’attente arrêtée sur « ' + name + ' » : ' + e.message);
+      return false;
+    }
+  }
+  function queueView() {
+    const { tbtn } = F();
+    const q = KS.prefs.loraQueue || [];
+    if (!q.length) return null;
+    return h('div.lt-queue', h('span.fx-lbl', { text: 'File d’attente' }),
+      ...q.map((name, i) => {
+        const p = S.projects.find(x => x.name === name) || { name };
+        const x = h('button.lt-x', { type: 'button', text: '×', title: 'Retirer de la file' });
+        x.addEventListener('click', () => { KS.prefs.loraQueue = q.filter(n => n !== name); KS.prefs.save(); render(); });
+        return h('span.lt-qitem', h('b', { text: String(i + 1) }), h('span', { text: label(p) }), x);
+      }),
+      !(S.run && S.run.running) ? tbtn('Démarrer la file', async () => { const q2 = KS.prefs.loraQueue || []; const next = q2.shift(); KS.prefs.loraQueue = q2; KS.prefs.save(); if (next) await startQueued(next); }, '.primary.sm') : null,
+      h('span.fx-info', { text: S.power ? 'Le PC s’éteindra à la fin de la file.' : '' }));
+  }
+  async function enqueue() {
+    if (!S.cur) return msg('train', 'Choisissez d’abord un projet.');
+    if (!String(S.form.trigger || '').trim()) return msg('train', 'Donnez un mot déclencheur avant de mettre ce projet en file.');
+    const patch = {}; for (const k of FORM_KEYS) patch[k] = S.form[k];
+    await call('save', { name: S.cur, patch });
+    const q = (KS.prefs.loraQueue || []).filter(n => n !== S.cur);
+    q.push(S.cur); KS.prefs.loraQueue = q; KS.prefs.save();
+    msg('train', `« ${label({ name: S.cur, trigger: S.form.trigger })} » ajouté à la file (${q.length}), avec ses réglages actuels. `
+      + (S.run && S.run.running ? 'Il démarrera à la fin de l’entraînement en cours.' : 'Cliquez « Démarrer la file » quand elle est prête.'));
+    render();
+  }
 
   /* ---------------------------------------------------------------- actions (comme les boutons de l'onglet de Forge) */
   async function importFrom({ folder, paths }) {
@@ -118,8 +169,65 @@
     const r = await busy('captions', 'Légendes WD14…', () => call('caption', { name: S.cur, threshold: S.form.threshold, only_missing: false }));
     S.caps = { ...(r.captions || {}) };
     const n = S.data.images.length, f = r.failed || [];
-    S.msgs.captions = `Captioned ${n - f.length} of ${n} image(s) at threshold ${S.form.threshold}.` + (f.length ? `\n\n**${f.length} image(s) could not be tagged** and would train on the trigger word alone: ` + f.slice(0, 10).map(x => '`' + x + '`').join(', ') : '');
+    S.msgs.captions = `${n - f.length} image(s) sur ${n} légendée(s) au seuil ${S.form.threshold}.` + (f.length ? `\n\n**${f.length} image(s) n’ont pas pu être légendées** et s’entraîneraient avec le déclencheur seul : ` + f.slice(0, 10).map(x => '`' + x + '`').join(', ') : '');
     render();
+  }
+  // Tags du projet : combien d'images portent chaque tag ; un clic le retire, le renomme ou le met partout
+  const splitTags = c => String(c || '').split(',').map(t => t.trim()).filter(Boolean);
+  function tagStats() {
+    const n = new Map();
+    for (const c of Object.values(S.caps)) for (const t of new Set(splitTags(c))) n.set(t, (n.get(t) || 0) + 1);
+    return [...n].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }
+  async function editTags(label, fn) {
+    S.capsUndo = { ...S.caps };
+    let changed = 0;
+    for (const [file, c] of Object.entries(S.caps)) {
+      const before = splitTags(c), after = fn(before, file);
+      if (after.join(', ') !== before.join(', ')) { S.caps[file] = after.join(', '); changed++; }
+    }
+    if (!changed) { delete S.capsUndo; return KS.toast('Aucune légende à changer', 'info', 2000); }
+    await saveCaptions();
+    msg('captions', `${label} : ${changed} légende(s) modifiée(s) et enregistrée(s).`);
+    S.capsMsg = `${label} : ${changed} légende(s).`;
+    render();
+  }
+  function tagManager() {
+    const { tbtn } = F();
+    queueMicrotask(() => { const d = root && root.querySelector('.lt-tagbox'); if (d && !d._kw) { d._kw = true; d.addEventListener('toggle', () => { S.tagsOpen = d.open; }); } });
+    const stats = tagStats(), total = Object.keys(S.caps).length;
+    const filter = h('input.fx-in', { placeholder: 'Filtrer les tags…', spellcheck: false, value: S.tagFilter || '' });
+    const list = h('div.lt-tags');
+    const fill = () => {
+      const q = filter.value.trim().toLowerCase();
+      list.replaceChildren(...stats.filter(([t]) => !q || t.toLowerCase().includes(q)).slice(0, 160).map(([t, n]) => {
+        const b = h('button.lt-tag' + (n === total ? '.all' : ''), { type: 'button', title: `${n} image(s) sur ${total} — clic : retirer, renommer…` }, h('span', { text: t }), h('b', { text: String(n) }));
+        b.addEventListener('click', e => {
+          const r = e.currentTarget.getBoundingClientRect();
+          ui.menu([
+            { label: `Retirer « ${t} » des ${n} légende(s)`, icon: 'trash', action: () => editTags(`« ${t} » retiré`, tags => tags.filter(x => x !== t)).catch(err => KS.toast(err.message, 'err')) },
+            { label: 'Renommer partout…', icon: 'text', action: async () => {
+              const v = (await KS.prompt('Renommer le tag', 'Nouveau nom', t) || '').trim(); if (!v || v === t) return;
+              editTags(`« ${t} » → « ${v} »`, tags => [...new Set(tags.map(x => x === t ? v : x))]).catch(err => KS.toast(err.message, 'err'));
+            } },
+            n < total ? { label: `L’ajouter aux ${total - n} autre(s) légende(s)`, icon: 'plus', action: () => editTags(`« ${t} » ajouté`, tags => tags.includes(t) ? tags : [...tags, t]).catch(err => KS.toast(err.message, 'err')) } : null,
+          ].filter(Boolean), r.left, r.bottom + 4);
+        });
+        return b;
+      }));
+    };
+    filter.addEventListener('input', () => { S.tagFilter = filter.value; fill(); });
+    filter.addEventListener('keydown', e => e.stopPropagation());
+    fill();
+    const add = h('input.fx-in', { placeholder: 'tag à ajouter à toutes les légendes', spellcheck: false });
+    add.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') addAll(); });
+    const addAll = () => { const v = add.value.trim(); if (v) editTags(`« ${v} » ajouté partout`, tags => tags.includes(v) ? tags : [...tags, v]).catch(err => KS.toast(err.message, 'err')); };
+    const undo = S.capsUndo ? tbtn('Annuler la dernière modification', async () => { S.caps = { ...S.capsUndo }; delete S.capsUndo; await saveCaptions(); msg('captions', 'Dernière modification des tags annulée.'); render(); }, '.sm') : null;
+    return h('details.fx-acc.lt-acc.lt-tagbox', { open: !!S.tagsOpen },
+      h('summary.fx-acc-h', h('span.fx-acc-t', { text: `Tags du projet (${stats.length} différents)` })),
+      h('div.fx-acc-b',
+        h('div.fx-info', { text: 'Nombre d’images qui portent chaque tag. En surbrillance : présent sur toutes les images. Un clic : le retirer partout, le renommer, ou le compléter.' }),
+        filter, list, h('div.lt-row', add, tbtn('Ajouter partout', addAll, '.sm'), undo)));
   }
   async function saveCaptions() {
     if (!S.cur) return;
@@ -148,6 +256,7 @@
   }
   async function start() {
     if (!S.cur) return msg('train', 'Choisissez d’abord un projet.');
+    if ((KS.prefs.loraQueue || []).includes(S.cur)) { KS.prefs.loraQueue = KS.prefs.loraQueue.filter(n => n !== S.cur); KS.prefs.save(); }
     const f = S.form;
     if (!String(f.trigger || '').trim()) return msg('train', 'Donnez un mot déclencheur : c’est le mot à écrire dans l’invite pour appeler le LoRA.');
     try {
@@ -328,6 +437,7 @@
     }
     const captions = h('div.fx-panel.lt-card', h('div.fx-h', { text: 'Légendes' }),
       h('div.lt-row', slider('Seuil de confiance des tags', f, 'threshold', 0.1, 0.9, 0.05, '', saveForm), tbtn('Légender toutes les images', () => autoCaption().catch(() => {}), '.primary')),
+      on && Object.keys(S.caps).length ? tagManager() : null,
       on ? rows : null,
       h('div.lt-row', tbtn('Enregistrer les légendes', () => saveCaptions().catch(() => {}), '.primary'), msgBox('captions')));
     // carte Training settings
@@ -352,6 +462,7 @@
         slider('Dimension / alpha du réseau', f, 'dim', 4, 128, 4, '', saveForm), field('Taux d’apprentissage', lr),
         select('Optimiseur', Object.entries(I.optimizers), f, 'optimizer', '', saveForm)),
       h('div.lt-grid3', select('Modules entraînés', Object.entries(I.scopes).map(([k, v]) => [k, v.label]), f, 'scope', 'les parties du modèle que le LoRA a le droit de modifier', v => { scopeHint.innerHTML = F().md(`**${I.scopes[v].summary}** · ${I.scopes[v].hint}`); saveForm(); }),
+        check('Taille réelle des images', f, 'native_res', 'chaque image s’entraîne à sa propre taille (jusqu’à 1536 × 1536), jamais agrandie : le trait est appris à l’échelle où vous générez (1856 × 1024…). Environ 40 % plus long.', saveForm),
         check('Plusieurs résolutions', f, 'multires', `entraîne en ${I.fewshot_resolutions.join(' / ')} px au lieu d’une seule taille`, saveForm),
         check('Images en miroir', f, 'flip_aug', 'une seconde vue de chaque image, gratuitement. À éviter pour un sujet volontairement asymétrique', saveForm)),
       scopeHint, adv,
@@ -402,7 +513,10 @@
       h('div.lt-row', check('Libérer la VRAM avant l’entraînement', freeFirst, 'v', 'sd-scripts charge sa propre copie du modèle ; ce que Forge garde en mémoire est retiré à l’entraînement', v => { S.freeFirst = v; }),
         tbtn('Libérer la VRAM maintenant', async () => { try { msg('vram', await freeVram()); } catch (e) { msg('vram', '⚠️ ' + e.message); } })),
       msgBox('vram'),
-      h('div.lt-row.lt-go', tbtn(running ? 'Entraînement en cours…' : 'Lancer l’entraînement', () => start(), '.primary.lt-start'), tbtn('Arrêter', () => stop()), tbtn('Actualiser', () => refreshAll())),
+      h('div.lt-row.lt-go', tbtn(running ? 'Entraînement en cours…' : 'Lancer l’entraînement', () => start(), '.primary.lt-start'),
+        tbtn('Ajouter à la file', () => enqueue().catch(e => msg('train', '⚠️ ' + e.message)), '.lt-enqueue', 'Enchaîner plusieurs projets : chacun démarre à la fin du précédent, avec ses réglages enregistrés. KaneApp doit rester ouvert.'),
+        tbtn('Arrêter', () => stop()), tbtn('Actualiser', () => refreshAll())),
+      queueView(),
       h('div.lt-row', check('Éteindre le PC quand l\'entraînement est terminé', power, 'v', '2 min après la fin, réussi ou en échec ; pas si vous l\'arrêtez vous-même. KaneApp doit rester ouvert.', v => { S.power = v; msg('power', v ? '⏻ Le PC s\'éteindra 2 minutes après la fin de l\'entraînement (réussi ou en échec). Pas d\'extinction si vous l\'arrêtez vous-même.' : 'Le PC restera allumé à la fin de l\'entraînement.'); }),
         tbtn('Annuler l\'extinction', async () => { S.power = false; await N.loraShutdown(false); msg('power', 'Extinction annulée : le PC restera allumé.'); render(); })),
       msgBox('power'),

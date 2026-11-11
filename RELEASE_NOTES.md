@@ -1,8 +1,6 @@
-# 1.29.0 — Atelier Lora : plus rapide, mieux réglé
+# 1.30.0 — Atelier Lora : taille réelle, tags, file d'attente
 
-- **Des LoRA justes au poids 1** : tous les LoRA entraînés ici s'utilisaient à 0,2–0,35, signe d'une recette environ trois fois trop forte. Le taux d'apprentissage est divisé par deux environ (comme le conseille la fiche d'ANIMA) et le nombre de passages par image baisse de 40 %. Essai sur votre style n1x3u (24 images) : **24 minutes au lieu de 41**, image propre au poids 1.
-- **Légendes dans l'ordre d'ANIMA** : note de contenu (safe, sensitive, nsfw, explicit), nombre de personnages, personnages, déclencheur, puis le reste. La note est ajoutée aux anciennes légendes quand vous appliquez le préréglage, sans toucher au reste.
-- **« @nom » pour les styles** (Style, Technique, Peinture numérique) : ANIMA reconnaît un artiste à son « @ ». Écrivez par exemple **@n1x3u** dans vos invites.
-- **Une version par époque, à comparer** : deux images d'aperçu (une scène de votre jeu d'images, une scène nouvelle) avant l'entraînement puis à chaque sauvegarde, même graine. Chaque époque a sa carte avec **Essayer** et **Garder cette version**, qui l'installe dans vos LoRA avec sa fiche (déclencheur, poids 1) et son image, sans jamais écraser un fichier.
-- **Anciens projets** : un message signale les réglages calculés avec l'ancienne recette ; « Appliquer le préréglage » les recalcule.
-- Préréglages et messages de l'atelier en français.
+- **Le trait appris à la bonne échelle** : vous générez surtout en 1856 × 1024, mais l'atelier entraînait à environ 1024 × 1024. Pour les styles (Style, Technique, Peinture numérique) dont les images dépassent 1024 × 1024, chaque image s'entraîne maintenant à sa taille réelle (jusqu'à 1536, jamais agrandie). Essai sur n1x3u comparé en 1856 × 1024 : hachures, mèches et grain du dessin nettement mieux rendus. Environ 40 % plus long, et encore plus court que l'ancienne recette (35 min contre 41 pour 24 images). Case « Taille réelle des images » pour choisir.
+- **Tags du projet** : combien d'images portent chaque tag ; d'un clic, retirer un tag de toutes les légendes, le renommer ou l'ajouter partout. « Annuler la dernière modification ».
+- **File d'attente** : « Ajouter à la file » garde les réglages du projet ; « Démarrer la file » enchaîne les entraînements, chacun à la fin du précédent. « Éteindre le PC » attend la fin de la file.
+- Noms de fichiers longs coupés proprement dans la liste des légendes ; carte d'époque à une seule image centrée.

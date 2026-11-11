@@ -139,7 +139,7 @@ def effective_captions(name: str, threshold: float) -> tuple[dict, list]:
 
 EDITABLE = {"trigger", "steps", "epochs", "repeats", "resolution", "dim", "learning_rate", "threshold", "shuffle_caption",
             "network_dropout", "caption_dropout_rate", "lr_scheduler_num_cycles", "optimizer", "base_model", "scope",
-            "rank_dropout", "module_dropout", "flip_aug", "multires", "lora_type", "captions", "sample_prompt", "sample_every", "recipe"}
+            "rank_dropout", "module_dropout", "flip_aug", "multires", "lora_type", "captions", "sample_prompt", "sample_every", "recipe", "native_res"}
 
 
 # --------------------------------------------------------------------------- commandes
@@ -321,15 +321,20 @@ def cmd_preset(a):
         rated = 0
     r = p.apply(kind, len(images), caps)
     multires = len(r["resolutions"]) > 1
+    # Taille réelle des images pour les styles, si elles sont plus grandes que 1024² : le trait (hachures, grain, mèches)
+    # s'apprend à l'échelle où l'on génère. Mesuré sur n1x3u à 1856x1024 : texture dessinée nettement mieux rendue,
+    # pour environ 40 % de temps en plus. Les autres types n'en profitent pas assez pour ce prix.
+    big = _median_area(images) > 1.1 * 1024 * 1024
+    native = (kind in LIB.caption.ARTIST_LIKE) and big and not multires
     m = s.load(name)
     m.update(steps=r["steps"], epochs=r["epochs"], dim=r["dim"], repeats=r["repeats"], learning_rate=r["learning_rate"],
              resolution=r["resolution"], shuffle_caption=r["shuffle_caption"], lora_type=kind, captions=r["captions"],
              rank_dropout=r["rank_dropout"], module_dropout=r["module_dropout"], flip_aug=r["flip_aug"], multires=multires,
-             caption_dropout_rate=r["caption_dropout_rate"], recipe=RECIPE)
+             caption_dropout_rate=r["caption_dropout_rate"], recipe=RECIPE, native_res=native)
     s.save(name, m)
     note = p.fewshot_note(kind, len(images))
-    where = " x ".join(f"{x}px" for x in r["resolutions"]) if multires else f"{r['resolution']}px"
-    pace = LIB.train.DEFAULT_PACE * 0.94   # encodeur de texte en cache : mesuré 1,39 s/pas contre 1,48
+    where = " x ".join(f"{x}px" for x in r["resolutions"]) if multires else ("taille réelle des images (jusqu'à 1536 px)" if native else f"{r['resolution']}px")
+    pace = LIB.train.DEFAULT_PACE * 0.94 * (1.4 if native else 1.0)   # encodeur en cache : 1,39 s/pas ; taille réelle : 1,96
     status = (f"Préréglage **{p.PRESETS[kind]['label']}** pour {len(images)} image(s) : dimension {r['dim']}, "
               f"taux {r['learning_rate']:.2g}, {r['repeats']} répétitions × {r['epochs']} époques = {r['steps']} pas "
               f"en {where} ({r['passes_per_image']} passages par image), environ {max(1, round(r['steps'] * pace / 60))} min.")
@@ -349,6 +354,23 @@ def cmd_preset(a):
         status += "\n\nRetirés des légendes pour se lier au déclencheur : " + ", ".join(r["removed_tags"][:12]) + more
     return {"manifest": m, "removed_tags": r["removed_tags"], "passes": r["passes_per_image"],
             "resolutions": r["resolutions"], "note": note, "status": status}
+
+
+def _median_area(images) -> float:
+    """Surface médiane des images (lecture des en-têtes seulement), 0 si illisible."""
+    try:
+        from PIL import Image
+        areas = []
+        for p in images[:200]:
+            try:
+                with Image.open(p) as im:
+                    areas.append(im.size[0] * im.size[1])
+            except Exception:
+                pass
+        areas.sort()
+        return float(areas[len(areas) // 2]) if areas else 0.0
+    except Exception:
+        return 0.0
 
 
 def cmd_start(a):
@@ -379,6 +401,7 @@ def cmd_start(a):
     repeats = int(m.get("repeats") or 10)
     resolution = int(m.get("resolution") or 1024)
     multires = bool(m.get("multires"))
+    native = bool(m.get("native_res")) and not multires
     root = s.dir_for(name) / "_training"
     prev_log = Path(m["last_run_log"]) if m.get("last_run_log") else root / "train.log"
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:8]
@@ -391,7 +414,7 @@ def cmd_start(a):
     # permettent de garder l'encodeur de texte en cache (environ 12 % plus rapide, mesuré sur une RTX 5080).
     toml = t.write_dataset_toml(subset, resolution, 1, repeats, work / "dataset.toml",
                                 shuffle=False, caption_dropout_rate=float(m.get("caption_dropout_rate", 0)),
-                                resolutions=resolutions, flip_aug=bool(m.get("flip_aug")))
+                                resolutions=resolutions, flip_aug=bool(m.get("flip_aug")), native=native)
     sample_every = int(a.get("sample_every", m.get("sample_every", 250)) or 0)
     save_every = 1 if len(images) <= p.FEWSHOT_MAX else 2
     sample_file = None
@@ -414,7 +437,7 @@ def cmd_start(a):
         sample_prompts=sample_file, sample_every_epochs=save_every if sample_file else 0, shuffle_caption=False, scope=scope,
         rank_dropout=float(m.get("rank_dropout") or 0), module_dropout=float(m.get("module_dropout") or 0))
     log = work / "train.log"
-    pace = t.measured_pace(prev_log) or t.DEFAULT_PACE
+    pace = (t.measured_pace(prev_log) or t.DEFAULT_PACE) * (1.4 if native else 1.0)   # mesuré : 1,96 s/pas contre 1,39
     (work / "command.txt").write_text("\n".join(command), encoding="utf-8")
     record = {"id": run_id, "project": name, "started_at": datetime.now(timezone.utc).isoformat(), "settings": m,
               "command": command, "output": str(out_dir / f"{trigger}.safetensors"), "stopped": False, "pid": None,

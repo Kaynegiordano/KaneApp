@@ -27,7 +27,9 @@ window.ksNative = {
       resolutions: [512,1024], optimizers: { adamw8bit: 'AdamW' }, dits: [], fewshot_resolutions: [512,1024], sd_scripts: 'C:/training', tagger: true };
     if (cmd === 'list') return { ok: true, projects: window.loraImages.length ? [{ name: 'Import-test', count: window.loraImages.length }] : [] };
     if (cmd === 'import') { window.loraImages.push(...args.paths.map(p => ({file: p.split('/').pop(),path:p}))); return {ok:true,name:'Import-test',added:args.paths.length,count:window.loraImages.length}; }
-    if (cmd === 'load') return { ok:true,manifest:{ trigger: 'n1x3u', lora_type: 'style' },images:window.loraImages,runs:window.loraRun ? [window.loraRun] : [] };
+    if (cmd === 'load') return { ok:true,manifest:{ trigger: 'n1x3u', lora_type: 'style', captions: window.loraCaps || {} },images:window.loraImages,runs:window.loraRun ? [window.loraRun] : [] };
+    if (cmd === 'save') { (window.loraSaves ||= []).push(args); if (args.patch && args.patch.captions) window.loraCaps = { ...args.patch.captions }; return { ok: true }; }
+    if (cmd === 'start') { (window.loraStarts ||= []).push(args); return { ok: true, pid: 7, run: 'C:/runs/' + args.name, total: 100, per_epoch: 10, resolutions: [1024], estimate_s: 600, output: 'C:/out/x.safetensors', count: 2, token: '@n1x3u' }; }
     if (cmd === 'install') { (window.loraInstalls ||= []).push(args); return { ok: true, installed: 'C:/Lora/Anima/' + args.name + '.safetensors', name: args.name }; }
     return {ok:true,status:null};
   },
@@ -574,7 +576,29 @@ async function scenario() {
   [...eps[2].querySelectorAll('button')].find(b => b.textContent === 'Garder cette version').click();
   await wait(() => window.loraInstalls?.length === 1);
   assert(window.loraInstalls[0].path.endsWith('n1x3u-000002.safetensors') && window.loraInstalls[0].token === '@n1x3u' && window.loraInstalls[0].weight === 1 && window.loraInstalls[0].preview.includes('e000002_01'), 'Garder une époque l’installe avec @n1x3u, poids 1 et son image');
-  window.loraRun = null; KS.trainTab.invalidate();
+  window.loraRun = null;
+  // Tags du projet : fréquences ; « Retirer » enlève le tag de toutes les légendes et enregistre
+  window.loraCaps = { 'training-a.png': 'safe, 1girl, frieren, smile', 'training-b.png': 'safe, 1girl, patreon username' };
+  KS.trainTab.invalidate(); await wait(() => !!document.querySelector('.lt-tagbox'));
+  document.querySelector('.lt-tagbox').open = true;
+  const chip = t => [...document.querySelectorAll('.lt-tag')].find(b => b.firstChild.textContent === t);
+  assert(chip('safe')?.classList.contains('all') && chip('safe').lastChild.textContent === '2' && chip('patreon username')?.lastChild.textContent === '1', 'Tags du projet : nombre d’images par tag, « présent partout » en surbrillance');
+  chip('patreon username').click(); await new Promise(r => setTimeout(r, 50));
+  [...document.querySelectorAll('.menu .mi')].find(i => i.textContent.startsWith('Retirer « patreon username »')).click();
+  await wait(() => window.loraCaps['training-b.png'] === 'safe, 1girl' && !chip('patreon username'));
+  assert(window.loraCaps['training-b.png'] === 'safe, 1girl' && window.loraCaps['training-a.png'] === 'safe, 1girl, frieren, smile' && !chip('patreon username'), 'Retirer un tag partout : légendes enregistrées sans lui, les autres intactes ' + JSON.stringify(window.loraCaps));
+  [...document.querySelectorAll('.lt-tagbox button')].find(b => b.textContent.startsWith('Annuler la dernière')).click();
+  await wait(() => window.loraCaps['training-b.png'] === 'safe, 1girl, patreon username');
+  assert(window.loraCaps['training-b.png'] === 'safe, 1girl, patreon username', 'Annuler la dernière modification des tags');
+  // File d'attente : ajouter, puis démarrer la file
+  KS.prefs.loraQueue = [];
+  [...document.querySelectorAll('.lt-go button')].find(b => b.textContent === 'Ajouter à la file').click();
+  await wait(() => !!document.querySelector('.lt-queue'));
+  assert((KS.prefs.loraQueue || []).join() === 'Import-test' && document.querySelectorAll('.lt-qitem').length === 1, 'Ajouter à la file : le projet attend son tour, avec ses réglages enregistrés');
+  [...document.querySelectorAll('.lt-queue button')].find(b => b.textContent === 'Démarrer la file').click();
+  await wait(() => window.loraStarts?.length === 1);
+  assert(window.loraStarts[0].name === 'Import-test' && !(KS.prefs.loraQueue || []).length, 'Démarrer la file lance le premier projet et le retire de la file');
+  window.loraRun = null; window.loraCaps = null; KS.prefs.loraQueue = []; KS.trainTab.invalidate();
   await KS.cmd.openStudioTab('txt2img');
   // Chercher / remplacer, nettoyer et historique des invites
   const pta = document.querySelector('.fx-prompts textarea.fx-prompt'), fbar = document.querySelector('.fx-prompts .kf-bar');
