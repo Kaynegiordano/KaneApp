@@ -1,3 +1,9 @@
+# 1.31.1 — Animation : l'aperçu bouge comme dans Wallpaper Engine
+
+- L'aperçu de l'atelier et la vidéo jouent maintenant **le même personnage-marionnette que la scène** : mêmes os, mêmes mouvements de la tête, des bras, des cheveux et des tissus (Animation 2.5.2). Avant, l'aperçu animait encore les anciens calques, bien moins que Wallpaper Engine.
+- Le clignement et le regard suivent la tête du personnage dans l'aperçu, comme dans la scène.
+- Les vagues et l'herbe s'affichent aussi dans l'aperçu de l'atelier.
+
 # 1.31.0 — Animation : découper une image en calques
 
 - Dans Animation, **« ✂ Découper en calques »** transforme une image plate en document en calques complet (fond, décor, cheveux derrière et devant, corps, visage, robe, manches, bras, bijoux…), avec les parties cachées repeintes (Animation 2.4).

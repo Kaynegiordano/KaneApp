@@ -99,6 +99,14 @@ FX.forEach((e, i) => {
     case 'nage':        fxD += `d += ${C} * (vn2(q*${QS}*0.004 + cy(vec2(0.11,0.08)) + 60.)*${F} + vn2(q*${QS}*0.030 + cy(vec2(1.3,-0.9)) + 3.)*${F}*0.2) * ${K};\n`; break;
     case 'eau':         fxD += `d += ${C} * (vn2(q*${QS}*0.0055 + cy(vec2(0.08,0.055)) + 40.) + vn2(q*${QS}*0.018 + cy(vec2(-0.17,0.11)) + 70.)*0.45 + vn2(q*${QS}*0.045 + cy(vec2(0.30,-0.20)) + 90.)*0.2) * ${F} * ${K};\n`; break;
     case 'derive':      fxD += `d += ${C} * vn2(q*${QS}*0.0042 + cy(vec2(0.055,-0.04)) + 17.) * ${F} * ${K};\n`; break;
+    // vagues : vaguelettes allongees dans le sens du courant qui defilent en boucle (bruit periodique), plus fines au loin
+    // (profondeur), reflets qui ondulent (deplacement surtout vertical) et scintillent sur la pente des vagues
+    case 'vagues': { const sp = e.vitesse ?? 1, n = x => Math.sign(x) * Math.max(1, Math.round(Math.abs(x))), dv = e.dir || [1, 0], nd = Math.hypot(dv[0], dv[1]) || 1;
+                     fxD += `vec3 V${i} = vagues(q, t, vec2(${f(dv[0] / nd)},${f(dv[1] / nd)}), ${QS}, D0, vec3(${n(sp)}.,${n(sp)}.,${n(-2 * sp)}.)); d += ${C} * V${i}.xy * ${F} * ${K};\n`;
+                     fxC += `{ float sh = clamp(V${i}.z*8., -1., 1.); float lu = dot(col, vec3(0.3,0.59,0.11)); col = col*(1. + ${C}*${K}*${f(e.reflet ?? 0.14)}*sh) + ${C}*${K}*${f(3 * (e.reflet ?? 0.14))}*pow(max(sh,0.),4.)*lu*lu; }\n`; break; }
+    // herbe : rafales qui traversent la zone dans le sens du vent (bandes courbes), touffes qui frissonnent chacune a sa phase, eclat des feuilles
+    case 'herbe':  fxD += `vec3 H${i} = herbe(q, t, wdir, ${QS}, ${f(e.vitesse ?? 1)}); d += ${C} * H${i}.xy * ${F} * ${K};\n`;
+                   fxC += `col *= 1. + ${C} * ${K} * ${f(e.eclat ?? 0.05)} * H${i}.z;\n`; break;
     case 'ondes':
       fxU += `uniform vec2 P${i};\n`;
       fxD += `{ vec2 fp=q-P${i}; float fr=length(fp); float wv=sin(fr*0.115 - t*W(2.0))*exp(-fr/${f(e.rayon ?? 70)})*smoothstep(4.,22.,fr)*(0.65+0.35*sin(t*W(0.7))); d += (fp/max(fr,1.))*wv*${F}*${C}*${K}; ond += wv*${C}*${K}; }\n`;
@@ -109,6 +117,23 @@ FX.forEach((e, i) => {
     default: console.warn('effet inconnu', e.type);
   }
 });
+/* vagues et herbe (memes formules dans outils\scene_shader.py). vnp : bruit dont le reseau se replie tous les n carreaux en x,
+   donc decale de n carreaux par boucle sans saut. Hauteur de l'eau = trois octaves allongees le long du courant. */
+const VAGUES_GLSL = `float hp(vec2 i,float n){ i.x -= n*floor(i.x/n); return hash(i); }
+float vnp(vec2 p,float n){ vec2 i=floor(p), r=fract(p); r=r*r*(3.-2.*r);
+  return mix(mix(hp(i,n),hp(i+vec2(1.,0.),n),r.x), mix(hp(i+vec2(0.,1.),n),hp(i+vec2(1.,1.),n),r.x), r.y); }
+float vagH(vec2 p,float u,vec3 m){
+  return (vnp(vec2(p.x*0.011-10.*m.x*u, p.y*0.045), 10.)-0.5)*0.55
+       + (vnp(vec2(p.x*0.023-14.*m.y*u, p.y*0.090+7.), 14.)-0.5)*0.30
+       + (vnp(vec2(p.x*0.047-20.*m.z*u, p.y*0.190+13.), 20.)-0.5)*0.15; }
+vec3 vagues(vec2 q,float tt,vec2 fl,float qs,float D,vec3 m){
+  float pf=1./(0.45+0.55*clamp(D*1.6,0.,1.)); vec2 p=q*qs*pf; p=vec2(dot(p,fl), dot(p,vec2(-fl.y,fl.x))); float u=fract(tt/LOOP);
+  float h=vagH(p,u,m), hy=vagH(p+vec2(0.,1.5),u,m), hx=vagH(p+vec2(37.,53.),u,m);
+  return vec3(vec2(hx*0.5,h)*2./pf, (hy-h)/1.5); }`;
+const HERBE_GLSL = `vec3 herbe(vec2 q,float tt,vec2 wd,float qs,float sp){
+  vec2 p=q*qs; float wv=0.5+0.5*sin(dot(p,wd)*0.010-tt*W(1.2*sp)+vn(p*0.004+3.)*4.); wv*=wv;
+  float fl=sin(tt*W(3.3*sp)+vn(p*0.06)*3.1416)*0.6+sin(tt*W(5.1*sp)+vn(p*0.11+9.)*3.1416)*0.4; float a=0.35+wv;
+  return vec3(wd*(wv-0.3+0.3*fl*a)+vec2(-wd.y,wd.x)*0.22*fl*a, fl*a); }`;
 const VS_BASE = `attribute vec2 a; varying vec2 v; void main(){ v=a*0.5+0.5; v.y=1.0-v.y; gl_Position=vec4(a,0.,1.); }`;
 const FS_BASE = `
 precision highp float;
@@ -119,7 +144,7 @@ uniform float zoom, t, headInput, headLift;
 uniform float K[${Math.max(1, FX.length)}];
 ${fxU}
 const vec2 IMG = vec2(${IMG_W}.,${IMG_H}.);
-const float LOOP = ${LOOP.toFixed(1)};
+const float LOOP = ${LOOP.toFixed(4)};
 float W(float w){ return 6.2831853*max(1.,floor(w*LOOP/6.2831853+0.5))/LOOP; }
 vec2 cy(vec2 v){ float th=6.2831853*t/LOOP; float R=length(v)*LOOP/6.2831853; return R*vec2(cos(th)-1.,sin(th)); }
 float g2(vec2 p, vec2 c, vec2 r){ vec2 q=(p-c)/r; return exp(-dot(q,q)); }
@@ -128,6 +153,8 @@ float vn(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
   return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x), mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x), f.y); }
 vec2 vn2(vec2 p){ return vec2(vn(p), vn(p+vec2(31.7,11.3)))*2.-1.; }
 vec2 ond2(vec2 p, float w){ float a=t*W(w); return vn2(p+vec2(3.1,1.7))*cos(a) + vn2(p+vec2(17.7,9.2))*sin(a); }
+${FX.some(e => e.type === 'vagues') ? VAGUES_GLSL : ''}
+${FX.some(e => e.type === 'herbe') ? HERBE_GLSL : ''}
 void main(){
   vec2 uv = 0.5 + (v-0.5)/cov;
   vec2 c0 = IMG*0.5;
@@ -403,6 +430,90 @@ function updRigide(L, t) {
   const M = L.mesh; for (let i = 0; i < M.n; i++) { const r = rot(M.rest[i * 2], M.rest[i * 2 + 1], p[0], p[1], a); M.pos[i * 2] = r[0]; M.pos[i * 2 + 1] = r[1]; }
 }
 
+/* ---------- calque "personnage" (Animation 2.5) : le personnage en une seule marionnette, la meme que celle de la scene
+   Wallpaper Engine (build.py la fabrique avec squelette.marionnette) : os en pixels de l'image, couches additives en boucle
+   qui partent toutes du repos, ressorts en rotation au bout des chaines, peau de 4 os par sommet au plus, triangles dans
+   l'ordre d'affichage de la scene. Angles en radians dans le repere de l'image (y vers le bas). ---------- */
+const b64 = (s, T) => { const bin = atob(s), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new T(u.buffer); };
+function initPersonnage(L) {
+  const sv = b64(L.sommets, Float32Array), n = sv.length / 4, idx = b64(L.triangles, Uint16Array);
+  const rest = new Float32Array(n * 2), uv = new Float32Array(n * 2), pos = new Float32Array(n * 2);
+  for (let i = 0; i < n; i++) { rest[i * 2] = sv[i * 4]; rest[i * 2 + 1] = sv[i * 4 + 1]; uv[i * 2] = sv[i * 4 + 2]; uv[i * 2 + 1] = sv[i * 4 + 3]; }
+  pos.set(rest);
+  const M = { n, rest, uv, pos, count: idx.length, posBuf: gl.createBuffer(), uvBuf: gl.createBuffer(), idxBuf: gl.createBuffer() };
+  gl.bindBuffer(gl.ARRAY_BUFFER, M.uvBuf); gl.bufferData(gl.ARRAY_BUFFER, uv, gl.STATIC_DRAW);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, M.idxBuf); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, M.posBuf); gl.bufferData(gl.ARRAY_BUFFER, pos, gl.DYNAMIC_DRAW);
+  L.mesh = M; L.si = b64(L.os_sommets, Uint8Array); L.sw = b64(L.poids_os, Uint8Array);
+  const nb = L.os.length, prof = i => { let d = 0; for (let p = L.os[i].p; p >= 0; p = L.os[p].p) d++; return d; };
+  L.ordre = [...Array(nb).keys()].sort((a, b) => prof(a) - prof(b));                 // parents d'abord
+  const F = () => new Float32Array(nb);
+  L.ang = F(); L.dy = F(); L.bx = F(); L.by = F(); L.ba = F(); L.bc = F(); L.bs = F();
+  L.phi = F(); L.om = F(); L.h1 = null; L.n = -1;
+  // couches : frequence arrondie pour boucler sur ANIM.boucle (export video sans saut) ; ecart < 10 % avec Wallpaper Engine
+  L.couches.forEach(c => { c.w = W(TAU * c.vitesse / (2 * c.duree)); });
+}
+function poseCouches(L, t) {                       // rotation et montee locales de chaque os : somme des couches
+  L.ang.fill(0); L.dy.fill(0);
+  for (const c of L.couches) {
+    const K = c.poids * (c.propriete ? val('kane_mouvement_' + c.propriete) : 1); if (K < 1e-4) continue;
+    const s = Math.sin(t * c.w), co = (1 - Math.cos(t * c.w)) / 2;
+    for (const k in c.os) { const v = c.os[k]; if (v.rot) L.ang[k] += K * v.rot * Math.PI / 180 * s; if (v.dy) L.dy[k] += K * v.dy * co; }
+  }
+}
+function osMonde(L) {                              // position et angle de chaque os dans l'image (cinematique directe)
+  const O = L.os;
+  for (const i of L.ordre) {
+    const o = O[i], p = o.p, a = L.ang[i] + L.phi[i];
+    if (p < 0) { L.bx[i] = o.x; L.by[i] = o.y - L.dy[i]; L.ba[i] = a; }
+    else { const lx = o.x - O[p].x, ly = o.y - O[p].y - L.dy[i], c = Math.cos(L.ba[p]), s = Math.sin(L.ba[p]);
+      L.bx[i] = L.bx[p] + lx * c - ly * s; L.by[i] = L.by[p] + lx * s + ly * c; L.ba[i] = L.ba[p] + a; }
+  }
+}
+function pasRessorts(L, t, dt) {
+  // ressort en rotation (reglages de la scene : raideur rs, amortissement rf, part d'inertie ri en %, angle limite) mis en
+  // mouvement par l'acceleration de l'attache de l'os et la rotation de son parent. Inertie unitaire : avec ri en diviseur
+  // (frequence propre 0,5 Hz), les bouts des capes entraient en resonance avec les couches « Pointes » (0,56 Hz) et battaient
+  // de 45 degres, alors que dans Wallpaper Engine ils restent calmes (comparaison sur la meme scene, video du 12/11/2026)
+  poseCouches(L, t); osMonde(L);
+  const O = L.os, nb = O.length;
+  if (!L.h1) { L.h1 = [L.bx.slice(), L.by.slice(), L.ba.slice()]; L.h2 = [L.bx.slice(), L.by.slice(), L.ba.slice()]; }
+  const [x1, y1, a1] = L.h1, [x2, y2, a2] = L.h2, i2 = 1 / (dt * dt);
+  for (const i of L.ordre) {
+    const R = O[i].ressort; if (!R) continue;
+    const p = O[i].p, ax = (L.bx[i] - 2 * x1[i] + x2[i]) * i2, ay = (L.by[i] - 2 * y1[i] + y2[i]) * i2;
+    const alp = p >= 0 ? (L.ba[p] - 2 * a1[p] + a2[p]) * i2 : 0;
+    const vx = O[i].bout[0] - O[i].x, vy = O[i].bout[1] - O[i].y, l2 = Math.max(1, vx * vx + vy * vy);
+    const c = Math.cos(L.ba[i]), s = Math.sin(L.ba[i]), dx = vx * c - vy * s, dy = vx * s + vy * c;
+    const acc = -(R.rs * L.phi[i] + R.rf * L.om[i]) - R.ri / 100 * (alp + (dx * ay - dy * ax) / l2);
+    L.om[i] += acc * dt; L.phi[i] += L.om[i] * dt;
+    if (Math.abs(L.phi[i]) > R.lim) { L.phi[i] = Math.sign(L.phi[i]) * R.lim; L.om[i] = 0; }
+  }
+  L.h2 = L.h1; L.h1 = [L.bx.slice(), L.by.slice(), L.ba.slice()];
+}
+function updPersonnage(L, t) {
+  const target = Math.round(t * 60);
+  if (L.n < 0 || target < L.n || target - L.n > 600) { L.n = target - 600; L.phi.fill(0); L.om.fill(0); L.h1 = null; }
+  while (L.n < target) { L.n++; pasRessorts(L, L.n / 60, 1 / 60); }
+  poseCouches(L, t); osMonde(L);
+  const O = L.os, nb = O.length;
+  for (let b = 0; b < nb; b++) { L.bc[b] = Math.cos(L.ba[b]); L.bs[b] = Math.sin(L.ba[b]); }
+  const M = L.mesh, si = L.si, sw = L.sw;
+  for (let v = 0; v < M.n; v++) {
+    const rx = M.rest[v * 2], ry = M.rest[v * 2 + 1]; let X = 0, Y = 0, ws = 0;
+    for (let k = 0; k < 4; k++) {
+      const w = sw[v * 4 + k]; if (!w) continue; const b = si[v * 4 + k], dx = rx - O[b].x, dy = ry - O[b].y;
+      X += w * (L.bx[b] + dx * L.bc[b] - dy * L.bs[b]); Y += w * (L.by[b] + dx * L.bs[b] + dy * L.bc[b]); ws += w;
+    }
+    if (ws > 0) { M.pos[v * 2] = X / ws; M.pos[v * 2 + 1] = Y / ws; } else { M.pos[v * 2] = rx; M.pos[v * 2 + 1] = ry; }
+  }
+}
+function suitTete(L, P) {                          // calque du visage porte par l'os de la tete (objet attache de la scene)
+  const b = P.tete, o = P.os[b], c = P.bc[b], s = P.bs[b], M = L.mesh;
+  for (let i = 0; i < M.n; i++) { const dx = M.rest[i * 2] - o.x, dy = M.rest[i * 2 + 1] - o.y;
+    M.pos[i * 2] = P.bx[b] + dx * c - dy * s; M.pos[i * 2 + 1] = P.by[b] + dx * s + dy * c; }
+}
+
 /* ---------- calque "visage" : clignement (sequence d'images, 0 = ouvert, N-1 = ferme), periodique ---------- */
 function initVisage(L, seed) {
   const B = []; let tt = 1.2 + rnd(seed) * 2.5, k = 0;
@@ -446,16 +557,20 @@ function updateParallax(t, dt) {
 }
 
 /* ---------- textures et initialisation ---------- */
-function loadTex(src, premul) {
+function loadTex(src, premul, nearest) {
   return new Promise(res => { const im = new Image(); im.onload = () => {
     const tx = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tx);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, !!premul);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, !!premul); gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, nearest ? gl.NONE : gl.BROWSER_DEFAULT_WEBGL);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, im);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    const fl = nearest ? gl.NEAREST : gl.LINEAR;
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, fl); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, fl);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     res(tx); }; im.src = src; });
 }
-const LAYERS = (ANIM.calques || []).map((l, i) => Object.assign({ idx: i }, l));
+// Animation 2.5 : ANIM.personnage (marionnette) prend la place des calques marques « dans_personnage », a son rang
+const PERSO = ANIM.personnage ? Object.assign({ idx: -1, type: 'personnage' }, ANIM.personnage) : null;
+const LAYERS = (ANIM.calques || []).map((l, i) => Object.assign({ idx: i }, l)).filter(l => !(PERSO && l.dans_personnage));
+if (PERSO) LAYERS.splice(LAYERS.filter(l => l.idx < PERSO.rang).length, 0, PERSO);
 let T = null;
 async function init() {
   const tb = await Promise.all([loadTex(A[ANIM.fond]), loadTex(A[ANIM.profondeur_web || ANIM.profondeur]), ...(ANIM.masques || []).map(m => loadTex(A[m]))]);
@@ -463,8 +578,11 @@ async function init() {
   DEPTH = await readImage(A[ANIM.profondeur_web || ANIM.profondeur]);
   for (const L of LAYERS) {
     L.tex = await loadTex(A[L.image], true);
-    if (L.poids) L.poidsImg = await readImage(A[L.poids]);
-    L.mesh = makeMesh(L.boite, L.maille ?? (L.type === 'visage' ? 8 : L.type === 'rigide' ? 24 : 10));
+    if (L.type === 'personnage') initPersonnage(L);
+    else {
+      if (L.poids) L.poidsImg = await readImage(A[L.poids]);
+      L.mesh = makeMesh(L.boite, L.maille ?? (L.type === 'visage' ? 8 : L.type === 'rigide' ? 24 : 10));
+    }
     if (L.type === 'cheveux') initCheveux(L);
     else if (L.type === 'membre') initMembre(L);
     else if (L.type === 'visage') initVisage(L, 3 + L.idx * 17);
@@ -487,16 +605,19 @@ function render() {
   renderedHead = headInteraction(); renderedLift = headLift();
   const sa = canvas.width / canvas.height, ia = IMG_W / IMG_H;
   const cam = { cov: sa > ia ? [1, sa / ia] : [ia / sa, 1], zoom: (ANIM.zoom ?? 1.012) + (ANIM.camera === false ? 0 : 0.006 * (PX.camera ?? 1) * Math.sin(time * W(0.13))), drift: ANIM.camera === false ? [0, 0] : [Math.sin(time * W(0.09)) * 5 * (PX.camera ?? 1), Math.cos(time * W(0.07)) * 3 * (PX.camera ?? 1)] };
-  // calques d'abord (le bout d'un membre pilote les ondes du shader)
+  // calques d'abord (le bout d'un membre pilote les ondes du shader) ; le personnage avant les calques portes par sa tete
+  if (PERSO) updPersonnage(PERSO, time);
   for (const L of LAYERS) {
     if (L.type === 'cheveux') updCheveux(L, time);
     else if (L.type === 'membre') updMembre(L, time);
     else if (L.type === 'rigide') updRigide(L, time);
+    else if (L.type === 'personnage') { /* deja pose */ }
+    else if (L.porte_tete && PERSO && PERSO.tete != null) suitTete(L, PERSO);
     else { const M = L.mesh; M.pos.set(M.rest); }
-    const M = L.mesh;
+    const M = L.mesh, corps = L.suit === 'corps' && !(L.porte_tete && PERSO);      // porte par la tete : pas de suivi du corps en plus
     for (let i = 0; i < M.n; i++) {
       const s = (L.Dv ? L.Dv[i] : (L.D ?? DC)) - DC;
-      if (L.suit === 'corps') { const h = bodyD(M.rest[i * 2], M.rest[i * 2 + 1], time); M.pos[i * 2] += h[0]; M.pos[i * 2 + 1] += h[1]; }
+      if (corps) { const h = bodyD(M.rest[i * 2], M.rest[i * 2 + 1], time); M.pos[i * 2] += h[0]; M.pos[i * 2 + 1] += h[1]; }
       M.pos[i * 2] += par[0] * s; M.pos[i * 2 + 1] += par[1] * s;
     }
   }
