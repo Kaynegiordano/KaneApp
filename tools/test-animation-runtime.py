@@ -76,6 +76,8 @@ def serve_forever():
     assert commands[-1][2:5] == [str(Path(runtime.__file__).resolve()), '--worker', 'C:/tools/auto_anim.py']
     runtime.subprocess.Popen(['python', '-u', 'C:/tools/decoupe.py'])
     assert commands[-1][2:5] == [str(Path(runtime.__file__).resolve()), '--worker', 'C:/tools/decoupe.py']
+    runtime.subprocess.Popen(['python', '-u', 'C:/tools/squelette.py', '--reconstruit'])
+    assert commands[-1][2:6] == [str(Path(runtime.__file__).resolve()), '--worker', 'C:/tools/squelette.py', '--reconstruit']
     runtime.subprocess.Popen(['python', '-u', 'C:/tools/depth.py'])
     assert commands[-1] == ['python', '-u', 'C:/tools/depth.py']
 
@@ -103,6 +105,12 @@ with tempfile.TemporaryDirectory() as folder:
             Path('index.html').write_text('aperçu enrichi', encoding='utf-8')
         with patch.dict(sys.modules, wetools=wetools, forge_rebouche=forge, animation_web=SimpleNamespace(configure=configure)), patch.object(runtime.runpy, 'run_path', lambda *a, **kw: None):
             runtime.worker('C:/fixture/auto_anim.py', [])
+        assert Path('anim.json').read_text(encoding='utf-8') == '{"effets":[]}'
+        assert Path('index.html').read_text(encoding='utf-8') == 'aperçu enrichi'
+        # « Appliquer » de l'onglet Squelette : même enrichissement de l'aperçu, même description neutre gardée
+        Path('index.html').write_text('aperçu brut', encoding='utf-8')
+        with patch.dict(sys.modules, wetools=wetools, forge_rebouche=forge, animation_web=SimpleNamespace(configure=configure)), patch.object(runtime.runpy, 'run_path', lambda *a, **kw: None):
+            runtime.worker('C:/fixture/squelette.py', ['--reconstruit'])
         assert Path('anim.json').read_text(encoding='utf-8') == '{"effets":[]}'
         assert Path('index.html').read_text(encoding='utf-8') == 'aperçu enrichi'
     finally:

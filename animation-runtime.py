@@ -63,7 +63,8 @@ def worker(script, args):
     finally:
         if finish:
             finish()
-    if os.path.basename(script) == 'auto_anim.py' and os.path.isfile('anim.json') and os.path.isfile('assets.js'):
+    # « 2. Animer » et « Appliquer » de l'onglet Squelette (Animation 2.6) réassemblent l'aperçu : interactions de KaneApp ensuite
+    if os.path.basename(script) in ('auto_anim.py', 'squelette.py') and os.path.isfile('anim.json') and os.path.isfile('assets.js'):
         from animation_web import configure
         # Web interactions change the assembled preview only. Preserve the neutral
         # animation description consumed by the independent native Scene exporter.
@@ -87,7 +88,7 @@ def server(script, args):
         def __init__(self, command, *a, **kw):
             if isinstance(command, list):
                 for i, part in enumerate(command[1:], 1):
-                    if os.path.basename(str(part)) in ('auto_anim.py', 'super_magique.py', 'decoupe.py'):
+                    if os.path.basename(str(part)) in ('auto_anim.py', 'super_magique.py', 'decoupe.py', 'squelette.py'):
                         command = command[:i] + [os.path.abspath(__file__), '--worker', part] + command[i + 1:]
                         break
             super().__init__(command, *a, **kw)

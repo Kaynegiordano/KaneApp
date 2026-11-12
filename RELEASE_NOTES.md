@@ -1,3 +1,12 @@
+# 1.32.0 — Animation : éditeur de squelette
+
+- Pour un document en calques, l'onglet **« 1. Squelette »** d'Animation montre les os du personnage sur l'image (Animation 2.6). L'onglet **« Zones »** reste pour les yeux, l'eau, les particules et la lumière.
+- **Articulations** : glissez un rond blanc (épaule, coude, poignet, cou…) quand la pose détectée est décalée.
+- **Mouvements** : pour chaque famille (respiration, tête, bras, cheveux, tissus, bijoux), une case, l'amplitude et la vitesse ; pour un os, son amplitude, « Figé » ou son ressort.
+- **Pièces** : choisissez l'os qui porte un calque, par exemple une main posée sur la hanche portée par le bassin.
+- **Chaînes** : tracez une mèche ou un pan de tissu en cliquant de la racine à la pointe, ou retirez une chaîne mal placée.
+- **« Appliquer ▶ »** met l'aperçu à jour en quelques secondes, sans refaire toute l'animation. Vos retouches sont gardées quand vous relancez « 2. Animer ».
+
 # 1.31.1 — Animation : l'aperçu bouge comme dans Wallpaper Engine
 
 - L'aperçu de l'atelier et la vidéo jouent maintenant **le même personnage-marionnette que la scène** : mêmes os, mêmes mouvements de la tête, des bras, des cheveux et des tissus (Animation 2.5.2). Avant, l'aperçu animait encore les anciens calques, bien moins que Wallpaper Engine.
