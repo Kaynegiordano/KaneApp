@@ -221,7 +221,7 @@ Le bouton Actualiser de Studio IA > LoRA libère un entraînement bloqué et rel
 - L’import d’images dans **Lora** reste dans l’atelier d’entraînement. Un dépôt dans le Studio
   ne crée plus implicitement de documents dans **Edition**.
 - **Préférences > Applications intégrées > Migration vers Kanevas** copie les moteurs du Studio,
-  ComfyUI, Animation et sd-scripts dans **KanevasData**, avec leurs environnements Python,
+  ComfyUI, Animation et sd-scripts dans **KaneAppData**, avec leurs environnements Python,
   extensions, nœuds et données. Les chemins internes et lanceurs Python sont adaptés dans les copies.
 - Les fichiers sont contrôlés par **SHA256**, les environnements Python testés et les points d’entrée
   revérifiés avant activation. **Montage** reçoit aussi son propre FFmpeg vérifié et sa licence.
@@ -592,9 +592,9 @@ Maintenir Alt + bouton droit dans la zone de travail : glisser horizontalement p
 
 
 ## Installateur et mises à jour
-- **Installer** : télécharger `Kanevas-Setup-x.y.z.exe` depuis les [Releases](https://github.com/Kaynegiordano/Kanevas/releases) (installation par utilisateur, sans droits administrateur).
+- **Installer** : télécharger `KaneApp-Setup-x.y.z.exe` depuis les [Releases](https://github.com/Kaynegiordano/KaneApp/releases) (installation par utilisateur, sans droits administrateur).
 - **Mises à jour** : Kanevas vérifie les releases GitHub 8 secondes après le démarrage ; Aide > Rechercher des mises à jour… le fait à la demande. Rien n'est téléchargé sans accord, puis « Redémarrer et installer ». Ne fonctionne que dans la version installée.
-- **Publier une version** : changer `version` dans `package.json` (et la même dans le journal des changements ci-dessous), puis `Publier une version.cmd`. Il construit l'installateur (`npm run dist`) et crée la release GitHub avec `Kanevas-Setup-x.y.z.exe`, `.blockmap` et `latest.yml` (ce dernier est indispensable aux mises à jour).
+- **Publier une version** : changer `version` dans `package.json` (et la même dans le journal des changements ci-dessous), puis `Publier une version.cmd`. Il construit l'installateur (`npm run dist`) et crée la release GitHub avec `KaneApp-Setup-x.y.z.exe`, `.blockmap` et `latest.yml` (ce dernier est indispensable aux mises à jour).
 
 ## Journal des versions
 - **1.0.0** : première version publique, installateur Windows et mises à jour GitHub.
@@ -630,4 +630,5 @@ Maintenir Alt + bouton droit dans la zone de travail : glisser horizontalement p
 - **1.30.2** : Animation Vidéo — les extensions de ComfyUI (custom_nodes) se mettent aussi à jour à chaque lancement (`services.cjs` `updateNodes` : fetch en parallèle, fast-forward si propre, sous-modules ignorés, retour arrière si pip échoue).
 - **1.31.0** : Animation 2.4 — tâche `decouper` (découpe en calques) dans la réservation du GPU et dans l'adaptateur `animation-runtime.py` (LaMa/ViTMatte libérés avant Forge, un seul déchargement en fin de tâche) ; « Ouvrir le document » relayé (`animation-open-document` → `animation-document`) pour ouvrir `calques.psd` dans l'Édition.
 - **1.32.0** : Animation 2.6 — onglet Squelette de l'atelier (articulations, mouvements, pièces, chaînes) ; « Appliquer » lance `squelette.py --reconstruit`, que `animation-runtime.py` passe par son adaptateur comme `auto_anim.py` : l'aperçu reprend ses interactions souris (`animation_web.configure`) et `anim.json` reste neutre pour la scène. Test : `tools/test-animation-runtime.py`.
+- **1.33.0** : renommage complet Kanevas → KaneApp : `KaneApp.exe` dans `Programs\KaneApp` (`build/installer.nsh` déplace l’ancienne installation), `KaneApp-Setup`, dépôt `Kaynegiordano/KaneApp`, dossiers `C:\KaneOS\KaneApp` et `KaneAppData` (jonctions cachées pour les anciens chemins), données `%APPDATA%\KaneApp` (renommées au premier lancement).
 - **1.31.1** : Animation 2.5.2 — `animation-web/moteur.html` reconstruit depuis le moteur d'Animation (interactions souris reportées) : personnage-marionnette `ANIM.personnage` (os, couches, ressorts, peau de 4 os, yeux portés par l'os de la tête) à la place des calques marqués `dans_personnage` ; vagues et herbe, qui manquaient à cette copie. Test WebGL réel : `tools/test-animation-personnage.cjs`.

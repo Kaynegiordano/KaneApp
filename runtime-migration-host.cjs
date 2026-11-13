@@ -4,7 +4,7 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 module.exports = function migrationHost({ getWin, directories, managed, idle, reset }) {
   let running = false, progress = null, error = '';
-  const target = () => path.join(directories().root, 'KanevasData');
+  const target = () => path.join(directories().root, 'KaneAppData');
   const reportFile = () => path.join(target(), 'migration.json');
   const state = () => {
     let report = null;

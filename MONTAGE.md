@@ -32,10 +32,10 @@ Electron, Playwright et FFmpeg ; il fabrique ses médias et utilise un profil
 isolé. Pour l'intégration, depuis le dépôt KaneClip :
 
 ```powershell
-$env:KANE_PRO_HOST='C:/KaneOS/Kanevas'
+$env:KANE_PRO_HOST='C:/KaneOS/KaneApp'
 node tests/pro-editing.cjs
 # Pour contrôler ensuite l'installation :
-$env:KANE_PRO_APP='C:/Users/Franc/AppData/Local/Programs/Kanevas/Kanevas.exe'
+$env:KANE_PRO_APP='C:/Users/Franc/AppData/Local/Programs/KaneApp/KaneApp.exe'
 node tests/pro-editing.cjs
 ```
 

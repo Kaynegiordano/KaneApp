@@ -3,7 +3,7 @@ import base64, json, os, socket, subprocess, tempfile, time, urllib.request, url
 from pathlib import Path
 
 repo = Path(__file__).resolve().parents[1]
-report = json.loads(Path(r'C:\KaneOS\KanevasData\migration.json').read_text(encoding='utf-8'))
+report = json.loads(Path(r'C:\KaneOS\KaneAppData\migration.json').read_text(encoding='utf-8'))
 component = report['components']['wallpaper']
 python = Path(component['directory']) / 'venv/Scripts/python.exe'
 port = 18780

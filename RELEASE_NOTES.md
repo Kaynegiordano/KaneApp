@@ -1,3 +1,11 @@
+# 1.33.0 — KaneApp s'appelle KaneApp partout
+
+- Le programme devient **KaneApp.exe**, installé dans `Programs\KaneApp` (au lieu de `Programs\Kanevas\Kanevas.exe`). La mise à jour déplace l'installation toute seule et recrée les raccourcis.
+- L'installateur s'appelle **KaneApp-Setup**, et le dépôt GitHub **Kaynegiordano/KaneApp** (l'ancienne adresse redirige).
+- Les dossiers de KaneOS deviennent **KaneApp** (le code) et **KaneAppData** (les moteurs IA). Vos préférences passent dans `%APPDATA%\KaneApp`.
+- Rien n'est perdu : réglages, projets, galerie, Lora et moteurs restent en place. Les anciens chemins restent valables grâce à un lien invisible.
+- Si KaneApp était épinglé à la barre des tâches, épinglez-le de nouveau depuis le menu Démarrer.
+
 # 1.32.0 — Animation : éditeur de squelette
 
 - Pour un document en calques, l'onglet **« 1. Squelette »** d'Animation montre les os du personnage sur l'image (Animation 2.6). L'onglet **« Zones »** reste pour les yeux, l'eau, les particules et la lumière.

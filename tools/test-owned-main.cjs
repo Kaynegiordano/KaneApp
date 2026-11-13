@@ -4,7 +4,7 @@ const fs = require('node:fs'), path = require('node:path'), os = require('node:o
 const root = process.env.KANEVAS_TEST_ROOT || path.join(__dirname, '..');
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'kanevas-owned-main-'));
 process.env.KANEVAS_PROFILE = profile;
-const reportFile = process.env.KANEVAS_MANAGED_REPORT || 'C:\\KaneOS\\KanevasData\\migration.json';
+const reportFile = process.env.KANEVAS_MANAGED_REPORT || 'C:\\KaneOS\\KaneAppData\\migration.json';
 // Les moteurs réels changent (ComfyUI se met à jour au lancement) : sans copie vérifiée intacte, le test est sauté,
 // sans exception au chargement (Electron ouvrirait une boîte d'erreur et attendrait un clic).
 let owned;

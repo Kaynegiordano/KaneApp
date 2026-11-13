@@ -11,10 +11,18 @@ app.on('will-quit', () => gpuMemory.stop());
 // Réutiliser les données existantes (préférences et modèles IA) après le changement de nom.
 // Le nom affiché est « KaneApp » (1.17) ; le dossier de données garde son nom technique (KaneShop ou Kanevas) : sinon le
 // changement de nom du produit aurait ouvert un dossier vide, sans préférences ni modèles.
-const legacyData = ['KaneShop', 'kaneshop'].map(n => path.join(app.getPath('appData'), n)).find(p => fs.existsSync(p));
+// 1.33 : le dossier prend le nom KaneApp. L'ancien (KaneShop, Kanevas) est renommé une fois, avant toute ouverture ;
+// s'il est verrouillé, on le garde tel quel et on réessaiera au prochain lancement.
+function userDataDir() {
+  const appData = app.getPath('appData'), target = path.join(appData, 'KaneApp');
+  if (fs.existsSync(target)) return target;
+  const legacy = ['KaneShop', 'kaneshop', 'Kanevas'].map(n => path.join(appData, n)).find(p => fs.existsSync(p));
+  if (!legacy) return target;
+  try { fs.renameSync(legacy, target); return target; } catch { return legacy; }
+}
 // KANEVAS_PROFILE : dossier de données séparé (essais automatisés à côté de l'application ouverte)
 if (process.env.KANEVAS_PROFILE) app.setPath('userData', process.env.KANEVAS_PROFILE);
-else app.setPath('userData', legacyData || path.join(app.getPath('appData'), 'Kanevas'));
+else app.setPath('userData', userDataDir());
 app.setName('KaneApp');
 if (process.platform === 'win32') app.setAppUserModelId('com.kane.kanevas');
 

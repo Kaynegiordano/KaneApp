@@ -1,8 +1,8 @@
 {
-  "name": "kanevas",
+  "name": "kaneapp",
   "productName": "KaneApp",
-  "version": "1.32.0",
-  "description": "Kanevas — éditeur d'images inspiré de Photoshop",
+  "version": "1.33.0",
+  "description": "KaneApp — éditeur d'images, Studio IA, Animation et Montage",
   "main": "main.js",
   "private": true,
   "scripts": {
@@ -20,16 +20,16 @@
     "onnxruntime-node": "^1.30.0"
   },
   "author": "Kane",
-  "homepage": "https://github.com/Kaynegiordano/Kanevas",
+  "homepage": "https://github.com/Kaynegiordano/KaneApp",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Kaynegiordano/Kanevas.git"
+    "url": "https://github.com/Kaynegiordano/KaneApp.git"
   },
   "license": "UNLICENSED",
   "build": {
     "appId": "com.kane.kanevas",
     "productName": "KaneApp",
-    "executableName": "Kanevas",
+    "executableName": "KaneApp",
     "copyright": "Kane",
     "directories": {
       "output": "dist",
@@ -92,7 +92,7 @@
         }
       ],
       "icon": "build/icon.ico",
-      "artifactName": "Kanevas-Setup-${version}.${ext}",
+      "artifactName": "KaneApp-Setup-${version}.${ext}",
       "signExecutable": false
     },
     "nsis": {
@@ -105,13 +105,14 @@
       "deleteAppDataOnUninstall": false,
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
-      "language": "1036"
+      "language": "1036",
+      "include": "build/installer.nsh"
     },
     "publish": [
       {
         "provider": "github",
         "owner": "Kaynegiordano",
-        "repo": "Kanevas",
+        "repo": "KaneApp",
         "releaseType": "release"
       }
     ]

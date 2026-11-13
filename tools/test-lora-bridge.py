@@ -1,6 +1,6 @@
 """Contrats de l'atelier Lora (passerelle + lib_trainer), sans GPU ni projet réel.
 Lancer avec le Python du venv du Studio :
-    C:\\KaneOS\\KanevasData\\runtimes\\studio\\venv\\Scripts\\python.exe tools\\test-lora-bridge.py
+    C:\\KaneOS\\KaneAppData\\runtimes\\studio\\venv\\Scripts\\python.exe tools\\test-lora-bridge.py
 Tout se passe dans un dossier temporaire : les projets et les LoRA de l'utilisateur ne sont jamais touchés.
 """
 import json
@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import lora_bridge as B  # noqa: E402
 
-DATA = Path(r"C:\KaneOS\KanevasData\runtimes\studio")
+DATA = Path(r"C:\KaneOS\KaneAppData\runtimes\studio")
 fails = 0
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 

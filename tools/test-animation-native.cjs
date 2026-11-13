@@ -9,7 +9,7 @@ const profile=path.join(tmp,'profile');process.env.KANEVAS_PROFILE=profile;
 const managed=require(path.join(root,'managed-runtimes.cjs'))(profile);
 // moteurs réels modifiés depuis leur vérification (ComfyUI se met à jour) : test sauté, sans boîte d'erreur au chargement
 let owned;
-try{owned=managed.activate('C:\\KaneOS\\KanevasData\\migration.json');}
+try{owned=managed.activate('C:\\KaneOS\\KaneAppData\\migration.json');}
 catch(error){console.log('SAUTÉ : copies des moteurs non activables ('+error.message+')');fs.rmSync(tmp,{recursive:true,force:true});process.exit(0);}
 owned.source=tmp;fs.writeFileSync(path.join(profile,'managed-runtimes.json'),JSON.stringify(owned));
 const output=path.join(tmp,'output','animation'),fixture=path.join(tmp,'Choix réel.png');fs.mkdirSync(output,{recursive:true});

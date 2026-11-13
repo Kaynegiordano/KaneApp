@@ -4,11 +4,11 @@ La migration copie les installations locales. Le retrait officiel des anciennes 
 
 ## Données et installations
 
-- `C:\KaneOS\KanevasData\runtimes\studio` : moteur du Studio, extensions, Python et projets LoRA.
-- `C:\KaneOS\KanevasData\runtimes\ComfyUI` : Animation Vidéo, nœuds personnalisés, Python et données de l’interface.
-- `C:\KaneOS\KanevasData\runtimes\Animation` : Animation, outils, Python, ressources et projets locaux.
-- `C:\KaneOS\KanevasData\runtimes\sd-scripts` : bibliothèque d’entraînement.
-- `C:\KaneOS\KanevasData\bin` : FFmpeg et sa licence, utilisés par Montage et les processus intégrés.
+- `C:\KaneOS\KaneAppData\runtimes\studio` : moteur du Studio, extensions, Python et projets LoRA.
+- `C:\KaneOS\KaneAppData\runtimes\ComfyUI` : Animation Vidéo, nœuds personnalisés, Python et données de l’interface.
+- `C:\KaneOS\KaneAppData\runtimes\Animation` : Animation, outils, Python, ressources et projets locaux.
+- `C:\KaneOS\KaneAppData\runtimes\sd-scripts` : bibliothèque d’entraînement.
+- `C:\KaneOS\KaneAppData\bin` : FFmpeg et sa licence, utilisés par Montage et les processus intégrés.
 
 Le dossier commun `C:\KaneOS\models`, les sorties communes de KaneOS, les caches Hugging Face et le Python de base installé dans Windows restent partagés. Ce ne sont pas des copies indépendantes de ces données. Ils doivent rester en place.
 
@@ -42,6 +42,6 @@ Avant retrait, le retour aux installations précédentes restaure les fichiers d
 - `tools/test-studio.cjs` : import Lora isolé de l’Édition.
 - `tools/test-suite.cjs` : interface et ponts natifs de migration, suppression indisponible sans données vérifiées.
 - `tools/test-owned-main.cjs` : vrai processus principal et profil isolé, chemins des services et projets LoRA copiés, FFmpeg réel et catalogue fonctionnel quand les métadonnées `cmd-flags` de Forge ne répondent pas.
-- `python tools/verify-migrated-runtimes.py --report C:\KaneOS\KanevasData\migration.json --component studio` : génération et inpaint sur le moteur copié, sur un port de test. Les autres composants disponibles sont `comfyui`, `wallpaper`, `lora` et `media`.
+- `python tools/verify-migrated-runtimes.py --report C:\KaneOS\KaneAppData\migration.json --component studio` : génération et inpaint sur le moteur copié, sur un port de test. Les autres composants disponibles sont `comfyui`, `wallpaper`, `lora` et `media`.
 
 Ces contrôles applicatifs utilisent les copies réelles et des ports locaux distincts. L’entraînement LoRA complet, une vidéo générative et l’évaluation des mouvements sur les projets personnels restent à effectuer avant d’autoriser un retrait.
