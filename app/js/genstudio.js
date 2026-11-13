@@ -1,5 +1,5 @@
 // Studio Forge dans Kanevas : nouvelle image (nouveau document), image vers image
-// (visages, mains, yeux), agrandir et détailler (MultiDiffusion), PNG Info (lecture, écriture, envoi au
+// (visages, mains, yeux), agrandir et détailler (super résolution générative), PNG Info (lecture, écriture, envoi au
 // panneau), et l'IA en direct (rendu qui suit le dessin). Tout passe par le Forge local.
 'use strict';
 (() => {
@@ -99,32 +99,9 @@
   };
 
   /* ---------------------------------------------------------------- agrandir et détailler */
-  // Agrandissement ESRGAN puis image vers image par tuiles (MultiDiffusion) à faible force : de vrais détails
-  // à la nouvelle taille, sans recomposer l'image. Le résultat s'ouvre dans un nouveau document.
-  C.upscaleDetail = async () => {
-    const d = D(); if (!d) return;
-    const st = G.studio(), m = st.md;
-    const forge = await needForge(); if (!forge) return;
-    const f = +m.factor || 1.5, W = r8(d.width * f), H = r8(d.height * f);
-    if (Math.max(W, H) > 8192 || W * H > 40e6) { KS.toast('Résultat trop grand (8192 px de côté, 40 mégapixels au plus)', 'err', 4000); return; }
-    const up = m.upscaler || (forge.upscalers || []).find(n => /ultrasharp/i.test(n)) || (forge.upscalers || [])[0] || 'Lanczos';
-    try {
-      const comp = d.composite();
-      const r1 = await G.task('Agrandissement (' + up + ')…', async () => N.forgeUpscale(G.url(), { resize_mode: 1, upscaling_resize_w: W, upscaling_resize_h: H, upscaling_crop: false, upscaler_1: up, upscaler_2: 'None', extras_upscaler_2_visibility: 0, gfpgan_visibility: 0, codeformer_visibility: 0, show_extras_results: true }, await pngBytes(comp)));
-      if (!r1.ok) throw new Error(r1.error);
-      let big = await U.canvasFromBlob(new Blob([r1.image], { type: 'image/png' }));
-      if (big.width !== W || big.height !== H) big = scaled(big, W, H);
-      const pp = await G.preparePrompt(promptOf() || 'masterpiece, best quality, highly detailed', forge, st);
-      const payload = { ...basePayload({ ...st, steps: m.steps }, pp, W, H, 1), denoising_strength: +m.denoise, resize_mode: 0 };
-      G.addScripts(payload, await G.scriptsFor(st, 'img2img', { md: true }));
-      const job = { payload, W, H, R: { x: 0, y: 0, w: W, h: H }, init: await pngBytes(big), mask: null };
-      const res = await G.forgeRun(job); res.job = job;
-      const nd = new KS.Doc({ name: d.name.replace(/\.[^.]+$/, '') + ` ×${f} détaillé`, width: W, height: H });
-      KS.addDoc(nd);
-      nd.addLayer(new KS.Layer({ name: 'Agrandi (' + up + ')', canvas: big }), 0);
-      G.addGenLayer(nd, res, null, { name: 'Détails (MultiDiffusion)', hist: 'Agrandir et détailler', noMask: true, index: 1, icon: 'upscale' });
-    } catch (e) { KS.toast('Agrandir et détailler impossible : ' + e.message, 'err', 6000); }
-  };
+  // Remplacé par la super résolution générative (Kane MultiDiffusion : tuiles à la taille de l'image, invite par tuile,
+  // formes et couleurs de la source tenues) : même fenêtre que la super résolution, méthode « Générative ».
+  C.upscaleDetail = () => C.superResolution({ method: 'gen' });
 
   /* ---------------------------------------------------------------- PNG Info */
   // Paramètres de génération rangés dans les PNG (bloc « parameters », comme Forge) : lus à l'ouverture,

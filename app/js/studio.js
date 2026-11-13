@@ -36,7 +36,8 @@
     i2i: { ...COMMON(), steps: 32, resize_mode: 1, sizeTab: 'to', scale_by: 1, autoSize: true, denoising_strength: 0.6, mask_blur: 4, inpainting_mask_invert: 0, inpainting_fill: 1,
       inpaint_full_res: 1, inpaint_full_res_padding: 32,
       soft: { enabled: false, bias: 1, preserve: 0.5, contrast: 4, influence: 0, diffThr: 0.5, diffContrast: 2 },
-      md: { enabled: false, method: 'Mixture of Diffusers', tw: 768, th: 768, overlap: 64, batch: 1 } },
+      md: { enabled: false, method: 'Kane', tw: 768, th: 768, overlap: 64, batch: 1,
+        kane: { tile: 0, overlap: 128, structure: 0.5, detail: 0.3, colors: 1, prompts: true } } },
     ex: { mode: 'by', resize: 4, w: 1024, h: 1024, crop: true, up1: 'None', up2: 'None', vis2: 0, batch: false },
   };
   const FREE = new Set(['scriptArgs', 'open', 'forces']);   // dictionnaires sans clés fixes
@@ -52,6 +53,8 @@
     return o;
   };
   const FX = merge(DEF, KS.prefs.fx && KS.prefs.fx.v === 1 ? KS.prefs.fx : null);
+  // Kane MultiDiffusion (2026-11) : devient la méthode de MultiDiffusion une fois, les réglages gardés ensuite
+  if (!KS.prefs.fx?.i2i?.md?.kane) FX.i2i.md.method = 'Kane';
   // Migration vers la force modérée du nouveau remplissage.
   if (!KS.prefs.fx?.editor?.fillVersion) FX.editor.strength = 0.5;
   FX.editor.strength = U.clamp(+FX.editor.strength || 0.5, 0.4, 0.6);
@@ -1183,10 +1186,34 @@
         row2(slider('CFG', st, 'cfg_scale', 1, 24, 0.5, 'CFG Scale'), slider('Shift', st, 'distilled_cfg_scale', 0, 24, 0.5)), presetRow(st)),
       sect('Graine', seedRows(st, 'i2i')),
       kdAcc(st, 'i2i'), soft,
-      acc('MultiDiffusion', st, 'md', () => [select('Méthode', ['MultiDiffusion', 'Mixture of Diffusers'], st.md, 'method'),
-        row2(slider('Largeur de tuile', st.md, 'tw', 256, 2048, 64, 'Tile width'), slider('Hauteur de tuile', st.md, 'th', 256, 2048, 64, 'Tile height')),
-        row2(slider('Chevauchement', st.md, 'overlap', 0, 1024, 16, 'Tile overlap'), slider('Tuiles par lot', st.md, 'batch', 1, 8, 1, 'Tile batch size'))], { on: [st.md, 'enabled'], tip: 'MultiDiffusion Integrated : génération par tuiles, pour les très grandes images' }),
+      acc('MultiDiffusion', st, 'md', () => mdBody(st), { on: [st.md, 'enabled'], tip: 'Image vers image par tuiles, pour les très grandes images. Kane MultiDiffusion : tuiles à la taille de l’image, invite par tuile, formes et couleurs de la source tenues' }),
       advAcc(st, 'i2i'));
+  }
+
+  // MultiDiffusion : Kane MultiDiffusion (extension du moteur du Studio) ou les deux méthodes de MultiDiffusion Integrated
+  function mdBody(st) {
+    const kane = st.md.method === 'Kane', k = st.md.kane, rp = () => renderParams();
+    const methods = [['Kane', 'Kane MultiDiffusion (conseillé)'], ['MultiDiffusion', 'MultiDiffusion'], ['Mixture of Diffusers', 'Mixture of Diffusers']];
+    const out = [select('Méthode', methods, st.md, 'method', 'Kane MultiDiffusion : moins de tuiles, raccords qui bougent à chaque pas, invite par tuile (WD14)', rp)];
+    if (!kane) return out.concat(
+      row2(slider('Largeur de tuile', st.md, 'tw', 256, 2048, 64, 'Tile width'), slider('Hauteur de tuile', st.md, 'th', 256, 2048, 64, 'Tile height')),
+      row2(slider('Chevauchement', st.md, 'overlap', 0, 1024, 16, 'Tile overlap'), slider('Tuiles par lot', st.md, 'batch', 1, 8, 1, 'Tile batch size')));
+    if (cat && !cat.kmdInfo) out.push(h('div.fx-info', { text: 'Kane MultiDiffusion n’est pas dans ce moteur : mettez Kane OS à jour puis redémarrez le moteur du Studio (MultiDiffusion classique en attendant).' }));
+    return out.concat(
+      row2(slider('Structure', k, 'structure', 0, 1, 0.05, 'Formes de la source tenues pendant le calcul : permet une force de 0,35 à 0,5 sans perdre la composition'),
+        slider('Détail en plus', k, 'detail', 0, 1, 0.05, 'Grain et finesse ajoutés au milieu du calcul')),
+      row2(slider('Couleurs d’origine', k, 'colors', 0, 1, 0.05, 'Teinte et lumière d’ensemble de la source gardées (ondelettes)'),
+        slider('Chevauchement', k, 'overlap', 32, 512, 16, 'Chevauchement minimal entre tuiles, en pixels')),
+      row2(slider('Tuile max (0 = auto)', k, 'tile', 0, 2048, 64, 'Côté maximal d’une tuile ; auto : 1,125 × la résolution du modèle (1152 px pour ANIMA)'),
+        check('Invite par tuile (WD14)', k, 'prompts', 'Chaque tuile ne reçoit que ce qu’elle montre, et un négatif contre les visages là où il n’y en a pas')));
+  }
+  function mdScripts(st) {
+    if (st.md.method === 'Kane' && cat && cat.kmdInfo) {
+      const k = st.md.kane;
+      return { 'Kane MultiDiffusion': { args: [{ enabled: true, tile: +k.tile || 0, overlap: +k.overlap || 128, structure: +k.structure, detail: +k.detail, colors: +k.colors, prompts: !!k.prompts, negatives: !!k.prompts }] } };
+    }
+    const method = st.md.method === 'Kane' ? 'Mixture of Diffusers' : st.md.method;
+    return { 'MultiDiffusion Integrated': { args: [true, method, +st.md.tw, +st.md.th, +st.md.overlap, +st.md.batch] } };
   }
 
   /* ---------------------------------------------------------------- onglets Lora et Checkpoints */
@@ -1921,7 +1948,7 @@
     if (st.kd.enabled && st.kd.parts.length && cat && cat.kdInfo) p.alwayson_scripts['Kane Detailer'] = { args: [{ enabled: true, parts: st.kd.parts, forces: { ...st.kd.forces }, skip: k === 'i2i' && !!st.kd.skip, keep: +st.kd.keep, resolution: +st.kd.resolution, detail: +st.kd.detail || 0, upscale: +st.kd.upscale || 1, tries: +st.kd.tries || 1, repair: !!st.kd.repair, grain: +st.kd.grain || 0, glow: !!st.kd.glow, age: !!st.kd.age, autotag: st.kd.autotag !== false, soft: st.kd.soft !== false, wd: st.kd.wd !== false }] };
     if (st.noom.unet || st.noom.vae) p.alwayson_scripts['Never OOM Integrated'] = { args: [!!st.noom.unet, !!st.noom.vae] };
     if (k === 'i2i') {
-      if (st.md.enabled) p.alwayson_scripts['MultiDiffusion Integrated'] = { args: [true, st.md.method, +st.md.tw, +st.md.th, +st.md.overlap, +st.md.batch] };
+      if (st.md.enabled) Object.assign(p.alwayson_scripts, mdScripts(st));
       if (st.soft.enabled && INPAINT_MODES.includes(FX.i2iMode)) p.alwayson_scripts['Soft inpainting'] = { args: [true, +st.soft.bias, +st.soft.preserve, +st.soft.contrast, +st.soft.influence, +st.soft.diffThr, +st.soft.diffContrast] };
     }
     const sc = st.script !== 'None' && cat && cat.scripts.find(s => s.name === st.script && s.img2img === (k === 'i2i'));

@@ -355,8 +355,13 @@ Le bouton Actualiser de Studio IA > LoRA libère un entraînement bloqué et rel
   Le résultat est un calque avec masque de fusion. Invite vide : remplissage par LaMa, sans Forge.
 - **Développement génératif** (Image) : agrandit l'image à un format (16:9, 1:1, 4:5…) ou d'une marge, la zone neuve
   est générée (Forge avec invite, sinon LaMa) dans un calque placé au-dessus de l'arrière-plan. Une seule étape d'historique.
-- **Super résolution IA** (Image) : ×2, ×3 ou ×4 avec les modèles ESRGAN de Forge (4x-UltraSharp…), dans un nouveau
-  document ; la transparence est conservée.
+- **Super résolution IA** (Image) : ×1,5, ×2, ×3 ou ×4, dans un nouveau document ; la transparence est conservée.
+  - **Générative** (par défaut) : l'image agrandie par le modèle ESRGAN choisi (4x-UltraSharp…) est repeinte par tuiles
+    par le moteur du Studio (**Kane MultiDiffusion**) : vrai détail à la nouvelle taille. Chaque tuile ne reçoit que ce
+    qu'elle montre (WD14) et un négatif contre les visages là où il n'y en a pas : plus de personnage inventé dans le
+    décor. Formes et couleurs de la source tenues. Réglages : créativité (0,35), détail en plus, invite (reprise de
+    l'image si elle vient du Studio). Au-delà de ×2, deux passes. ×2 d'une image de 2 Mpx : environ 50 s (RTX 5080).
+  - **Classique** : le modèle ESRGAN seul, rapide et fidèle.
 - **Harmoniser** (Calque, menu du calque, barre contextuelle) : accorde la lumière, le contraste et la dominante de
   couleur du calque à ce qu'il y a dessous (mesures en Lab sur le calque et son voisinage), avec aperçu.
 - **Pinceau de réglage** (B, avec le pinceau) : on peint un réglage (éclaircir, assombrir, contraste, saturer,
@@ -499,8 +504,10 @@ Kanevas pilote le Forge local comme un « mini Forge », avec en plus tout l'éd
 - **Image → image** : l'image (ou la sélection) retravaillée selon l'invite et la force, dans un calque au-dessus.
 - **ADetailer** : détecteurs de Forge (visages, mains, yeux Eyeful…), jusqu'à 3, invite / force / confiance ; à chaque
   génération, ou **Retoucher (ADetailer)** seul sur l'image en cours (comme « Skip img2img »), dans un calque.
-- **Agrandir et détailler** : agrandissement ESRGAN (×1,5 / ×2 / ×3) puis image vers image par tuiles
-  (**MultiDiffusion**, Mixture of Diffusers), dans un nouveau document (calque agrandi + calque détaillé).
+- **Agrandir et détailler** : c'est maintenant la super résolution générative (Kane MultiDiffusion, voir plus haut).
+- **MultiDiffusion** (image → image du Studio) : **Kane MultiDiffusion** par défaut (tuiles à la taille de l'image,
+  raccords qui bougent à chaque pas, invite par tuile, structure, détail en plus, couleurs d'origine) ; MultiDiffusion
+  et Mixture of Diffusers restent au choix.
 - **Shift** (anima) envoyé comme dans Forge (3), préréglages de Forge avec leur Shift et leur taille.
 - **Aperçu en direct** de l'image qui se forme pendant chaque génération (option de Forge).
 - **PNG Info** (Fichier ou IA) : les paramètres d'un PNG de Forge sont lus à l'ouverture et réécrits à l'export PNG ;

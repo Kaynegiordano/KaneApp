@@ -1,3 +1,14 @@
+# 1.35.0 — Super résolution générative (Kane MultiDiffusion)
+
+- **Super résolution IA** a deux méthodes. **Générative** (par défaut) ajoute du vrai détail : l'image agrandie par le modèle choisi (4x-UltraSharp…) est repeinte par tuiles par le moteur du Studio. **Classique** garde l'agrandisseur seul.
+- La générative utilise **Kane MultiDiffusion**, une nouvelle extension du moteur, plus fidèle et plus rapide que MultiDiffusion :
+  - moins de tuiles (2048 × 3072 : 6 au lieu de 12), et des raccords qui changent de place à chaque pas ;
+  - chaque tuile ne reçoit que ce qu'elle montre (WD14), avec un négatif contre les visages là où il n'y en a pas. Sur l'image d'essai, MultiDiffusion inventait un petit personnage derrière une main ; ici, rien n'apparaît ;
+  - les formes et les couleurs de la source sont tenues.
+- Réglages : ×1,5 à ×4, créativité (0,35), détail en plus, invite (reprise de l'image si elle vient du Studio), invite par tuile. Au-delà de ×2, deux passes. Environ 50 s pour ×2 d'une image de 2 mégapixels sur une RTX 5080.
+- Dans le Studio, image vers image › **MultiDiffusion** propose **Kane MultiDiffusion** (conseillé) avec ses réglages : structure, détail en plus, couleurs d'origine, chevauchement, taille de tuile, invite par tuile.
+- Il faut le moteur du Studio à jour (Kane OS) : sinon la méthode générative est grisée et le Studio revient à MultiDiffusion.
+
 # 1.34.1 — KaneApp se ferme toujours
 
 - Un projet Animation supprimé pendant qu'il était ouvert bloquait la fermeture de KaneApp. À chaque essai, le message « Les zones de l'animation n'ont pas pu être enregistrées » s'ajoutait. Le projet disparu est maintenant refermé, sans rien bloquer.

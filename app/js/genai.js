@@ -243,7 +243,7 @@
   };
   G.forgeRun = async job => {
     let stop = false;
-    const label = job.payload.override_settings?.sd_model_checkpoint ? 'Changement de modèle puis génération avec Forge…' : 'Génération avec Forge…';
+    const label = job.label || (job.payload.override_settings?.sd_model_checkpoint ? 'Changement de modèle puis génération avec Forge…' : 'Génération avec Forge…');
     const r = await G.task(label, () => job.txt ? N.forgeTxt2img(G.url(), job.payload) : N.forgeImg2img(G.url(), job.payload, job.init, job.mask),
       { cancel: () => { stop = true; N.forgeInterrupt(G.url()); }, progress: N.forgeProgress ? forgeProgress : null });
     if (!r.ok) throw new Error(r.error);
@@ -469,50 +469,132 @@
   };
 
   /* ---------------------------------------------------------------- super résolution */
-  C.superResolution = async () => {
+  // Deux méthodes. Classique : le modèle ESRGAN seul (rapide, fidèle, n'invente rien). Générative : l'image agrandie par
+  // ce modèle est repeinte par tuiles par le moteur du Studio (Kane MultiDiffusion) : du vrai détail à la nouvelle taille.
+  // Chaque tuile reçoit l'invite de ce qu'elle montre (WD14) et une invite négative contre les visages là où il n'y en a
+  // pas ; les formes et les couleurs de la source sont tenues. Au-delà de ×2, deux passes (×2 puis la taille finale).
+  const SR = { method: 'gen', factor: 2, creativity: 0.35, detail: 0.3, tilePrompts: true };
+  const genPrompt = info => { const t = String(info || ''); const i = t.search(/\n(Negative prompt:|Steps:)/); return (i < 0 ? t : t.slice(0, i)).trim(); };
+  const genNegative = info => { const m = /\nNegative prompt: ([^\n]*)/.exec(String(info || '')); return m ? m[1].trim() : ''; };
+  C.superResolution = async (opts = {}) => {
     const d = D(); if (!d) return;
     if (!N || !N.forgeUpscale) { KS.toast('La super résolution n\'est disponible que dans l\'application de bureau', 'info'); return; }
     const f = await G.forge(true);
-    if (!f) { KS.toast(G.forgeError() + ' : la super résolution passe par Forge, lancez-le depuis Kane OS', 'err', 5000); return; }
-    if (!f.upscalers.length) { KS.toast('Forge ne propose aucun modèle d\'agrandissement', 'err'); return; }
+    if (!f) { KS.toast(G.forgeError() + ' : la super résolution passe par le moteur du Studio', 'err', 5000); return; }
+    if (!f.upscalers.length) { KS.toast('Le moteur ne propose aucun modèle d\'agrandissement', 'err'); return; }
+    const kmd = N.forgeKmdInfo ? await N.forgeKmdInfo(G.url()) : { ok: false };
     const pref = KS.prefs.upscaler;
     const def = f.upscalers.find(n => n === pref) || f.upscalers.find(n => /ultrasharp/i.test(n)) || f.upscalers.find(n => /R-ESRGAN 4x\+$/.test(n)) || f.upscalers[0];
-    const o = { factor: 2, model: def };
+    const o = { ...SR, ...(KS.prefs.superRes || {}), ...opts, model: def, prompt: genPrompt(d.genInfo) };
+    if (!kmd.ok) o.method = 'classic';
+    const gen = () => o.method === 'gen';
+    const size = () => ({ W: Math.round(d.width * o.factor), H: Math.round(d.height * o.factor) });
     const info = h('div.note');
-    const upd = () => { info.textContent = `${d.width} × ${d.height} → ${d.width * o.factor} × ${d.height * o.factor} px, dans un nouveau document`; };
-    upd();
-    const ok = await new Promise(res => KS.modal({
-      title: 'Super résolution IA', width: 470,
+    let planSeq = 0;
+    const upd = async () => {
+      const { W, H } = size(), seq = ++planSeq;
+      let txt = `${d.width} × ${d.height} → ${W} × ${H} px, dans un nouveau document`;
+      info.textContent = txt;
+      if (!gen()) return;
+      const passes = o.factor > 2 ? 2 : 1;
+      const r = await N.forgeKmdPlan(G.url(), { width: W - W % 8, height: H - H % 8 }).catch(() => null);
+      if (seq !== planSeq) return;
+      if (r && r.ok) txt += ` · ${r.plan.count} tuile${r.plan.count > 1 ? 's' : ''} de ${r.plan.tile[0]} × ${r.plan.tile[1]} px`;
+      info.textContent = txt + (passes > 1 ? ' · 2 passes (×2 puis la taille finale)' : '');
+    };
+    const genRows = [];
+    const row = (label, ctl, title) => { const l = h('label.l', { text: label, title: title || '' }); genRows.push(l, ctl); return [l, ctl]; };
+    const prompt = h('textarea.field', { rows: 3, spellcheck: false, placeholder: 'Facultatif : ce que montre l’image (en anglais ou en français). Vide : chaque tuile est décrite par ce qu’on y voit.' });
+    prompt.value = o.prompt; prompt.addEventListener('input', () => { o.prompt = prompt.value; }); prompt.addEventListener('keydown', e => e.stopPropagation());
+    const factors = [['1.5', '× 1,5'], ['2', '× 2'], ['3', '× 3'], ['4', '× 4']];
+    const showGen = () => { for (const el of genRows) el.style.display = gen() ? '' : 'none'; upd(); };
+    const pending = new Promise(res => KS.modal({
+      title: 'Super résolution IA', width: 520,
       body: h('div.form-grid',
-        h('label.l', { text: 'Agrandir' }), ui.seg([['2', '× 2'], ['3', '× 3'], ['4', '× 4']], String(o.factor), v => { o.factor = +v; upd(); }),
+        h('label.l', { text: 'Méthode' }), ui.seg([['gen', 'Générative', kmd.ok ? 'Ajoute du vrai détail (moteur du Studio, Kane MultiDiffusion)' : 'Kane MultiDiffusion absent du moteur : mettez Kane OS à jour puis redémarrez le moteur du Studio'], ['classic', 'Classique', 'Agrandisseur seul : rapide, fidèle, n’invente rien']], o.method, v => {
+          if (v === 'gen' && !kmd.ok) { KS.toast('Kane MultiDiffusion n’est pas dans ce moteur : mettez Kane OS à jour puis redémarrez le moteur du Studio.', 'err', 5000); return; }
+          o.method = v; showGen();
+        }),
+        h('label.l', { text: 'Agrandir' }), ui.seg(factors.map(([v, l]) => [v, l]), String(o.factor), v => { o.factor = +v; upd(); }),
         h('label.l', { text: 'Modèle' }), ui.select(f.upscalers.map(n => [n, n]), o.model, v => { o.model = v; }),
+        ...row('Créativité', ui.scrub({ value: o.creativity, min: 0.15, max: 0.6, step: 0.05, onInput: v => { o.creativity = v; } }), 'Force du repeint : 0,25 fidèle, 0,35 conseillé, 0,5 et plus redessine'),
+        ...row('Détail en plus', ui.scrub({ value: o.detail, min: 0, max: 1, step: 0.05, onInput: v => { o.detail = v; } }), 'Grain et finesse ajoutés au milieu du calcul'),
+        ...row('Invite', prompt),
+        ...row('', ui.check('Invite par tuile (ce que chaque tuile montre)', o.tilePrompts, v => { o.tilePrompts = v; }, 'WD14 décrit chaque tuile : le personnage n’est demandé que là où il se trouve, plus de visages inventés dans le décor')),
         h('span'), info,
-        h('span'), h('div.note', { text: 'Calcul local par Forge (modèles ESRGAN installés dans Kane OS).' })),
+        h('span'), h('div.note', { text: 'Calcul local par le moteur du Studio. Générative : environ une minute pour ×2 d’une image de 2 mégapixels sur une RTX 5080.' })),
       buttons: [{ label: 'Annuler', value: null }, { label: 'Agrandir', primary: true, value: 'ok' }],
       onClose: v => res(v === 'ok'),
     }));
-    if (!ok) return;
-    const W = d.width * o.factor, H = d.height * o.factor;
-    if (Math.max(W, H) > 16384 || W * H > 150e6) { KS.toast('Résultat trop grand (16 384 px de côté, 150 mégapixels au plus)', 'err', 4000); return; }
-    KS.prefs.upscaler = o.model; KS.prefs.save();
+    showGen();
+    if (!(await pending)) return;
+    const { W, H } = size();
+    const maxSide = gen() ? 8192 : 16384, maxPx = gen() ? 40e6 : 150e6;
+    if (Math.max(W, H) > maxSide || W * H > maxPx) { KS.toast(`Résultat trop grand (${maxSide.toLocaleString('fr-FR')} px de côté, ${maxPx / 1e6} mégapixels au plus${gen() ? ' en générative' : ''})`, 'err', 5000); return; }
+    KS.prefs.upscaler = o.model;
+    KS.prefs.superRes = { method: o.method, factor: o.factor, creativity: o.creativity, detail: o.detail, tilePrompts: o.tilePrompts };
+    KS.prefs.save();
     const comp = d.composite();
     // transparence : l'agrandisseur travaille en RVB, l'alpha est agrandi à part
     const probe = U.getData(scaled(comp, Math.min(256, d.width), Math.min(256, d.height))).data;
     let alphaUsed = false; for (let i = 3; i < probe.length; i += 4) if (probe[i] < 255) { alphaUsed = true; break; }
     try {
-      const r = await G.task('Super résolution avec Forge…', async () => N.forgeUpscale(G.url(), {
-        resize_mode: 0, upscaling_resize: o.factor, upscaler_1: o.model, upscaler_2: 'None', extras_upscaler_2_visibility: 0,
-        gfpgan_visibility: 0, codeformer_visibility: 0, show_extras_results: true,
-      }, await pngBytes(comp)), { cancel: () => N.forgeInterrupt(G.url()) });
-      if (!r.ok) throw new Error(r.error);
-      let out = await fromPng(r.image);
+      let out;
+      if (gen()) out = await G.superGen(comp, W, H, { ...o, info: d.genInfo }, f);
+      else {
+        const r = await G.task('Super résolution…', async () => N.forgeUpscale(G.url(), {
+          resize_mode: 0, upscaling_resize: o.factor, upscaler_1: o.model, upscaler_2: 'None', extras_upscaler_2_visibility: 0,
+          gfpgan_visibility: 0, codeformer_visibility: 0, show_extras_results: true,
+        }, await pngBytes(comp)), { cancel: () => N.forgeInterrupt(G.url()) });
+        if (!r.ok) throw new Error(r.error);
+        out = await fromPng(r.image);
+      }
+      if (!out) return;
       if (out.width !== W || out.height !== H) out = scaled(out, W, H);
       if (alphaUsed) { const x = out.getContext('2d'); x.globalCompositeOperation = 'destination-in'; x.imageSmoothingQuality = 'high'; x.drawImage(comp, 0, 0, W, H); }
-      const nd = new KS.Doc({ name: d.name.replace(/\.[^.]+$/, '') + ` ×${o.factor}`, width: W, height: H });
-      nd.addLayer(new KS.Layer({ name: `Super résolution ×${o.factor}`, canvas: out }), 0);
+      const label = String(o.factor).replace('.', ',');
+      const nd = new KS.Doc({ name: d.name.replace(/\.[^.]+$/, '') + ` ×${label}` + (gen() ? ' détaillé' : ''), width: W, height: H });
+      nd.addLayer(new KS.Layer({ name: `Super résolution ×${label}` + (gen() ? ' (générative)' : ''), canvas: out }), 0);
       KS.addDoc(nd);
-      KS.toast(`Agrandi ×${o.factor} (${o.model})`, 'ok');
+      KS.toast(`Agrandi ×${label} (${gen() ? 'générative, ' : ''}${o.model})`, 'ok');
     } catch (e) { KS.toast('Super résolution impossible : ' + e.message, 'err', 6000); }
+  };
+
+  // Super résolution générative : une ou deux passes d'image vers image par tuiles (Kane MultiDiffusion). L'agrandisseur
+  // choisi prépare l'image à la taille de la passe (réglage upscaler_for_img2img, le temps de la requête).
+  G.superGen = async (comp, W, H, o, forge) => {
+    const st = G.studio();
+    const own = (o.prompt || '').trim();
+    const fromInfo = own && own === genPrompt(o.info);
+    // invite reprise de l'image : déjà complète (préfixe du modèle, LoRA) ; sinon celle tapée, ou une invite de qualité
+    const pp = await G.preparePrompt(own || 'masterpiece, best quality, highly detailed', forge,
+      fromInfo || /<lora:/i.test(own) ? { ...st, usePrefix: false, loras: [] } : st);
+    // pas de « personne » en négatif ici : l'image en a peut-être une ; les tuiles sans visage ont leur propre négatif
+    const negative = (fromInfo && genNegative(o.info)) || [st.negative, 'nsfw, nude'].filter(Boolean).join(', ');
+    const r8 = v => Math.max(64, Math.floor(v / 8) * 8);
+    const stages = o.factor > 2 ? [[r8(comp.width * 2), r8(comp.height * 2), 1], [r8(W), r8(H), 0.8]] : [[r8(W), r8(H), 1]];
+    let cur = comp;
+    for (let i = 0; i < stages.length; i++) {
+      const [sw, sh, k] = stages[i];
+      const ov = pp.extra.override_settings || {};
+      const payload = {
+        prompt: pp.prompt, negative_prompt: negative, steps: +st.steps || 30, cfg_scale: +st.cfg || 4.5, width: sw, height: sh,
+        batch_size: 1, n_iter: 1, seed: st.seed != null && st.seed !== '' ? +st.seed : -1, denoising_strength: U.clamp(+o.creativity * k, 0.1, 0.75),
+        resize_mode: 0, save_images: false, send_images: true, distilled_cfg_scale: pp.extra.distilled_cfg_scale,
+        // aperçu en direct approché (RVB) : un aperçu complet décoderait plusieurs mégapixels à chaque pas
+        override_settings: { ...ov, upscaler_for_img2img: o.model, live_previews_enable: true, show_progress_type: 'RGB', show_progress_every_n_steps: 1 },
+        override_settings_restore_afterwards: pp.extra.override_settings ? pp.extra.override_settings_restore_afterwards : true,
+        alwayson_scripts: { 'Kane MultiDiffusion': { args: [{ enabled: true, prompts: o.tilePrompts !== false, negatives: o.tilePrompts !== false, structure: 0.5, detail: +o.detail || 0, colors: 1 }] } },
+      };
+      if (pp.sampler) payload.sampler_name = pp.sampler;
+      if (pp.scheduler) payload.scheduler = pp.scheduler;
+      if (sw * sh > 12e6) payload.alwayson_scripts['Never OOM Integrated'] = { args: [false, true] };    // VAE par tuiles
+      const job = { payload, W: sw, H: sh, R: { x: 0, y: 0, w: sw, h: sh }, init: await pngBytes(cur), mask: null,
+        label: 'Super résolution générative' + (stages.length > 1 ? ` (passe ${i + 1} / ${stages.length})` : '') + '…' };
+      const res = await G.forgeRun(job);
+      cur = res.variants[0];
+    }
+    return cur;
   };
 
   /* ---------------------------------------------------------------- harmoniser */
