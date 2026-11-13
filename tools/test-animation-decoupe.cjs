@@ -31,7 +31,8 @@ if (fs.existsSync(userModels)) fs.symlinkSync(userModels, models, 'junction');
 const output = path.join(tmp, 'output', 'animation'); fs.mkdirSync(output, { recursive: true });
 const dir = owned.components.wallpaper.directory;
 const child = spawn(path.join(dir, 'venv/Scripts/python.exe'), ['-u', path.join(root.replace(/app\.asar$/, 'app.asar.unpacked'), 'animation-runtime.py'), '--server', path.join(dir, 'outils/peintre.py'), '--port', '8780'],
-  { cwd: dir, windowsHide: true, env: { ...process.env, WEA_PROJETS: output, PYTHONIOENCODING: 'utf-8' }, stdio: 'ignore' });
+  { cwd: dir, windowsHide: true, env: { ...process.env, WEA_PROJETS: output, PYTHONIOENCODING: 'utf-8' }, stdio: process.env.KANEVAS_TEST_LOG ? ['ignore', fs.openSync(path.join(tmp, 'serveur.log'), 'w'), fs.openSync(path.join(tmp, 'serveur.log'), 'a')] : 'ignore' });
+if (process.env.KANEVAS_TEST_LOG) console.log('journal du serveur : ' + path.join(tmp, 'serveur.log'));
 const cleanup = () => {
   try { execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }); } catch { /* déjà fini */ }
   try { if (fs.lstatSync(models).isSymbolicLink()) fs.rmdirSync(models); } catch { /* sans jonction */ }
@@ -81,7 +82,11 @@ print(json.dumps({'calques': [[c.nom, list(c.chemin), c.image.getchannel('A').ge
       assert(lu.calques.filter(c => c[0] !== 'Fond').every(c => c[2][0] === 0), 'masques appliqués à l’alpha');
       console.log('OK PSD : lu par Animation avec ses masques, rôles ' + Object.entries(roles).map(([n, r]) => n + '=' + r).join(', '));
       // 3. « Animer l'illustration » : nouveau projet Animation construit sur les calques
-      const dossier = await win.webContents.executeJavaScript(`(async()=>{ await KS.cmd.toWallpaper(); return KS.suite.project.animation.dossier; })()`);
+      const dossier = await win.webContents.executeJavaScript(`(async()=>{ await KS.cmd.toWallpaper(); return KS.suite.project.animation.dossier; })()`).catch(async error => {
+        const f = win.webContents.mainFrame.frames.find(x => x.url.startsWith('http://127.0.0.1:8780/'));
+        const etat = f ? await f.executeJavaScript('JSON.stringify({ P: typeof P === "undefined" ? null : P, statut: document.getElementById("statut")?.textContent, ressources: performance.getEntriesByType("resource").slice(-8).map(r => r.name.replace(location.origin, "") + " " + Math.round(r.duration)) })').catch(e => 'cadre : ' + e.message) : 'sans cadre';
+        throw new Error(error.message + ' — atelier : ' + etat);
+      });
       const manifest = JSON.parse(fs.readFileSync(path.join(output, dossier, 'psd', 'calques.json'), 'utf8'));
       assert(manifest.calques.some(c => c.role === 'bras') && manifest.calques.some(c => c.role === 'corps') && manifest.calques[0].role === 'decor', JSON.stringify(manifest.calques.map(c => c.role)));
       console.log(`OK Animer : projet « ${dossier} » en ${manifest.calques.length} calques (${manifest.calques.map(c => c.role).join(', ')})`);
