@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict'), fs = require('node:fs'), os = require('node:os'), path = require('node:path');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kanevas-outputs-'));
 const outputs = require('../output-paths.cjs')(() => tmp);
-for (const id of ['studio','animation','comfyui','montage','lora','edition','merge']) assert.equal(outputs.directory(id), path.join(tmp,'output',id));
+for (const id of ['studio','comfyui','montage','lora','edition','merge']) assert.equal(outputs.directory(id), path.join(tmp,'output',id));
 assert.throws(() => outputs.directory('../ailleurs'));
 const runtime = path.join(tmp,'runtime'); fs.mkdirSync(runtime);
 fs.writeFileSync(path.join(runtime,'config.json'), JSON.stringify({sd_model_checkpoint:'conservé',outdir_txt2img_samples:'ancien'}));

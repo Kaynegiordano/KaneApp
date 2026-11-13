@@ -1097,7 +1097,7 @@ body.studio #studio-bar { display: flex; }
 .ga-cell:hover { border-color: var(--accent); }
 .ga-k { position: absolute; left: 4px; bottom: 4px; font-size: 9.5px; padding: 1px 5px; border-radius: 6px; background: rgba(0,0,0,.55); color: #fff; }
 
-/* Espaces intégrés : ComfyUI, Wallpaper, Vidéo (KaneClip) */
+/* Espaces intégrés : Vidéo IA (ComfyUI), Montage (KaneClip) */
 #ws-ext { display: none; }
 body.ws-ext #main > :not(#ws-ext), body.ws-ext #optionsbar { display: none !important; }
 body.ws-ext #ws-ext { display: flex; flex: 1; min-width: 0; min-height: 0; background: var(--bg); }
@@ -1150,7 +1150,7 @@ body.ws-ext #ws-ext { display: flex; flex: 1; min-width: 0; min-height: 0; backg
 body.pf-hide-hero .suite-hero, body.pf-hide-pipeline .suite-pipeline, body.pf-hide-library .suite-library, body.pf-hide-homefoot .suite-home-footer,
 body.pf-hide-capture .sb-capture, body.pf-hide-libbtn .sb-library, body.pf-hide-activity .sb-activity,
 body.pf-hide-statusbar #statusbar, body.pf-hide-gpu #gpu-status,
-body.pf-hide-ws-studio .ws-btn[data-v="studio"], body.pf-hide-ws-wallpaper .ws-btn[data-v="wallpaper"],
+body.pf-hide-ws-studio .ws-btn[data-v="studio"],
 body.pf-hide-ws-comfyui .ws-btn[data-v="comfyui"], body.pf-hide-ws-video .ws-btn[data-v="video"] { display: none !important; }
 body.pf-reduce-motion *, body.pf-reduce-motion *::before, body.pf-reduce-motion *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
 body.pf-home-empty .suite-home-scroll::before { content: "Tout est masqué sur cet écran. Rétablissez-le dans Préférences › Affichage (Ctrl+K)."; display: block; margin: 80px auto; max-width: 420px; text-align: center; color: var(--muted); }

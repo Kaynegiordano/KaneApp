@@ -31,9 +31,8 @@ const kcHost = require('./kaneclip-host.cjs');
 kcHost.registerScheme();
 
 let win = null;
-let services = null;           // ateliers ComfyUI / Animation (services.cjs)
+let services = null;           // espace Vidéo IA : ComfyUI (services.cjs)
 let allowClose = false;
-let animationBusy = false;
 const pending = [];          // fichiers reçus avant que la page soit prête
 // « Envoyer vers KaneApp » de Kane Explorer : --kane-studio=img2img (inpaint, extras, pnginfo) ouvre l'image puis l'envoie
 // dans cet onglet du Studio IA (1.26.1)
@@ -78,29 +77,14 @@ if (!app.requestSingleInstanceLock()) {
       root: () => engineDirs().root,
       managed: () => managedRuntime.read(),
       environment: id => managedRuntime.environment(id),
-      engine: {
-        url: () => engine.url,
-        // Forge de Kane OS s'il tourne, sinon le moteur de Kanevas (démarré à la demande de Wallpaper)
-        forgeUrl: async () => engine.url || (engineDirs().shareExternal && await ping('http://127.0.0.1:7860', 800) ? 'http://127.0.0.1:7860' : 'http://127.0.0.1:' + ENGINE_PORT),
-        state: () => engine.state,
-        start: () => engineStart(),
-        animationBusy: value => { animationBusy = value; },
-        release: async () => {
-          const base = engine.url || (engineDirs().shareExternal && await ping('http://127.0.0.1:7860', 800) ? 'http://127.0.0.1:7860' : 'http://127.0.0.1:' + ENGINE_PORT);
-          if (!(await ping(base, 1000))) return;
-          const progress = await forgeCall(base, '/sdapi/v1/progress?skip_current_image=true', null, 5000);
-          if (progress?.state?.job_count > 0 || progress?.progress > 0) throw new Error('Le Studio génère encore une image. Attendez sa fin avant Animation.');
-          await forgeCall(base, '/sdapi/v1/unload-checkpoint', {}, 60000);
-        },
-      },
     });
     require('./runtime-migration-host.cjs')({ getWin: () => win, directories: engineDirs, managed: managedRuntime,
       idle: async () => {
-        if (animationBusy || engine.state === 'starting') throw new Error('Attendez la fin des tâches en cours');
-        for (const port of [7860, 7862, 8188, 8780]) {
+        if (engine.state === 'starting') throw new Error('Attendez la fin des tâches en cours');
+        for (const port of [7860, 7862, 8188]) {
           const net = require('node:net');
           const busy = await new Promise(resolve => { const socket = net.connect({ host: '127.0.0.1', port }); socket.setTimeout(500); socket.on('connect', () => { socket.destroy(); resolve(true); }); socket.on('error', () => resolve(false)); socket.on('timeout', () => { socket.destroy(); resolve(false); }); });
-          if (busy) throw new Error('Arrêtez les moteurs Studio, Forge, Animation et ComfyUI avant de basculer les copies');
+          if (busy) throw new Error('Arrêtez les moteurs Studio, Forge et ComfyUI avant de basculer les copies');
         }
       }, reset: () => { forgeDirs = null; integrationRoot = ''; engine.state = 'off'; engine.url = ''; engineEmit(); },
     });
@@ -125,7 +109,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: false,
-      // le préchargement sert aussi les cadres des espaces intégrés (KaneClip, Wallpaper) : voir preload.js
+      // le préchargement sert aussi les cadres des espaces intégrés (KaneClip, ComfyUI) : voir preload.js
       nodeIntegrationInSubFrames: true,
       autoplayPolicy: 'no-user-gesture-required',
       // les tâches longues (IA, filtres en parallèle) continuent quand la fenêtre est masquée
@@ -152,7 +136,7 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  // un cadre intégré (Wallpaper…) qui retient la fermeture par beforeunload ne bloque pas Kanevas une fois la fermeture confirmée
+  // un cadre intégré (ComfyUI, KaneClip…) qui retient la fermeture par beforeunload ne bloque pas Kanevas une fois la fermeture confirmée
   win.webContents.on('will-prevent-unload', e => { if (allowClose) e.preventDefault(); });
   win.on('close', e => {
     if (allowClose) return;
@@ -392,7 +376,6 @@ const forgeBase = url => {
 const GPU_WORK = /^\/sdapi\/v1\/(txt2img|img2img|extra-single-image|reload-checkpoint)$/;
 const vram = { idleMin: 0, lastWork: Date.now(), unloaded: false };
 async function forgeCall(base, route, body, timeout = 600000) {
-  if (animationBusy && body && /^\/sdapi\/v1\/(txt2img|img2img|extra-single-image|options|reload-checkpoint)$/.test(route)) throw new Error('Le moteur IA est réservé à Animation. Attendez la fin de sa tâche.');
   if (GPU_WORK.test(route)) { vram.lastWork = Date.now(); vram.unloaded = false; }
   const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), timeout);
   try {
@@ -871,11 +854,10 @@ ipcMain.handle('engine-stop', (_e, explicit) => {
 });
 ipcMain.handle('engine-log', () => engine.log.join('\n'));
 
-// Déchargement du modèle du Studio : 'busy' si une génération (ou Animation) l'utilise.
+// Déchargement du modèle du Studio : 'busy' si une génération l'utilise.
 async function studioUnload(reason) {
   if (engine.state === 'external') return 'external';
   if (!engine.ours || engine.state !== 'ready') return 'off';
-  if (animationBusy) return 'busy';
   const p = await forgeCall(engine.url, '/sdapi/v1/progress?skip_current_image=true', null, 4000);
   if (p?.state?.job_count > 0 || p?.progress > 0) { vram.lastWork = Date.now(); return 'busy'; }
   await forgeCall(engine.url, '/sdapi/v1/unload-checkpoint', {}, 60000);

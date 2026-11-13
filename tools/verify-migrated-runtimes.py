@@ -1,4 +1,4 @@
-"""Contrôles locaux sur les copies réelles : API, images Studio, workflow ComfyUI, Animation et passerelle LoRA."""
+"""Contrôles locaux sur les copies réelles : API, images Studio, workflow ComfyUI et passerelle LoRA."""
 import argparse
 import base64
 import json
@@ -60,7 +60,7 @@ def stop(child, log):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--report', required=True)
-parser.add_argument('--component', choices=['studio', 'comfyui', 'wallpaper', 'lora', 'media'], required=True)
+parser.add_argument('--component', choices=['studio', 'comfyui', 'lora', 'media'], required=True)
 args = parser.parse_args()
 file = Path(args.report); report = json.loads(file.read_text(encoding='utf-8'))
 components = report['components']; folder = Path(report['destination']) / 'validation'; folder.mkdir(exist_ok=True)
@@ -110,13 +110,6 @@ elif args.component == 'comfyui':
             time.sleep(.5)
         else: raise RuntimeError('Workflow ComfyUI non terminé')
         checks['comfyui'] = {'api': True, 'workflow': True, 'nodes': len(nodes), 'time': time.time()}
-    finally: stop(child, log)
-elif args.component == 'wallpaper':
-    directory = Path(components['wallpaper']['directory']); port = 18780
-    child, log = serve(components['wallpaper']['python'], [str(repo / 'animation-runtime.py'), '--server', str(directory / 'outils' / 'peintre.py'), '--port', str(port), '--sans-navigateur'], directory, port, '/api/projets', folder)
-    try:
-        projects = request(port, '/api/projets')
-        checks['wallpaper'] = {'api': True, 'projects': len(projects), 'time': time.time()}
     finally: stop(child, log)
 elif args.component == 'lora':
     directory = Path(components['studio']['directory']); python = components['studio']['python']

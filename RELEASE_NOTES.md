@@ -1,3 +1,9 @@
+# 1.37.0 — Animation retirée, place à Vidéo IA
+
+- L'atelier **Animation** (fonds animés pour Wallpaper Engine) est retiré de KaneApp : onglet, menus, découpe en calques et moteur.
+- L'espace ComfyUI devient **Vidéo IA**, un onglet comme les autres : étape « Vidéo IA » sur l'écran Projet, « Faire une vidéo IA » sur un média de la bibliothèque, et dans le menu IA.
+- Il faut Kane OS 5.3.0.
+
 # 1.36.0 — Découpe en calques dans Retouche (Animation 4.0)
 
 - Nouveau : **IA › Découper en calques pour l’animation**. L’illustration ouverte devient un document en calques : Fond, Cheveux derrière, Corps, Bras, Cheveux devant. Plus de SAM : la silhouette vient du détourage de Retouche (BiRefNet), et les membres sont séparés d’après le squelette, en suivant les bords de l’image.

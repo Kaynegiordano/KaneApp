@@ -20,6 +20,14 @@ et les trois copies ICO utilisées par la fenêtre, les raccourcis et l'installa
 dix tailles de 16 à 256 pixels ; le symbole reste transparent et indépendant du thème de l'interface.
 
 ## Outils récents
+### Animation retirée, Vidéo IA (1.37.0)
+
+- L'atelier **Animation** (fonds animés Wallpaper Engine) est retiré entièrement : espace, pont, réservation du GPU,
+  découpe en calques, menus et tests. La navigation devient **Projet · Retouche · Studio IA · Vidéo IA · Montage**.
+- L'espace ComfyUI s'appelle **Vidéo IA** (icône appareil photo) : étape « 03 Vidéo IA » de l'écran Projet, action
+  « Faire une vidéo IA » sur un média, menu IA › « Faire une vidéo IA avec l'illustration… ».
+- Les anciens médias de source `wallpaper` restent lisibles (étiquette « Import »).
+
 ### Atelier Lora : taille réelle, tags, file d'attente (1.30.0)
 
 - **Taille réelle** (`write_dataset_toml(native=True)` : bloc 1536 + `bucket_no_upscale`) : activée par le préréglage pour Style / Technique / Peinture quand la surface médiane des images dépasse 1,1 × 1024² (`lora_bridge._median_area`). Mesuré : 1,96 s/pas contre 1,39 (RTX 5080). A/B n1x3u à 1856 × 1024 (le format le plus utilisé par l'utilisateur) : texture dessinée (hachures, mèches) mieux rendue ; même qualité d'ensemble.
@@ -641,4 +649,5 @@ Maintenir Alt + bouton droit dans la zone de travail : glisser horizontalement p
 - **1.34.0** : l’atelier d’entraînement Lora et le Merge partent dans **Lora Studio** (`C:\KaneOS\LoraStudio`, avec `lora_bridge.py` et `merge_bridge.py`). KaneApp garde `lora-training-running` (lit les `run.json` : pid vivant, pas fini) pour faire attendre ses générations, `open-lora-studio` (menu Studio) et `--kane-prompt=` (« Essayer » de Lora Studio → invite de Créer).
 - **1.34.1** : `suite-bridges.cjs` `flushAnimation` : si `enregistre()` échoue et que le projet n’est plus dans `/api/projets`, il est refermé (`P = null`) au lieu de bloquer ; `KS.beforeClose` propose « Quitter sans enregistrer » sur un vrai échec. Test : `tools/test-animation-flush.cjs`.
 - **1.36.0** : Animation 4.0, découpe dans Retouche sans SAM. `app/js/animcut.js` : IA › *Découper en calques pour l’animation* (silhouette `KS.ai.segment` BiRefNet → IPC `animation-cut` → `POST /api/decoupe-calques` d’Animation : pose, GrabCut, LaMa) ; groupes Décor / Personnage, un masque de fusion par pièce. `C.toWallpaper` envoie un document à groupe « Personnage » en PSD (`S.animate(it, psd)`, toujours une nouvelle animation). Bouton ✂ de l’atelier : `window.kaneDecoupeRetouche` → `C.cutAnimationProject` (`animation-scene`, `animation-write-document` : `calques.psd` du projet, l’ancien en « calques (précédent).psd », ouvert dans Retouche). `WX.ensure(id, { quiet })` démarre un moteur sans changer d’espace. Test : `tools/test-animation-decoupe.cjs` (vraie fenêtre, vrai BiRefNet, vrai moteur Animation ; `KANEVAS_TEST_IMAGE`).
+- **1.37.0** : Animation retirée (fichiers `animation-*`, `animcut.js`, tests `test-animation-*` ; `services.cjs` sans service `wallpaper` ni relais 8601 ; `managed-runtimes` et `runtime-migrate` à trois moteurs). ComfyUI devient l'espace **Vidéo IA**.
 - **1.31.1** : Animation 2.5.2 — `animation-web/moteur.html` reconstruit depuis le moteur d'Animation (interactions souris reportées) : personnage-marionnette `ANIM.personnage` (os, couches, ressorts, peau de 4 os, yeux portés par l'os de la tête) à la place des calques marqués `dans_personnage` ; vagues et herbe, qui manquaient à cette copie. Test WebGL réel : `tools/test-animation-personnage.cjs`.

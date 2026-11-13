@@ -152,7 +152,6 @@
   // Adresse du moteur : celui que Kanevas démarre (engine.js), sinon l'adresse réglée à la main
   G.url = () => (KS.engine && KS.engine.url) || G.settings().url;
   G.forge = async (fresh = false, opts = {}) => {
-    if (KS.animationBusy) { forgeCache = { t: Date.now(), s: null, err: 'Le moteur IA est réservé à Animation.' }; return null; }
     if (!N || !N.forgeStatus) return null;
     if (!fresh && forgeCache && Date.now() - forgeCache.t < 15000) return forgeCache.s;
     if (KS.engine && !opts.noStart && !(await KS.engine.ensure())) { forgeCache = { t: Date.now(), s: null, err: KS.engine.error || 'Moteur IA arrêté' }; return null; }

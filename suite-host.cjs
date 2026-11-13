@@ -20,7 +20,7 @@ module.exports = function setupSuite(getWin) {
     const win = getWin();
     if (!win || event.sender !== win.webContents || event.senderFrame === win.webContents.mainFrame) throw new Error('Cadre invalide');
     const url = event.senderFrame.url;
-    if (url.startsWith('http://127.0.0.1:8780/') || url.startsWith('http://127.0.0.1:8188/')) return '(' + require('./suite-bridges.cjs').toString() + ')(' + JSON.stringify(url.startsWith('http://127.0.0.1:8780/') ? 'animation' : 'comfyui') + ')';
+    if (url.startsWith('http://127.0.0.1:8188/')) return '(' + require('./suite-bridges.cjs').toString() + ')("comfyui")';
     const local = pathToFileURL(path.join(__dirname, 'kaneclip', 'app', 'index.html')).href;
     if (url === local) return fs.readFileSync(path.join(__dirname, 'app', 'js', 'video-suite.js'), 'utf8');
     throw new Error('Atelier inconnu');

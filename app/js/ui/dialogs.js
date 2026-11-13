@@ -556,11 +556,11 @@
       if (!result.ok) KS.toast(result.error, 'err', 6000);
       update(await N.runtimeMigrationState());
     }, '.small');
-    const labels = { studio: 'Studio IA', comfyui: 'Animation Vidéo · ComfyUI', wallpaper: 'Animation', training: 'Entraînement LoRA', media: 'Montage · FFmpeg' };
+    const labels = { studio: 'Studio IA', comfyui: 'Vidéo IA · ComfyUI', training: 'Entraînement LoRA', media: 'Montage · FFmpeg' };
     const phases = { inventoried: 'Inventorié', copying: 'Copie en cours', verified: 'Copie vérifiée', probed: 'Environnement testé' };
     const update = value => {
-      const components = Object.entries(value.report?.components || {});
-      const copied = components.length === 4 && components.every(([, c]) => ['verified', 'probed'].includes(c.phase));
+      const components = Object.entries(value.report?.components || {}).filter(([id]) => labels[id]);   // Animation retirée (1.37)
+      const copied = components.length === 3 && components.every(([, c]) => ['verified', 'probed'].includes(c.phase));
       const tested = copied && components.every(([, c]) => c.phase === 'probed') && value.report.integrityCheckedAt && value.report.media?.phase === 'probed';
       status.textContent = value.error || (value.running ? 'Opération en cours… ' + (labels[value.progress?.component] || '') + (value.progress?.files ? ' · ' + value.progress.files + ' fichiers' : '') : value.active ? 'KaneApp utilise ses copies des moteurs.' : 'Les installations actuelles sont encore utilisées.');
       rows.replaceChildren(h('div.note', { text: value.destination }), ...components.map(([id, c]) => h('div.note', { text: labels[id] + ' · ' + (phases[c.phase] || c.phase) + ' · ' + (c.bytes / 2 ** 30).toFixed(1) + ' Go' })));
@@ -601,7 +601,7 @@
   D.about = () => {
     const body = h('div', { style: { display: 'flex', gap: '18px', alignItems: 'center', width: '460px' } },
       h('span.brand-mark.xl'),
-      h('div', h('div', { text: 'KaneApp', style: { fontSize: '22px', fontWeight: '600' } }), h('div.note', { text: 'Version ' + (KS.updates ? KS.updates.version : '1.0.0') + ' — création d’images, animation et montage.' }),
+      h('div', h('div', { text: 'KaneApp', style: { fontSize: '22px', fontWeight: '600' } }), h('div.note', { text: 'Version ' + (KS.updates ? KS.updates.version : '1.0.0') + ' — création d’images, vidéo IA et montage.' }),
         h('div.note', { style: { marginTop: '8px' }, text: 'Lecture et écriture PSD par ag-psd (MIT). Police Outfit (OFL). Tout reste sur votre machine.' })));
     KS.modal({ title: 'À propos', body, buttons: [{ label: 'Fermer', primary: true }] });
   };

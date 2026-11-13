@@ -12,8 +12,8 @@ import sys
 import time
 from contextlib import contextmanager
 
-COMPONENTS = {'studio': 'sd-webui-forge-classic', 'comfyui': 'ComfyUI', 'wallpaper': 'wallpaper-engine-animator', 'training': 'sd-scripts'}
-FOLDERS = {'studio': 'studio', 'comfyui': 'ComfyUI', 'wallpaper': 'Animation', 'training': 'sd-scripts'}
+COMPONENTS = {'studio': 'sd-webui-forge-classic', 'comfyui': 'ComfyUI', 'training': 'sd-scripts'}
+FOLDERS = {'studio': 'studio', 'comfyui': 'ComfyUI', 'training': 'sd-scripts'}
 TEXT = {'.py', '.json', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.pth', '.egg-link', '.bat', '.ps1', '.sh', '.txt', '.cmd'}
 
 
@@ -105,7 +105,7 @@ class Migration:
             (self.destination / '.gitignore').write_text('*\n', encoding='utf-8')
             self.report = {'schema': 1, 'source': str(self.source), 'destination': str(self.destination), 'created': time.time(), 'components': {},
                            'models': str(self.source / 'models'), 'sourcesPreserved': True, 'deletionAllowed': False,
-                           'pending': ['Génération Studio sur vos projets', 'Entraînement LoRA complet', 'Workflow vidéo avec vos modèles', 'Rendu Animation sur vos projets']}
+                           'pending': ['Génération Studio sur vos projets', 'Entraînement LoRA complet', 'Workflow vidéo avec vos modèles']}
 
     def save(self):
         atomic(self.file, self.report)

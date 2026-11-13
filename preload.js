@@ -4,16 +4,11 @@ const { contextBridge, ipcRenderer, webUtils, webFrame } = require('electron');
 // Ce préchargement tourne aussi dans les cadres des espaces intégrés (nodeIntegrationInSubFrames) :
 //   - la page de Kanevas reçoit ksNative ;
 //   - le cadre de KaneClip (kaneclip/app, espace « Vidéo ») reçoit kcNative, relié aux canaux « kc:… » ;
-//   - le cadre de Wallpaper Engine Animator (127.0.0.1:8780) ouvre le projet demandé par Kanevas (?kv_projet=…) ;
-//   - les autres cadres (ComfyUI…) ne reçoivent rien.
+//   - le cadre de ComfyUI (Vidéo IA) reçoit seulement son pont (suite-bridges.cjs) ; les autres ne reçoivent rien.
 if (!process.isMainFrame) {
   const loc = window.location;
   if (loc.protocol === 'file:' && /\/kaneclip\/app\//i.test(decodeURIComponent(loc.pathname).replace(/\\/g, '/'))) exposeKaneClip();
-  else if (loc.origin === 'http://127.0.0.1:8780') {
-    const q = new URLSearchParams(loc.search).get('kv_projet');
-    if (q) try { localStorage.setItem('atelier_projet', q); } catch { /* stockage indisponible */ }
-  }
-  if (window.parent === window.top && (loc.origin === 'http://127.0.0.1:8780' || loc.origin === 'http://127.0.0.1:8188' || (loc.protocol === 'file:' && /\/kaneclip\/app\//i.test(decodeURIComponent(loc.pathname).replace(/\\/g, '/'))))) {
+  if (window.parent === window.top && (loc.origin === 'http://127.0.0.1:8188' || (loc.protocol === 'file:' && /\/kaneclip\/app\//i.test(decodeURIComponent(loc.pathname).replace(/\\/g, '/'))))) {
     const install = () => ipcRenderer.invoke('suite-bridge').then(code => webFrame.executeJavaScript(code)).catch(err => console.warn('Pont Kanevas : ' + err.message));
     if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', install, { once: true }); else install();
   }
@@ -144,7 +139,7 @@ contextBridge.exposeInMainWorld('ksNative', {
   updateInstall: () => ipcRenderer.send('update-install'),
   onUpdateStatus: fn => ipcRenderer.on('update-status', (_e, s) => fn(s)),
   setZoom: f => webFrame.setZoomFactor(f),
-  // espaces intégrés : ComfyUI, Wallpaper Engine Animator, Vidéo (KaneClip)
+  // espaces intégrés : Vidéo IA (ComfyUI), Montage (KaneClip)
   svcStatus: id => ipcRenderer.invoke('svc-status', id),
   svcStart: id => ipcRenderer.invoke('svc-start', id),
   svcStop: (id, explicit) => ipcRenderer.invoke('svc-stop', id, explicit),
@@ -153,21 +148,12 @@ contextBridge.exposeInMainWorld('ksNative', {
   svcOpenFolder: id => ipcRenderer.invoke('svc-open-folder', id),
   onSvc: fn => ipcRenderer.on('svc', (_e, s) => fn(s)),
   comfyUpload: (name, data) => ipcRenderer.invoke('comfy-upload', name, data),
-  weaNew: (name, data) => ipcRenderer.invoke('wea-new', name, data),
   kcStage: (name, data) => ipcRenderer.invoke('kc-stage', name, data),
   kcOpen: files => ipcRenderer.invoke('kc-open', files),
   kcUrl: () => ipcRenderer.invoke('kc-url'),
   kcStop: () => ipcRenderer.invoke('kc-stop'),
   suiteCall: (op, args) => ipcRenderer.invoke('suite-call', op, args),
   suitePick: () => ipcRenderer.invoke('suite-pick'),
-  weaUpdate: (dossier, data) => ipcRenderer.invoke('wea-update', dossier, data),
-  animationRun: (dossier, operation, body) => ipcRenderer.invoke('animation-run', dossier, operation, body),
-  animationDocument: dossier => ipcRenderer.invoke('animation-document', dossier),
-  animationCut: (image, alpha, forge) => ipcRenderer.invoke('animation-cut', image, alpha, forge),
-  animationScene: dossier => ipcRenderer.invoke('animation-scene', dossier),
-  animationWriteDocument: (dossier, data) => ipcRenderer.invoke('animation-write-document', dossier, data),
-  animationGPUState: () => ipcRenderer.invoke('animation-gpu-state'),
-  onAnimationGPU: fn => ipcRenderer.on('animation-gpu', (_e, state) => fn(state)),
   runtimeMigrationState: () => ipcRenderer.invoke('runtime-migration-state'),
   runtimeMigrationRun: action => ipcRenderer.invoke('runtime-migration-run', action),
   onRuntimeMigration: fn => ipcRenderer.on('runtime-migration', (_e, state) => fn(state)),

@@ -1,20 +1,15 @@
-// Ateliers spécialisés de la suite. Le projet, les médias et les tâches sont portés par Kanevas.
+// Espaces intégrés de la suite (Vidéo IA, Montage). Le projet, les médias et les tâches sont portés par KaneApp.
 'use strict';
 (() => {
   const h = KS.h, ui = KS.ui, C = KS.cmd, N = KS.native;
   if (!N?.svcStatus) return;
   const WS = {
-    wallpaper: { label: 'Animation', engine: 'Wallpaper Animator', icon: 'sparkles', svc: true,
-      help: 'Peignez les zones, réglez leurs mouvements et créez une boucle ou un fond d’écran interactif.' },
-    comfyui: { label: 'Animation Vidéo', engine: 'ComfyUI', icon: 'grid', svc: true,
-      help: 'Préparez un workflow avec une image du projet, puis personnalisez son graphe dans ComfyUI.' },
+    comfyui: { label: 'Vidéo IA', engine: 'ComfyUI', icon: 'camera', svc: true,
+      help: 'Faites une vidéo par IA à partir d’une image du projet : chargez un workflow, puis lancez-le dans ComfyUI.' },
     video: { label: 'Montage', engine: 'KaneClip', icon: 'play', svc: false,
-      help: 'Assemblez vos images et animations avec du son, des transitions et des titres.' },
+      help: 'Assemblez vos images et vidéos avec du son, des transitions et des titres.' },
   };
   const WX = KS.ws = { cur: null, el: {}, st: {}, pending: new Map(), definitions: WS };
-  const gpuState = value => { KS.animationBusy = !!value.busy; KS.emit('animation-gpu', value); if (value.error) KS.toast(value.error, 'err', 6000); };
-  N.onAnimationGPU?.(gpuState);
-  N.animationGPUState?.().then(gpuState).catch(() => {});
   let host;
   const up = s => s && ['ready', 'external'].includes(s.state);
   function build(id) {
@@ -43,11 +38,7 @@
     const btn = (label, fn, disabled = false) => { const b = ui.btn(label, () => KS.suite?.run(label, fn).catch(() => {}), '.small'); b.disabled = disabled; return b; };
     const subtitle = id === 'video' ? KS.suite?.project?.name || W.engine : E.title || W.engine;
     const controls = [h('div.wx-identity', h('b', { text: W.label }), h('span', { text: subtitle, title: subtitle }))];
-    if (id === 'wallpaper') {
-      controls.push(btn('Ouvrir une image…', () => KS.suite.importAnimation()), btn('Animer le document', () => C.toWallpaper(), !KS.state.doc),
-        btn('Reprendre l’animation', () => KS.suite.resumeAnimation(), !KS.suite?.project?.animation),
-        btn('Exporter le fond', () => WX.request(id, 'export'), !up(s)));
-    } else if (id === 'comfyui') {
+    if (id === 'comfyui') {
       controls.push(btn('Charger un workflow…', () => KS.suite.loadWorkflow()),
         btn('Utiliser le document', () => C.toComfy(), !KS.state.doc));
     } else controls.push(btn('Ajouter le document', () => C.toVideo(), !KS.state.doc), btn('Enregistrer le montage', () => WX.request('video', 'save')));
@@ -109,8 +100,7 @@
     while (!E.ready && Date.now() < until) await new Promise(r => setTimeout(r, 100));
     if (!E.ready) throw new Error('L’atelier initialise son interface. Réessayez dans un instant.');
     return new Promise((resolve, reject) => {
-      // ouvrir un projet peut charger les modules d'Animation la première fois (processeur chargé) : 3 min ; sinon 45 s
-      const key = crypto.randomUUID(), timer = setTimeout(() => { WX.pending.delete(key); reject(new Error('L’atelier ne répond pas à la commande')); }, op === 'open' ? 180000 : 45000);
+      const key = crypto.randomUUID(), timer = setTimeout(() => { WX.pending.delete(key); reject(new Error('L’atelier ne répond pas à la commande')); }, 45000);
       WX.pending.set(key, { id, resolve, reject, timer });
       E.frame.contentWindow.postMessage({ kv: 'suite-request', id: key, op, ...args }, '*');
     });
@@ -147,7 +137,6 @@
       await KS.suite.home(); return;
     }
     const E = WX.el[id];
-    if (id === 'wallpaper' && E?.ready) await WX.request(id, 'flush');
     if (id === 'video') {
       if (E?.ready) await WX.request(id, 'stop');
       await N.kcStop();
@@ -183,12 +172,6 @@
     const r = await toggle0(on); sync(); return r;
   };
   C.toComfy = async () => { const it = await KS.suite.capture(); if (it) await KS.suite.toComfy(it); };
-  // Un document découpé en calques (groupe « Personnage ») part en PSD : Animation garde ses calques et leurs masques.
-  C.toWallpaper = async () => {
-    const d = KS.state.doc, layered = !!d?.layers.some(L => L.kind === 'group' && L.name === 'Personnage');
-    const psd = layered ? await KS.io.writePSD(d) : null;
-    const it = await KS.suite.capture(); if (it) await KS.suite.animate(it, psd);
-  };
   C.toVideo = async () => { const it = await KS.suite.capture(); if (it) await KS.suite.toVideo(it); };
   KS.on('studio', sync); KS.on('doc', sync); KS.on('suite-project', sync); KS.on('engine', sync);
   KS.on('ui-ready', () => setTimeout(() => {
@@ -205,45 +188,10 @@
     window.addEventListener('message', async e => {
       const [id, E] = Object.entries(WX.el).find(([, x]) => e.source === x.frame?.contentWindow) || [];
       if (!id || !e.data) return;
-      const expected = id === 'comfyui' ? 'http://127.0.0.1:8188' : id === 'wallpaper' ? 'http://127.0.0.1:8780' : 'null';
+      const expected = id === 'comfyui' ? 'http://127.0.0.1:8188' : 'null';
       if (e.origin !== expected && !(id === 'video' && e.origin === 'file://')) return;
       const m = e.data;
-      if (m.kv === 'suite-native-request' && id === 'wallpaper' && m.op === 'animation-import') {
-        let result;
-        try { const opened = await KS.suite.run('Ouverture de l’image dans Animation', () => KS.suite.importAnimation({ name:m.name, data:m.data })); result = { ok:true, opened }; }
-        catch (err) { result = { ok:false, error:err.message }; }
-        if (E.frame?.contentWindow === e.source) e.source.postMessage({ kv:'suite-native-response', id:m.id, ...result }, e.origin);
-        return;
-      }
-      if (m.kv === 'suite-native-request' && id === 'wallpaper' && m.op === 'animation-open-document') {
-        let result;
-        try {
-          const found = await N.animationDocument(String(m.dossier || ''));
-          if (!found.ok) throw new Error(found.error);
-          go(null); await KS.io.openPath(found.path); result = { ok: true };
-          KS.toast('Document en calques ouvert : enregistrez (Ctrl+S), puis « Recharger » dans Animation.', 'ok', 5000);
-        } catch (err) { result = { ok: false, error: err.message }; }
-        if (E.frame?.contentWindow === e.source) e.source.postMessage({ kv: 'suite-native-response', id: m.id, ...result }, e.origin);
-        return;
-      }
-      if (m.kv === 'suite-native-request' && id === 'wallpaper' && m.op === 'animation-cut-project') {
-        let result;
-        try { result = { ok: true, ...(await KS.suite.run('Découpe en calques dans Retouche', () => C.cutAnimationProject(String(m.dossier || '')))) }; }
-        catch (err) { result = { ok: false, error: err.message }; }
-        if (E.frame?.contentWindow === e.source) e.source.postMessage({ kv: 'suite-native-response', id: m.id, ...result }, e.origin);
-        return;
-      }
-      if (m.kv === 'suite-native-request' && id === 'wallpaper' && m.op === 'animation-run') {
-        let result;
-        if (KS.studioApi.isBusy()) result = { ok: false, error: 'Le Studio génère encore une image. Attendez sa fin avant Animation.' };
-        else {
-          gpuState({ busy: true });
-          try { result = await N.animationRun(m.dossier, m.operation, m.body); } catch (err) { result = { ok: false, error: err.message }; }
-          if (!result.ok) { try { gpuState(await N.animationGPUState()); } catch { /* la réservation reste visible en cas de liaison perdue */ } }
-        }
-        if (!result.ok) KS.toast(result.error, 'err', 6000);
-        E.frame?.contentWindow.postMessage({ kv: 'suite-native-response', id: m.id, ...result }, expected);
-      } else if (m.kv === 'suite-response') {
+      if (m.kv === 'suite-response') {
         const p = WX.pending.get(m.id); if (!p || p.id !== id) return;
         clearTimeout(p.timer); WX.pending.delete(m.id); m.error ? p.reject(new Error(m.error)) : p.resolve(m.value);
       } else if (m.kv === 'suite-event') {
@@ -258,13 +206,6 @@
   KS.beforeClose = async () => {
     try { if ((await N.runtimeMigrationState?.())?.running) { KS.toast('La migration continue. Attendez sa fin avant de quitter KaneApp.', 'info', 5000); return false; } } catch { /* version sans migration */ }
     if (WX.el.video?.ready) { try { await WX.request('video', 'save'); } catch (e) { KS.toast(e.message, 'err'); return false; } }
-    // Un échec d'enregistrement d'Animation ne doit jamais empêcher de quitter : on demande (1.34.1)
-    if (WX.el.wallpaper?.ready) {
-      try { await WX.request('wallpaper', 'flush'); } catch (e) {
-        const quit = await KS.confirm(e.message + '. Quitter quand même ? Les dernières modifications des zones seront perdues.', { title: 'Animation', ok: 'Quitter sans enregistrer', danger: true });
-        if (!quit) return false;
-      }
-    }
     // Le dialogue natif de KaneClip reste disponible pour un montage non rattaché au projet.
     const V = WX.el.video;
     if (!V?.frame) return true;

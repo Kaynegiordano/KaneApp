@@ -5,7 +5,7 @@ module.exports = function managedRuntimes(profile) {
   const file = path.join(profile, 'managed-runtimes.json');
   const read = () => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return { active: false }; } };
   const write = value => { fs.mkdirSync(profile, { recursive: true }); fs.writeFileSync(file + '.tmp', JSON.stringify(value, null, 2)); fs.renameSync(file + '.tmp', file); };
-  const entries = { studio: 'launch.py', comfyui: 'main.py', wallpaper: 'outils/peintre.py', training: 'anima_train_network.py' };
+  const entries = { studio: 'launch.py', comfyui: 'main.py', training: 'anima_train_network.py' };
   function inspect(reportFile) {
     if (fs.existsSync(path.join(path.dirname(reportFile), 'migration.lock'))) throw new Error('Attendez la fin de la migration avant activation');
     const report = JSON.parse(fs.readFileSync(reportFile, 'utf8'));
@@ -52,7 +52,7 @@ module.exports = function managedRuntimes(profile) {
       const result = { ...base, PATH: [path.join(value.components[id].directory, 'venv/Scripts'), value.media.directory, ...clean].join(path.delimiter),
         VIRTUAL_ENV: path.join(value.components[id].directory, 'venv'), IMAGEIO_FFMPEG_EXE: value.media.ffmpeg };
       delete result.PYTHONPATH; delete result.PYTHONHOME;
-      for (const key of ['WEA_PROJETS', 'HF_HOME', 'HF_HUB_CACHE', 'TRANSFORMERS_CACHE', 'TORCH_HOME']) {
+      for (const key of ['HF_HOME', 'HF_HUB_CACHE', 'TRANSFORMERS_CACHE', 'TORCH_HOME']) {
         if (!base[key] || !path.isAbsolute(base[key])) continue;
         const owner = old.find(c => inside(c.source, base[key]));
         if (owner) result[key] = path.join(owner.directory, path.relative(owner.source, base[key]));

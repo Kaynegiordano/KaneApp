@@ -6,7 +6,7 @@ const original = '{"data":"original","models":"shared"}'; fs.writeFileSync(path.
 const crypto = require('node:crypto');
 const config = require(path.join(root, 'managed-runtimes.cjs'))(profile), reportFile = path.join(destination, 'migration.json');
 const report = { schema: 1, source: path.join(tmp, 'source'), destination, models: path.join(tmp, 'models'), sourcesPreserved: true, profiles: [], components: {} };
-for (const [id, entry] of Object.entries({ studio: 'launch.py', comfyui: 'main.py', wallpaper: 'outils/peintre.py', training: 'anima_train_network.py' })) {
+for (const [id, entry] of Object.entries({ studio: 'launch.py', comfyui: 'main.py', training: 'anima_train_network.py' })) {
   const directory = path.join(destination, 'runtimes', id), python = path.join(directory, 'venv/Scripts/python.exe');
   fs.mkdirSync(path.dirname(python), { recursive: true }); fs.writeFileSync(python, 'python');
   fs.mkdirSync(path.dirname(path.join(directory, entry)), { recursive: true }); fs.writeFileSync(path.join(directory, entry), '# fixture');

@@ -28,7 +28,6 @@
   E.stop = async explicit => apply(await N.engineStop(explicit === true));
   // Prêt à générer ? Sinon démarre le moteur (sauf préférence contraire) et attend, journal à l'appui.
   E.ensure = async ({ quiet = false } = {}) => {
-    if (KS.animationBusy) { if (!quiet) KS.toast('Le moteur IA est réservé à Animation. Attendez la fin de sa tâche.', 'info'); return false; }
     await E.refresh();
     if (E.ready()) return true;
     if (E.state !== 'starting') {

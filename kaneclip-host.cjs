@@ -161,7 +161,7 @@ function setup(getWin, { output } = {}) {
   O('toggle-devtools', () => { const w = getWin(); if (w) w.webContents.toggleDevTools(); });
   O('toggle-fullscreen', () => { const w = getWin(); if (w) w.setFullScreen(!w.isFullScreen()); });
 
-  // Envois depuis Kanevas : un média (image du document, sortie ComfyUI, vidéo de Wallpaper) sur la timeline
+  // Envois depuis Kanevas : un média (image du document, sortie ComfyUI) sur la timeline
   const stageDir = path.join(dataDir, 'media');
   ipcMain.handle('kc-stage', async (_e, name, data) => {
     await fs.promises.mkdir(stageDir, { recursive: true });

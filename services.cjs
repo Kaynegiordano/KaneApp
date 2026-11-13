@@ -1,32 +1,20 @@
-// Espaces « ComfyUI » et « Wallpaper » : Kanevas démarre leurs serveurs locaux (ou reprend ceux que Kane OS a déjà
-// lancés), les arrête en quittant, et fait le lien avec l'Édition (envoi d'images, sorties à importer).
-// Wallpaper Engine Animator rebouche ses fonds avec le moteur Forge de Kanevas : il le joint par WEA_FORGE_URL, et
-// demande son démarrage à un petit relais local qui parle comme le lanceur Kane OS (WEA_LANCEUR_URL).
+// Espace « Vidéo IA » (ComfyUI) : KaneApp démarre son serveur local (ou reprend celui que Kane OS a déjà lancé), l'arrête
+// en quittant, et fait le lien avec Retouche (envoi d'images, sorties à importer).
 const { ipcMain, shell, app } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const { spawn, execFileSync } = require('child_process');
 
-const RELAY_PORT = 8601;
-
-module.exports = function services({ getWin, root, engine, managed = () => ({ active: false }), environment = () => process.env }) {
+module.exports = function services({ getWin, root, managed = () => ({ active: false }), environment = () => process.env }) {
   const outputs = require('./output-paths.cjs')(root);
   const directory = (id, legacy) => { const value = managed(); return value.active ? value.components[id].directory : legacy; };
-  const runtime = path.join(__dirname.replace(/app\.asar(?=[\\/]|$)/, 'app.asar.unpacked'), 'animation-runtime.py');
   const SV = {
     comfyui: {
       name: 'ComfyUI', port: 8188, ping: '/system_stats',
       dir: () => directory('comfyui', path.join(root(), 'ComfyUI')),
       check: d => fs.existsSync(path.join(d, 'main.py')) && fs.existsSync(path.join(d, 'venv', 'Scripts', 'python.exe')),
       cmd: d => [path.join(d, 'venv', 'Scripts', 'python.exe'), ['-u', path.join(d, 'main.py'), '--port', '8188', '--listen', '127.0.0.1', '--disable-auto-launch', '--enable-manager', '--output-directory', outputs.directory('comfyui')]],
-    },
-    wallpaper: {
-      name: 'Wallpaper Engine Animator', port: 8780, ping: '/api/projets',
-      dir: () => directory('wallpaper', path.join(root(), 'wallpaper-engine-animator')),
-      check: d => fs.existsSync(path.join(d, 'outils', 'peintre.py')) && fs.existsSync(path.join(d, 'venv', 'Scripts', 'python.exe')),
-      cmd: d => [path.join(d, 'venv', 'Scripts', 'python.exe'), ['-u', runtime, '--server', path.join(d, 'outils', 'peintre.py'), '--port', '8780', '--sans-navigateur']],
-      env: async () => ({ WEA_FORGE_URL: await engine.forgeUrl(), WEA_LANCEUR_URL: 'http://127.0.0.1:' + RELAY_PORT, WEA_PROJETS: await weaProjects() }),
     },
   };
   // ComfyUI refuse les requêtes « cross-site » (protection CSRF) : vue de Kanevas, sa page dans le cadre en est une.
@@ -55,7 +43,7 @@ module.exports = function services({ getWin, root, engine, managed = () => ({ ac
   const adoptable = id => {
     if (!managed().active) return true;
     const d = SV[id].dir();
-    try { return !!require('./local-process.cjs').identify({ port: SV[id].port, script: path.join(d, id === 'comfyui' ? 'main.py' : 'outils/peintre.py'), python: path.join(d, 'venv/Scripts/python.exe') }); } catch { return false; }
+    try { return !!require('./local-process.cjs').identify({ port: SV[id].port, script: path.join(d, 'main.py'), python: path.join(d, 'venv/Scripts/python.exe') }); } catch { return false; }
   };
 
   // ComfyUI : fetch + fast-forward de master si l'arbre est propre et sans commit local, puis ses paquets Python ;
@@ -126,13 +114,11 @@ module.exports = function services({ getWin, root, engine, managed = () => ({ ac
     if (await ping(id)) { S.state = adoptable(id) ? 'external' : 'error'; S.error = S.state === 'error' ? 'Une ancienne installation occupe le port. Arrêtez-la dans KaneOS avant d’ouvrir cette copie KaneApp.' : ''; S.ours = false; emit(id); return status(id); }
     const d = D.dir();
     if (!D.check(d)) { S.state = 'error'; S.error = D.name + ' introuvable ou incomplet : ' + d; emit(id); return status(id); }
-    if (id === 'wallpaper') startRelay();
     S.log = []; S.error = ''; S.state = 'starting'; S.ours = true; emit(id);
     if (id === 'comfyui') { await updateComfy(d, id); if (S.state === 'starting') { emit(id); await updateNodes(d, id); } }   // à chaque lancement, puis démarrage sur le code à jour
     if (S.state !== 'starting') return status(id);         // arrêté pendant la mise à jour
     const [py, args] = D.cmd(d);
     const env = { ...environment(id), PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1', ...(D.env ? await D.env() : {}) };
-    S.forge = env.WEA_FORGE_URL || '';
     log(id, '> ' + [py, ...args].join(' '));
     const child = spawn(py, args, { cwd: d, windowsHide: true, env });
     S.pid = child.pid;
@@ -158,30 +144,11 @@ module.exports = function services({ getWin, root, engine, managed = () => ({ ac
     const S = st[id];
     if (!S.ours && explicit) {
       const dir = SV[id].dir();
-      require('./local-process.cjs').stop({ port: SV[id].port, script: path.join(dir, id === 'comfyui' ? 'main.py' : 'outils/peintre.py'), python: path.join(dir, 'venv/Scripts/python.exe') });
+      require('./local-process.cjs').stop({ port: SV[id].port, script: path.join(dir, 'main.py'), python: path.join(dir, 'venv/Scripts/python.exe') });
     }
     const pid = S.pid || (S.ours ? pidOnPort(SV[id].port) : null);
     if (S.ours && pid) { try { execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }); } catch { /* déjà arrêté */ } }
     S.pid = null; S.state = 'off'; S.ours = false; emit(id);
-  }
-
-  // Relais « lanceur Kane OS » pour Wallpaper : /api/health, /api/status, /api/webui/profiles, /api/webui/start
-  let relay = null;
-  function startRelay() {
-    if (relay) return;
-    relay = http.createServer(async (req, res) => {
-      const out = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
-      const u = req.url.split('?')[0];
-      try {
-        if (u === '/api/health') return out(200, { application: 'Kane OS', relais: 'Kanevas' });
-        if (u === '/api/status') { const s = engine.state(); return out(200, { webui: { status: s === 'ready' || s === 'external' ? 'running' : s === 'starting' ? 'starting' : 'stopped' } }); }
-        if (u === '/api/webui/profiles') return out(200, [{ id: 'kanevas', name: 'Moteur IA de KaneApp', args: '--api' }]);
-        if (u === '/api/webui/start' && req.method === 'POST') { engine.start(); return out(200, { ok: true }); }
-        out(404, { error: 'introuvable' });
-      } catch (e) { out(500, { error: String(e.message || e) }); }
-    });
-    relay.on('error', () => { relay = null; });           // port pris : Wallpaper gardera LaMa seul si le moteur est arrêté
-    relay.listen(RELAY_PORT, '127.0.0.1');
   }
 
   ipcMain.handle('svc-status', async (_e, id) => {
@@ -192,9 +159,9 @@ module.exports = function services({ getWin, root, engine, managed = () => ({ ac
     return status(id);
   });
   ipcMain.handle('svc-start', (_e, id) => { if (!SV[id]) throw new Error('Service inconnu'); return start(id); });
-  ipcMain.handle('svc-stop', async (_e, id, explicit) => { if (!SV[id]) throw new Error('Service inconnu'); kill(id, explicit === true); if (id === 'wallpaper') await gpu.stopped(); return status(id); });
+  ipcMain.handle('svc-stop', async (_e, id, explicit) => { if (!SV[id]) throw new Error('Service inconnu'); kill(id, explicit === true); return status(id); });
   ipcMain.handle('svc-log', (_e, id) => (st[id] ? st[id].log.join('\n') : ''));
-  app.on('will-quit', () => { for (const id in SV) if (st[id].ours) kill(id); if (relay) try { relay.close(); } catch { /* rien */ } });
+  app.on('will-quit', () => { for (const id in SV) if (st[id].ours) kill(id); });
 
   /* ------------------------------------------------ liens avec l'Édition */
   const post = (port, route, body, headers, timeout = 120000) => new Promise((res, rej) => {
@@ -205,75 +172,6 @@ module.exports = function services({ getWin, root, engine, managed = () => ({ ac
     });
     r.on('error', rej); r.on('timeout', () => { r.destroy(); rej(new Error('Pas de réponse')); });
     r.end(data);
-  });
-  const animationStatus = async dossier => {
-    const response = await fetch('http://127.0.0.1:8780/p/' + encodeURIComponent(dossier) + '/etat', { signal: AbortSignal.timeout(5000) });
-    if (!response.ok) throw new Error('Animation HTTP ' + response.status);
-    const value = await response.json();
-    if (!['en cours', 'fini', 'erreur', 'libre'].includes(value.etat)) throw new Error('État Animation invalide');
-    return value;
-  };
-  const gpu = require('./animation-gpu.cjs')({
-    release: () => engine.release(), status: animationStatus,
-    changed: value => { engine.animationBusy?.(value.busy); const w = getWin(); if (w && !w.isDestroyed()) w.webContents.send('animation-gpu', value); },
-  });
-  const mainOnly = event => { const w = getWin(); if (!w || event.sender !== w.webContents || event.senderFrame !== w.webContents.mainFrame) throw new Error('Commande réservée à KaneApp'); };
-  ipcMain.handle('animation-gpu-state', event => { mainOnly(event); return gpu.state(); });
-  ipcMain.handle('animation-run', async (event, dossier, operation, body) => {
-    mainOnly(event);
-    try {
-      if (typeof dossier !== 'string' || !dossier || dossier.length > 240 || /[\\/\x00]/.test(dossier) || ['.', '..'].includes(dossier)) throw new Error('Projet Animation invalide');
-      if (!['super', 'animer', 'video', 'sam', 'decouper'].includes(operation)) throw new Error('Opération Animation inconnue');
-      if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Paramètres Animation invalides');
-      if ((await animationStatus(dossier)).etat === 'en cours') throw new Error('Une tâche Animation est déjà en cours.');
-      const value = await gpu.run(dossier, () => post(8780, '/p/' + encodeURIComponent(dossier) + '/' + operation, body, {}, operation === 'sam' ? 600000 : 120000), { synchronous: operation === 'sam' });
-      return { ok: true, value };
-    } catch (e) { return { ok: false, error: e.message }; }
-  });
-  // Animation 2.4 : le document en calques d'un projet (calques.psd), à ouvrir dans Retouche
-  ipcMain.handle('animation-document', async (event, dossier) => {
-    mainOnly(event);
-    try {
-      if (typeof dossier !== 'string' || !dossier || dossier.length > 240 || /[\\/\x00]/.test(dossier) || ['.', '..'].includes(dossier)) throw new Error('Projet Animation invalide');
-      const base = path.resolve(await weaProjects()), file = path.resolve(base, dossier, 'calques.psd');
-      if (!file.startsWith(base + path.sep)) throw new Error('Projet Animation invalide');
-      await fs.promises.access(file).catch(() => { throw new Error('Ce projet n’a pas encore de document en calques.'); });
-      return { ok: true, path: file };
-    } catch (e) { return { ok: false, error: e.message }; }
-  });
-  // Animation 4.0 : découpe en calques pour Retouche. KaneApp envoie l'image et la silhouette BiRefNet ; Animation (pose,
-  // GrabCut, LaMa) renvoie chaque calque : couleurs et masque (PNG).
-  const projectFile = async (dossier, name) => {
-    if (typeof dossier !== 'string' || !dossier || dossier.length > 240 || /[\\/\x00]/.test(dossier) || ['.', '..'].includes(dossier)) throw new Error('Projet Animation invalide');
-    const base = path.resolve(await weaProjects()), file = path.resolve(base, dossier, name);
-    if (!file.startsWith(base + path.sep)) throw new Error('Projet Animation invalide');
-    return file;
-  };
-  ipcMain.handle('animation-cut', async (event, image, alpha, forge) => {
-    mainOnly(event);
-    try {
-      const url = data => 'data:image/png;base64,' + Buffer.from(data).toString('base64');
-      const r = await post(8780, '/api/decoupe-calques', { image: url(image), alpha: url(alpha), forge: !!forge }, {}, 1800000);
-      if (!r || !Array.isArray(r.calques)) throw new Error('Réponse de la découpe illisible');
-      const bytes = s => s ? new Uint8Array(Buffer.from(s, 'base64')) : null;
-      return { ok: true, taille: r.taille, journal: r.journal || [], carte: bytes(r.carte),
-        calques: r.calques.map(c => ({ nom: String(c.nom), role: c.role, groupe: c.groupe, famille: c.famille || null, x: c.x | 0, y: c.y | 0, couleurs: bytes(c.couleurs), masque: bytes(c.masque) })) };
-    } catch (e) { return { ok: false, error: e.serverResponded ? e.message.replace(/^HTTP \d+ /, '') : e.message }; }
-  });
-  ipcMain.handle('animation-scene', async (event, dossier) => {
-    mainOnly(event);
-    try { const file = await projectFile(dossier, 'scene.png'); await fs.promises.access(file); return { ok: true, path: file }; }
-    catch (e) { return { ok: false, error: e.message }; }
-  });
-  ipcMain.handle('animation-write-document', async (event, dossier, data) => {
-    mainOnly(event);
-    try {
-      const file = await projectFile(dossier, 'calques.psd'), buf = Buffer.from(data);
-      if (buf.subarray(0, 4).toString('latin1') !== '8BPS') throw new Error('Document en calques invalide');
-      if (fs.existsSync(file)) await fs.promises.copyFile(file, path.join(path.dirname(file), 'calques (précédent).psd'));
-      const temp = file + '.kaneapp.tmp'; await fs.promises.writeFile(temp, buf); await fs.promises.rename(temp, file);
-      return { ok: true, path: file };
-    } catch (e) { return { ok: false, error: e.message }; }
   });
   // ComfyUI : l'image va dans son dossier input (nœud « Load Image »)
   ipcMain.handle('comfy-upload', async (_e, name, data) => {
@@ -287,57 +185,6 @@ module.exports = function services({ getWin, root, engine, managed = () => ({ ac
       return { ok: true, name: r.name || fname };
     } catch (err) { return { ok: false, error: String(err.message || err) }; }
   });
-  // Wallpaper : nouveau projet à partir d'une image
-  ipcMain.handle('wea-new', async (_e, name, data) => {
-    try {
-      const r = await post(8780, '/api/nouveau', { nom: String(name || 'Illustration').slice(0, 80), image: 'data:image/png;base64,' + Buffer.from(data).toString('base64') });
-      return { ok: true, dossier: r.dossier };
-    } catch (err) { return { ok: false, error: String(err.message || err) }; }
-  });
-  // Sorties à reprendre : images et vidéos de ComfyUI, vidéos exportées par Wallpaper
-  let animationProjects;
-  const weaProjects = () => animationProjects ||= (async () => {
-    const dest = outputs.directory('animation'), runtime = SV.wallpaper.dir();
-    let config = {}; try { config = JSON.parse(await fs.promises.readFile(path.join(runtime, 'config.json'), 'utf8')); } catch { /* sans config */ }
-    for (const source of new Set([runtime, config.projets, environment('wallpaper').WEA_PROJETS].filter(Boolean))) {
-      if (path.resolve(source).toLowerCase() === path.resolve(dest).toLowerCase()) continue;
-      for (const item of await fs.promises.readdir(source, {withFileTypes:true}).catch(() => [])) {
-        const from = path.join(source, item.name), target = path.join(dest, item.name);
-        if (!item.isDirectory() || !fs.existsSync(path.join(from, 'scene.png')) || fs.existsSync(target)) continue;
-        const temp = path.join(dest, '._import-' + require('node:crypto').randomUUID());
-        await fs.promises.cp(from, temp, {recursive:true,errorOnExist:true,force:false});
-        await fs.promises.rename(temp, target); // L'original est conservé ; aucun projet existant n'est écrasé.
-      }
-    }
-    return dest;
-  })().catch(error => { animationProjects = null; throw error; });
-  ipcMain.handle('wea-update', async (_e, dossier, data) => {
-    try {
-      if (typeof dossier !== 'string' || !dossier || /[\\/]/.test(dossier) || dossier === '.' || dossier === '..') throw new Error('Projet Animation invalide');
-      const base = path.resolve(await weaProjects()), dir = path.resolve(base, dossier);
-      if (!dir.startsWith(base + path.sep)) throw new Error('Projet Animation invalide');
-      const state = await new Promise((resolve, reject) => {
-        http.get(`http://127.0.0.1:8780/p/${encodeURIComponent(dossier)}/etat`, { timeout: 4000 }, r => {
-          let text = ''; r.on('data', b => text += b); r.on('end', () => { try { resolve(JSON.parse(text)); } catch { reject(new Error('État Animation illisible')); } });
-        }).on('error', reject).on('timeout', function () { this.destroy(new Error('Animation ne répond pas')); });
-      });
-      if (state.etat === 'en cours') throw new Error('Attendez la fin de l’animation ou de l’export');
-      const { nativeImage } = require('electron');
-      let image = nativeImage.createFromBuffer(Buffer.from(data));
-      if (image.isEmpty()) throw new Error('Image illisible');
-      if (image.getSize().width > 3840) image = image.resize({ width: 3840 });
-      const scene = path.join(dir, 'scene.png'), previous = await fs.promises.readFile(scene);
-      const old = nativeImage.createFromBuffer(previous).getSize(), size = image.getSize();
-      if (old.width !== size.width || old.height !== size.height) throw new Error('Dimensions différentes : créez une nouvelle animation pour conserver les zones existantes');
-      const history = path.join(dir, 'work', 'sources'); await fs.promises.mkdir(history, { recursive: true });
-      await fs.promises.writeFile(path.join(history, Date.now() + '.png'), previous);
-      const temp = path.join(dir, 'scene.kanevas.tmp');
-      await fs.promises.writeFile(temp, image.toPNG()); await fs.promises.rename(temp, scene);
-      // Ces aperçus sont calculés depuis l'ancienne source ; la peinture et les profondeurs manuelles restent en place.
-      for (const file of ['depth_auto.png', path.join('work', 'vignette.jpg')]) await fs.promises.rm(path.join(dir, file), { force: true });
-      return { ok: true };
-    } catch (e) { return { ok: false, error: e.message }; }
-  });
   const MEDIA = /\.(png|jpe?g|webp|gif|mp4|webm|mov|mkv)$/i;
   async function walk(dir, depth, out, filter) {
     let ents = []; try { ents = await fs.promises.readdir(dir, { withFileTypes: true }); } catch { return; }
@@ -350,12 +197,11 @@ module.exports = function services({ getWin, root, engine, managed = () => ({ ac
   ipcMain.handle('svc-outputs', async (_e, id, limit = 60) => {
     const out = [];
     if (id === 'comfyui') await walk(path.join(root(), 'output', 'comfyui'), 3, out);
-    else if (id === 'wallpaper') await walk(await weaProjects(), 3, out, p => /[\\/]a poster video[\\/]/i.test(p) && /\.mp4$/i.test(p));
     out.sort((a, b) => b.mtime - a.mtime);
     return out.slice(0, limit);
   });
   ipcMain.handle('svc-open-folder', async (_e, id) => {
-    const d = id === 'comfyui' ? outputs.directory('comfyui') : id === 'wallpaper' ? await weaProjects() : null;
+    const d = id === 'comfyui' ? outputs.directory('comfyui') : null;
     if (d && fs.existsSync(d)) shell.openPath(d);
   });
   // ComfyUI garde ses modèles en mémoire graphique entre deux workflows : /free les décharge sans arrêter le serveur.

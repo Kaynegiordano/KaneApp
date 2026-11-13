@@ -64,7 +64,7 @@ module.exports = function createStore(root) {
         return projects.sort((a, b) => b.updated - a.updated);
       }
       if (op === 'create') {
-        const p = { app: 'Kanevas Suite', version: 1, id: randomUUID(), name: title(o.name), created: Date.now(), items: [], animation: null };
+        const p = { app: 'Kanevas Suite', version: 1, id: randomUUID(), name: title(o.name), created: Date.now(), items: [] };
         await write(p); return publicProject(p);
       }
       const p = await load(o.project);
@@ -79,10 +79,6 @@ module.exports = function createStore(root) {
         if (previous) return { project: publicProject(p), item: publicProject({ ...p, items: [previous] }).items[0], duplicate: true };
         const parent = o.parent || p.items.find(it => it.origin === o.path)?.id;
         return append(p, { ...o, name: o.name || path.basename(o.path), file: o.path, parent, origin: o.path, originStamp: stamp });
-      }
-      if (op === 'animation') {
-        if (o.value !== null && (!o.value || typeof o.value.dossier !== 'string' || /[\\/]/.test(o.value.dossier))) throw new Error('Animation invalide');
-        p.animation = o.value; await write(p); return publicProject(p);
       }
       if (op === 'video') {
         const data = String(o.data || ''); JSON.parse(data);

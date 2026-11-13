@@ -1,4 +1,4 @@
-// Projet commun, bibliothèque durable et parcours Illustration → Animation → Montage.
+// Projet commun, bibliothèque durable et parcours Illustration → Vidéo IA → Montage.
 'use strict';
 (() => {
   const N = KS.native, h = KS.h, ui = KS.ui, C = KS.cmd, U = KS.util;
@@ -10,9 +10,9 @@
   const COUNTS = [[12, '12'], [24, '24'], [48, '48'], [96, '96'], [200, '200'], [0, 'Tous']];
   const shown = () => { const n = +(KS.prefs.libraryCount ?? 48); return n > 0 ? n + extra : Infinity; };
   let resolveReady; S.ready = new Promise(r => resolveReady = r);
-  const captures = new WeakMap(), animations = new Map();
+  const captures = new WeakMap();
   const mediaURL = p => 'kcm://f/' + encodeURIComponent(p);
-  const titleOf = source => ({ edition: 'Retouche', studio: 'Studio IA', wallpaper: 'Animation', comfyui: 'Animation Vidéo', video: 'Montage', import: 'Import' })[source] || source;
+  const titleOf = source => ({ edition: 'Retouche', studio: 'Studio IA', wallpaper: 'Import', comfyui: 'Vidéo IA', video: 'Montage', import: 'Import' })[source] || source;
   const action = (label, fn, cls = '', disabled = false, icon) => {
     const b = ui.btn(label, () => S.run(label, fn).catch(() => {}), cls, icon); b.disabled = disabled; return b;
   };
@@ -35,22 +35,13 @@
     let task = S.tasks.find(t => t.external === id && t.phase === 'running');
     if (m.busy) {
       if (!task) { task = { id: crypto.randomUUID(), external: id, label: '', phase: 'running', time: Date.now() }; S.tasks.unshift(task); }
-      task.label = m.status || (id === 'wallpaper' ? 'Animation en cours' : 'Traitement vidéo');
+      task.label = m.status || 'Traitement vidéo';
     } else if (task) { task.phase = /[ée]chec|erreur/i.test(m.status || '') ? 'error' : 'done'; task.error = task.phase === 'error' ? m.status : null; }
     renderTasks();
   }
   S.event = (id, m) => {
     if (typeof m.busy === 'boolean') externalTask(id, m);
     if (m.error) KS.toast(m.error, 'err', 6000);
-    if (id === 'wallpaper' && m.dossier) animations.set(id, m);
-    if (id === 'wallpaper' && m.completed && S.project?.animation?.dossier === m.dossier) {
-      S.run('Récupération de la boucle', async () => {
-        const project = S.project.id, outputs = await N.svcOutputs('wallpaper', 100);
-        for (const it of outputs.filter(it => it.path.split(/[\\/]/).includes(m.dossier))) {
-          const result = await call('import', { project, path: it.path, source: 'wallpaper' }); adopt(result.project);
-        }
-      }).catch(() => {});
-    }
   };
   function renderTasks() {
     if (!taskButton) return;
@@ -64,7 +55,7 @@
       body.replaceChildren();
       for (const t of S.tasks) body.append(h('div.suite-task', { 'data-phase': t.phase }, h('span', { text: t.phase === 'running' ? '◌' : t.phase === 'error' ? '!' : '✓' }),
         h('div', h('b', { text: t.label }), h('small', { text: t.error || (t.phase === 'running' ? 'En cours…' : 'Terminé') }))));
-      if (!S.tasks.length) body.append(h('p.note', { text: 'Les transferts, animations et rendus apparaîtront ici.' }));
+      if (!S.tasks.length) body.append(h('p.note', { text: 'Les transferts, vidéos et rendus apparaîtront ici.' }));
     };
     const modal = KS.modal({ title: 'Activité de la suite', width: 580, body, buttons: [{ label: 'Fermer', primary: true }] });
     fill(); const timer = setInterval(fill, 800); modal.done.then(() => clearInterval(timer));
@@ -99,7 +90,6 @@
   }
   async function choose(p) {
     if (KS.ws.el.video?.ready) await KS.ws.request('video', 'save');
-    if (KS.ws.el.wallpaper?.ready) await KS.ws.request('wallpaper', 'flush');
     if (KS.ws.el.video?.ready) await KS.ws.request('video', 'project', { project: p });
     S.project = p; S.selected = p.items[0]?.id || null;
     KS.prefs.suiteProject = p.id; KS.prefs.save();
@@ -186,43 +176,6 @@
     drawer.hidden = true;
   };
   async function modalChoice(title, message, buttons) { return (await KS.modal({ title, body: h('p', { text: message }), buttons }).done); }
-  S.importAnimation = async file => {
-    await S.ready;
-    if (!file) file = (await N.openDialog({ title:'Ouvrir une image dans Animation', multi:false, filters:[{name:'Images',extensions:['png','jpg','jpeg','webp','bmp','gif','avif']}] }))?.[0];
-    if (!file) return;
-    if (file.error) throw new Error(file.error);
-    if (!file.data || file.data.byteLength > 100 * 1024 * 1024) throw new Error('Choisissez une image de moins de 100 Mo');
-    let canvas;
-    try { canvas = await KS.io.canvasFromEntry(file); }
-    catch { throw new Error('Cette image est illisible ou son format n’est pas pris en charge.'); }
-    const data = new Uint8Array(await (await U.blobFromCanvas(canvas)).arrayBuffer());
-    const r = await call('capture', { name:String(file.name || 'Image').replace(/\.[^.]+$/, '') + '.png', data, source:'wallpaper' });
-    adopt(r.project); S.selected = r.item.id;
-    return S.animate(r.item);
-  };
-  S.animate = async (it, psd = null) => {
-    if (it.kind !== 'image') throw new Error('Choisissez une image pour l’animation');
-    const project = S.project.id, linked = S.project.animation;
-    // document en calques (découpe 4.0) : toujours une nouvelle animation, construite sur ses calques
-    const decision = psd ? 'new' : linked ? await modalChoice('Animation du projet', 'Reprendre les zones existantes avec cette version, ou créer une autre animation ?',
-      [{ label: 'Annuler', value: null }, { label: 'Nouvelle animation', value: 'new' }, { label: 'Mettre à jour la source', primary: true, value: 'update' }]) : 'new';
-    if (!decision) return false;
-    await KS.ws.ensure('wallpaper');
-    const f = await N.readFile(it.path); if (f.error) throw new Error(f.error);
-    let dossier;
-    if (decision === 'update') {
-      await KS.ws.request('wallpaper', 'flush'); const result = await N.weaUpdate(linked.dossier, f.data);
-      if (!result.ok) throw new Error(result.error); dossier = linked.dossier;
-    } else { const result = await N.weaNew(S.project.name, psd || f.data); if (!result.ok) throw new Error(result.error); dossier = result.dossier; }
-    const p = await call('animation', { project, value: { dossier, item: it.id, updated: Date.now() } }); adopt(p);
-    await KS.ws.request('wallpaper', 'open', { dossier });
-    drawer.hidden = true; KS.toast(decision === 'update' ? 'Source mise à jour. Les zones sont conservées ; vérifiez-les avant de régénérer.' : 'Animation prête : peignez les zones à mettre en mouvement.', 'ok', 4500);
-    return true;
-  };
-  S.resumeAnimation = async () => {
-    const link = S.project.animation; if (!link) return KS.ws.go('wallpaper');
-    await KS.ws.ensure('wallpaper'); await KS.ws.request('wallpaper', 'open', { dossier: link.dossier });
-  };
   S.openVideo = async () => { await S.ready; await KS.ws.ensure('video'); await KS.ws.request('video', 'project', { project: S.project }); };
   S.toVideo = async it => { await S.openVideo(); await KS.ws.request('video', 'add', { path: it.path }); drawer.hidden = true; KS.toast('Média ajouté au montage du projet.', 'ok'); };
   S.replaceVideo = async it => {
@@ -254,14 +207,13 @@
     if (S.tasks.some(t => t.external === id && t.phase === 'running')) throw new Error('Attendez la fin du traitement avant de récupérer les résultats');
     const project = S.project.id;
     let outputs = await N.svcOutputs(id, 80);
-    if (id === 'wallpaper' && S.project.animation) outputs = outputs.filter(it => it.path.split(/[\\/]/).includes(S.project.animation.dossier));
     const selected = new Set(), grid = h('div.suite-outputpick');
     for (const it of outputs) {
       const preview = it.video ? h('video', { src: mediaURL(it.path), preload: 'metadata', muted: true }) : h('img', { src: mediaURL(it.path), loading: 'lazy', alt: '' });
       const check = h('input', { type: 'checkbox' }); check.addEventListener('change', () => check.checked ? selected.add(it.path) : selected.delete(it.path));
       grid.append(h('label', check, preview, h('span', { text: it.name })));
     }
-    if (!outputs.length) grid.append(h('p.note', { text: 'Aucun résultat disponible. Exportez une vidéo depuis Animation ou exécutez votre workflow.' }));
+    if (!outputs.length) grid.append(h('p.note', { text: 'Aucun résultat disponible. Exécutez d’abord votre workflow dans ComfyUI.' }));
     const ok = await KS.modal({ title: 'Ajouter des résultats au projet', width: 760, body: grid, buttons: [{ label: 'Annuler', value: false }, { label: 'Ajouter la sélection', primary: true, value: true }] }).done;
     if (!ok) return;
     for (const path of selected) { const r = await call('import', { project, path, source: id }); adopt(r.project); }
@@ -316,13 +268,12 @@
       h('p.note', { text: (it.snapshotPath ? 'Document avec calques conservé · ' : '') + U.fmtBytes(it.size) + ' · ' + new Date(it.added).toLocaleDateString('fr-FR') }),
       action(it.snapshotPath ? 'Reprendre avec les calques' : 'Ouvrir dans Retouche', () => S.open(it), '.primary', !image, 'image'),
       action(KS.state.doc ? 'Ajouter en calque · ' + KS.state.doc.name : 'Ajouter en calque', () => S.addLayer(it), '.small', !image || !KS.state.doc, 'layers'),
-      action('Animer cette image', () => S.animate(it), '', !image, 'sparkles'),
       action('Ajouter au montage', () => S.toVideo(it), '', false, 'play'),
       action('Mettre à jour un média du montage…', () => S.replaceVideo(it), '.small'),
       h('div.suite-detail-sep'),
       action('Transformer dans le Studio', () => S.toStudio(it, 'img2img'), '.small', !image),
       action('Retoucher une zone', () => S.toStudio(it, 'inpaint'), '.small', !image),
-      action('Utiliser dans un workflow', () => S.toComfy(it), '.small', !image),
+      action('Faire une vidéo IA', () => S.toComfy(it), '.small', !image),
       action('Afficher le fichier', () => N.showInFolder(it.path), '.small'));
     if (it.parent) { const parent = S.project.items.find(x => x.id === it.parent); if (parent) el.append(action('Voir la version précédente', () => { S.selected = parent.id; render(); }, '.small')); }
     if (it.info) el.append(h('details.suite-parameters', h('summary', { text: 'Paramètres de génération' }), h('pre', { text: it.info })));
@@ -337,10 +288,10 @@
       h('div.suite-pipeline',
         pipeline('01', 'Créer', 'Imaginez dans le Studio IA.', 'sparkles', () => C.openStudioTab('txt2img')),
         pipeline('02', 'Retoucher', 'Composez et retouchez vos images.', 'image', () => C.toggleStudio(false)),
-        pipeline('03', 'Animer', p.animation ? 'Reprenez les mouvements du projet.' : 'Donnez du mouvement à une illustration.', 'play', () => S.resumeAnimation()),
+        pipeline('03', 'Vidéo IA', 'Donnez vie à une image avec un workflow ComfyUI.', 'camera', () => KS.ws.go('comfyui')),
         pipeline('04', 'Monter', 'Assemblez les séquences et le son.', 'layers', () => S.openVideo())),
       list = h('section.suite-library'),
-      h('footer.suite-home-footer', h('span', { text: 'Les médias importés et leurs versions sont copiés dans ce projet. Les générations du Studio y sont archivées.' }), action('Animation Vidéo · ComfyUI', () => KS.ws.go('comfyui'), '.small'))));
+      h('footer.suite-home-footer', h('span', { text: 'Les médias importés et leurs versions sont copiés dans ce projet. Les générations du Studio y sont archivées.' }))));
     if (KS.prefs.showLibrary === true) renderLibrary(list); // masquée par défaut : rien à préparer
     if (!drawer.hidden) renderLibrary(drawer);
     KS.ws?.sync(); renderTasks();
