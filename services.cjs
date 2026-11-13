@@ -241,6 +241,40 @@ module.exports = function services({ getWin, root, engine, managed = () => ({ ac
       return { ok: true, path: file };
     } catch (e) { return { ok: false, error: e.message }; }
   });
+  // Animation 4.0 : découpe en calques pour Retouche. KaneApp envoie l'image et la silhouette BiRefNet ; Animation (pose,
+  // GrabCut, LaMa) renvoie chaque calque : couleurs et masque (PNG).
+  const projectFile = async (dossier, name) => {
+    if (typeof dossier !== 'string' || !dossier || dossier.length > 240 || /[\\/\x00]/.test(dossier) || ['.', '..'].includes(dossier)) throw new Error('Projet Animation invalide');
+    const base = path.resolve(await weaProjects()), file = path.resolve(base, dossier, name);
+    if (!file.startsWith(base + path.sep)) throw new Error('Projet Animation invalide');
+    return file;
+  };
+  ipcMain.handle('animation-cut', async (event, image, alpha, forge) => {
+    mainOnly(event);
+    try {
+      const url = data => 'data:image/png;base64,' + Buffer.from(data).toString('base64');
+      const r = await post(8780, '/api/decoupe-calques', { image: url(image), alpha: url(alpha), forge: !!forge }, {}, 1800000);
+      if (!r || !Array.isArray(r.calques)) throw new Error('Réponse de la découpe illisible');
+      const bytes = s => s ? new Uint8Array(Buffer.from(s, 'base64')) : null;
+      return { ok: true, taille: r.taille, journal: r.journal || [], carte: bytes(r.carte),
+        calques: r.calques.map(c => ({ nom: String(c.nom), role: c.role, groupe: c.groupe, famille: c.famille || null, x: c.x | 0, y: c.y | 0, couleurs: bytes(c.couleurs), masque: bytes(c.masque) })) };
+    } catch (e) { return { ok: false, error: e.serverResponded ? e.message.replace(/^HTTP \d+ /, '') : e.message }; }
+  });
+  ipcMain.handle('animation-scene', async (event, dossier) => {
+    mainOnly(event);
+    try { const file = await projectFile(dossier, 'scene.png'); await fs.promises.access(file); return { ok: true, path: file }; }
+    catch (e) { return { ok: false, error: e.message }; }
+  });
+  ipcMain.handle('animation-write-document', async (event, dossier, data) => {
+    mainOnly(event);
+    try {
+      const file = await projectFile(dossier, 'calques.psd'), buf = Buffer.from(data);
+      if (buf.subarray(0, 4).toString('latin1') !== '8BPS') throw new Error('Document en calques invalide');
+      if (fs.existsSync(file)) await fs.promises.copyFile(file, path.join(path.dirname(file), 'calques (précédent).psd'));
+      const temp = file + '.kaneapp.tmp'; await fs.promises.writeFile(temp, buf); await fs.promises.rename(temp, file);
+      return { ok: true, path: file };
+    } catch (e) { return { ok: false, error: e.message }; }
+  });
   // ComfyUI : l'image va dans son dossier input (nœud « Load Image »)
   ipcMain.handle('comfy-upload', async (_e, name, data) => {
     try {

@@ -1,3 +1,11 @@
+# 1.36.0 — Découpe en calques dans Retouche (Animation 4.0)
+
+- Nouveau : **IA › Découper en calques pour l’animation**. L’illustration ouverte devient un document en calques : Fond, Cheveux derrière, Corps, Bras, Cheveux devant. Plus de SAM : la silhouette vient du détourage de Retouche (BiRefNet), et les membres sont séparés d’après le squelette, en suivant les bords de l’image.
+- Chaque pièce a un **masque de fusion** : peignez-le en blanc ou en noir pour agrandir ou réduire une pièce. Les parties cachées (le corps sous un bras, les cheveux derrière la nuque, le fond) sont déjà repeintes.
+- **Animer l’illustration** envoie ce document avec ses calques : l’animation est construite sur les pièces.
+- Dans l’atelier Animation, **✂ Découper en calques** passe aussi par Retouche : le document s’ouvre pour correction, puis Ctrl+S et « Recharger ».
+- Il faut Kane OS 5.2.0 (moteur Animation 4.0).
+
 # 1.35.0 — Super résolution générative (Kane MultiDiffusion)
 
 - **Super résolution IA** a deux méthodes. **Générative** (par défaut) ajoute du vrai détail : l'image agrandie par le modèle choisi (4x-UltraSharp…) est repeinte par tuiles par le moteur du Studio. **Classique** garde l'agrandisseur seul.

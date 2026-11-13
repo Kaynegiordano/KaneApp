@@ -89,8 +89,8 @@
     WX.st[id] = await N.svcStatus(id); renderBar(id); renderFrame(id); return WX.st[id];
   }
   N.onSvc(s => { WX.st[s.id] = s; renderBar(s.id); renderFrame(s.id); KS.emit('suite-services'); });
-  WX.ensure = async id => {
-    go(id);
+  WX.ensure = async (id, o = {}) => {
+    if (!o.quiet) go(id);                                      // quiet : le moteur démarre sans quitter l'espace en cours
     if (!WS[id].svc) return true;
     let s = await refresh(id); if (up(s)) return true;
     if (s.found === false) throw new Error(WS[id].engine + ' est introuvable. Installez-le depuis KaneOS.');
@@ -109,7 +109,8 @@
     while (!E.ready && Date.now() < until) await new Promise(r => setTimeout(r, 100));
     if (!E.ready) throw new Error('L’atelier initialise son interface. Réessayez dans un instant.');
     return new Promise((resolve, reject) => {
-      const key = crypto.randomUUID(), timer = setTimeout(() => { WX.pending.delete(key); reject(new Error('L’atelier ne répond pas à la commande')); }, 45000);
+      // ouvrir un projet peut charger les modules d'Animation la première fois (processeur chargé) : 3 min ; sinon 45 s
+      const key = crypto.randomUUID(), timer = setTimeout(() => { WX.pending.delete(key); reject(new Error('L’atelier ne répond pas à la commande')); }, op === 'open' ? 180000 : 45000);
       WX.pending.set(key, { id, resolve, reject, timer });
       E.frame.contentWindow.postMessage({ kv: 'suite-request', id: key, op, ...args }, '*');
     });
@@ -182,7 +183,12 @@
     const r = await toggle0(on); sync(); return r;
   };
   C.toComfy = async () => { const it = await KS.suite.capture(); if (it) await KS.suite.toComfy(it); };
-  C.toWallpaper = async () => { const it = await KS.suite.capture(); if (it) await KS.suite.animate(it); };
+  // Un document découpé en calques (groupe « Personnage ») part en PSD : Animation garde ses calques et leurs masques.
+  C.toWallpaper = async () => {
+    const d = KS.state.doc, layered = !!d?.layers.some(L => L.kind === 'group' && L.name === 'Personnage');
+    const psd = layered ? await KS.io.writePSD(d) : null;
+    const it = await KS.suite.capture(); if (it) await KS.suite.animate(it, psd);
+  };
   C.toVideo = async () => { const it = await KS.suite.capture(); if (it) await KS.suite.toVideo(it); };
   KS.on('studio', sync); KS.on('doc', sync); KS.on('suite-project', sync); KS.on('engine', sync);
   KS.on('ui-ready', () => setTimeout(() => {
@@ -217,6 +223,13 @@
           go(null); await KS.io.openPath(found.path); result = { ok: true };
           KS.toast('Document en calques ouvert : enregistrez (Ctrl+S), puis « Recharger » dans Animation.', 'ok', 5000);
         } catch (err) { result = { ok: false, error: err.message }; }
+        if (E.frame?.contentWindow === e.source) e.source.postMessage({ kv: 'suite-native-response', id: m.id, ...result }, e.origin);
+        return;
+      }
+      if (m.kv === 'suite-native-request' && id === 'wallpaper' && m.op === 'animation-cut-project') {
+        let result;
+        try { result = { ok: true, ...(await KS.suite.run('Découpe en calques dans Retouche', () => C.cutAnimationProject(String(m.dossier || '')))) }; }
+        catch (err) { result = { ok: false, error: err.message }; }
         if (E.frame?.contentWindow === e.source) e.source.postMessage({ kv: 'suite-native-response', id: m.id, ...result }, e.origin);
         return;
       }

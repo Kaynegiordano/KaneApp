@@ -200,10 +200,11 @@
     adopt(r.project); S.selected = r.item.id;
     return S.animate(r.item);
   };
-  S.animate = async it => {
+  S.animate = async (it, psd = null) => {
     if (it.kind !== 'image') throw new Error('Choisissez une image pour l’animation');
     const project = S.project.id, linked = S.project.animation;
-    const decision = linked ? await modalChoice('Animation du projet', 'Reprendre les zones existantes avec cette version, ou créer une autre animation ?',
+    // document en calques (découpe 4.0) : toujours une nouvelle animation, construite sur ses calques
+    const decision = psd ? 'new' : linked ? await modalChoice('Animation du projet', 'Reprendre les zones existantes avec cette version, ou créer une autre animation ?',
       [{ label: 'Annuler', value: null }, { label: 'Nouvelle animation', value: 'new' }, { label: 'Mettre à jour la source', primary: true, value: 'update' }]) : 'new';
     if (!decision) return false;
     await KS.ws.ensure('wallpaper');
@@ -212,7 +213,7 @@
     if (decision === 'update') {
       await KS.ws.request('wallpaper', 'flush'); const result = await N.weaUpdate(linked.dossier, f.data);
       if (!result.ok) throw new Error(result.error); dossier = linked.dossier;
-    } else { const result = await N.weaNew(S.project.name, f.data); if (!result.ok) throw new Error(result.error); dossier = result.dossier; }
+    } else { const result = await N.weaNew(S.project.name, psd || f.data); if (!result.ok) throw new Error(result.error); dossier = result.dossier; }
     const p = await call('animation', { project, value: { dossier, item: it.id, updated: Date.now() } }); adopt(p);
     await KS.ws.request('wallpaper', 'open', { dossier });
     drawer.hidden = true; KS.toast(decision === 'update' ? 'Source mise à jour. Les zones sont conservées ; vérifiez-les avant de régénérer.' : 'Animation prête : peignez les zones à mettre en mouvement.', 'ok', 4500);

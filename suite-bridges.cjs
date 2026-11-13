@@ -11,12 +11,14 @@ module.exports = function installSuiteBridge(kind) {
       const entry = pending.get(e.data.id); if (!entry) return;
       clearTimeout(entry.timer); pending.delete(e.data.id); entry.resolve(e.data);
     });
-    const request = (op, args) => new Promise(resolve => {
+    const request = (op, args, delay = 120000) => new Promise(resolve => {
       const id = crypto.randomUUID();
-      const timer = setTimeout(() => { pending.delete(id); resolve({ok:false,error:'Animation ne répond pas. Réessayez.'}); }, 120000);
+      const timer = setTimeout(() => { pending.delete(id); resolve({ok:false,error:'Animation ne répond pas. Réessayez.'}); }, delay);
       pending.set(id, {resolve,timer});
       window.parent.postMessage({kv:'suite-native-request',op,id,...args}, '*');
     });
+    // Animation 4.0 : « ✂ Découper en calques » se fait dans Retouche (silhouette BiRefNet, calques à masques modifiables)
+    window.kaneDecoupeRetouche = dossier => request('animation-cut-project', { dossier }, 1800000);
     // Le prompt() de la page autonome n'est pas pris en charge dans Electron.
     // Le sélecteur et le dépôt passent par le même import que le bouton KaneApp.
     window.creer = async file => {
