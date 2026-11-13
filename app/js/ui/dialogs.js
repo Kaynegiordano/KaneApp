@@ -551,10 +551,9 @@
     const status = h('div.note', { role: 'status', 'aria-live': 'polite' }), rows = h('div.form-col');
     const buttons = {};
     const action = (key, label) => buttons[key] = ui.btn(label, async () => {
-      if (KS.studioApi?.isBusy() || await KS.trainTab?.running()) return KS.toast('Attendez la fin des tâches IA et de l’entraînement.', 'info');
+      if (KS.studioApi?.isBusy() || await KS.trainingRunning?.()) return KS.toast('Attendez la fin des tâches IA et de l’entraînement.', 'info');
       const result = await N.runtimeMigrationRun(key);
       if (!result.ok) KS.toast(result.error, 'err', 6000);
-      if (result.ok && ['activate', 'rollback'].includes(key)) KS.trainTab?.invalidate();
       update(await N.runtimeMigrationState());
     }, '.small');
     const labels = { studio: 'Studio IA', comfyui: 'Animation Vidéo · ComfyUI', wallpaper: 'Animation', training: 'Entraînement LoRA', media: 'Montage · FFmpeg' };

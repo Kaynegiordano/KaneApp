@@ -31,16 +31,14 @@ app.on('browser-window-created', (_event, win) => {
         await KS.gpuMemory.refresh();
         if (!['ready','high'].includes(document.querySelector('#gpu-status').dataset.state)) throw new Error('Jauge VRAM indisponible');
         const catalogue=await KS.native.forgeCatalog('http://127.0.0.1:17863');
-        const lora=await KS.native.loraCall('info');
         const comfy=await KS.native.svcStatus('comfyui');
         const animation=await KS.native.svcStatus('wallpaper');
         const migration=await KS.native.runtimeMigrationState();
         await KS.suite.openVideo();
-        return {config,catalogue:{ok:catalogue.ok,dirs:catalogue.dirs},lora:{ok:lora.ok,sd:lora.sd_scripts},comfy,animation,migration:{active:migration.active,deletionAllowed:migration.deletionAllowed}};
+        return {config,catalogue:{ok:catalogue.ok,dirs:catalogue.dirs},comfy,animation,migration:{active:migration.active,deletionAllowed:migration.deletionAllowed}};
       })()`);
       assert(result.config.managed && result.config.runtime === owned.components.studio.directory);
       assert(result.catalogue.ok && result.catalogue.dirs.data === owned.components.studio.directory && result.catalogue.dirs.models === owned.models);
-      assert(result.lora.ok && path.resolve(result.lora.sd) === path.resolve(owned.components.training.directory));
       assert.equal(result.comfy.dir, owned.components.comfyui.directory); assert.equal(result.animation.dir, owned.components.wallpaper.directory);
       assert(result.migration.active && !result.migration.deletionAllowed);
       console.log('OK VRAM réelle du pilote NVIDIA via le pont Electron, sans moteur Studio actif');

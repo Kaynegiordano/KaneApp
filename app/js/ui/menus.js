@@ -263,7 +263,7 @@
         { label: 'Harmoniser…', icon: 'harmonize', action: () => C.harmonize(), disabled: noDoc },
         { sep: true },
         { label: 'Infos de génération (PNG Info)…', icon: 'info', action: () => C.pngInfo() },
-        { label: 'Train LoRA…', icon: 'layers', action: () => C.loraStudio(), hidden: !KS.native },
+        { label: 'Lora Studio (entraînement, Merge)…', icon: 'layers', action: () => C.loraStudio(), hidden: !KS.native },
         { label: 'Modèles d\'IA locaux…', icon: 'settings', action: () => C.aiModels(), hidden: !KS.native },
       ],
     },

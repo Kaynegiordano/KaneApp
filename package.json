@@ -1,7 +1,7 @@
 {
   "name": "kaneapp",
   "productName": "KaneApp",
-  "version": "1.33.0",
+  "version": "1.34.0",
   "description": "KaneApp — éditeur d'images, Studio IA, Animation et Montage",
   "main": "main.js",
   "private": true,
@@ -44,8 +44,6 @@
       "updater.cjs",
       "recovery-store.cjs",
       "translate.cjs",
-      "lora_bridge.py",
-      "merge_bridge.py",
       "services.cjs",
       "local-process.cjs",
       "studio-runtime.cjs",
@@ -75,8 +73,6 @@
     ],
     "asarUnpack": [
       "node_modules/onnxruntime-node/**",
-      "lora_bridge.py",
-      "merge_bridge.py",
       "animation-runtime.py",
       "animation_web.py",
       "animation-web/**/*",

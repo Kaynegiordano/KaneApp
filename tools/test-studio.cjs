@@ -542,7 +542,6 @@ async function scenario() {
   await KS.cmd.openStudioTab('txt2img');
   document.querySelector('#toasts').replaceChildren();
   document.querySelector('.fx-body').scrollTop = 0;
-  assert([...document.querySelectorAll('.fx-rail button')].some(b => b.textContent === 'Lora'), 'Le volet LoRA porte le nom Lora');
   const priorDoc = KS.state.doc; KS.state.doc = null;
   await click('Découper', document.querySelector('.fx-rail'));
   await wait(() => !!document.querySelector('.sc-prev'));
@@ -551,62 +550,7 @@ async function scenario() {
   await wait(() => !!window.cutFiles?.length);
   assert(window.cutFiles.every(f => f.data.length > 100 && /_\d+\.jpg$/.test(f.name)), 'La découpe exporte les panneaux de l’image du Studio');
   KS.state.doc = priorDoc;
-  await KS.cmd.openStudioTab('train'); await wait(() => !!document.querySelector('.lt-drop'));
-  const beforeLoraDocs = KS.state.docs.length, loraDrop = new DataTransfer();
-  loraDrop.items.add(new File([bytes], 'training-a.png', {type:'image/png'}));
-  loraDrop.items.add(new File([bytes], 'training-b.png', {type:'image/png'}));
-  document.querySelector('.lt-drop').dispatchEvent(new DragEvent('drop', { dataTransfer:loraDrop, bubbles:true, cancelable:true }));
-  await wait(() => window.loraImages.length === 2 && document.querySelectorAll('.lt-cell').length === 2);
-  await new Promise(r => setTimeout(r,100));
-  assert(KS.state.docs.length === beforeLoraDocs && KS.prefs.fx.tab === 'train', 'Importer plusieurs images par dépôt dans Lora ne crée aucun document dans Edition');
-  window.loraPaths = ['C:/selected/picked.png']; document.querySelector('.lt-drop').click();
-  await wait(() => window.loraImages.length === 3);
-  assert(KS.state.docs.length === beforeLoraDocs, 'Choisir les images dans Lora les garde aussi dans cet atelier');
-  window.dispatchEvent(new DragEvent('drop', { dataTransfer:loraDrop, bubbles:true, cancelable:true }));
-  await new Promise(r => setTimeout(r,100));
-  assert(KS.state.docs.length === beforeLoraDocs, 'Un dépôt ailleurs dans le Studio ne passe pas implicitement dans Edition');
-  // Atelier Lora : une carte par époque (images d'aperçu), « Garder cette version » installe avec le déclencheur @
-  window.loraRun = { run: 'C:/runs/r1', project: 'Import-test', running: false, state: 'done', pct: 100, text: 'Terminé', output: 'C:/out/n1x3u.safetensors', token: '@n1x3u',
-    checkpoints: ['C:/out/n1x3u-000002.safetensors', 'C:/out/n1x3u.safetensors'], samples: [], before: ['C:/out/sample/n1x3u_000000_00_1.png'],
-    epochs: [{ epoch: 2, path: 'C:/out/n1x3u-000002.safetensors', name: 'n1x3u-000002', final: false, samples: ['C:/out/sample/n1x3u_e000002_00_1.png', 'C:/out/sample/n1x3u_e000002_01_1.png'] },
-      { epoch: 4, path: 'C:/out/n1x3u.safetensors', name: 'n1x3u', final: true, samples: ['C:/out/sample/n1x3u_e000004_00_1.png'] }] };
-  KS.trainTab.invalidate(); await wait(() => document.querySelectorAll('.lt-ep').length === 3);
-  const eps = [...document.querySelectorAll('.lt-ep')];
-  assert(eps.length === 3 && eps[0].classList.contains('before') && eps[1].classList.contains('final') && eps[2].querySelectorAll('.lt-ep-imgs img').length === 2, 'Lora : référence sans LoRA, puis une carte par époque (la finale en premier) avec ses images');
-  [...eps[2].querySelectorAll('button')].find(b => b.textContent === 'Garder cette version').click();
-  await wait(() => window.loraInstalls?.length === 1);
-  assert(window.loraInstalls[0].path.endsWith('n1x3u-000002.safetensors') && window.loraInstalls[0].token === '@n1x3u' && window.loraInstalls[0].weight === 1 && window.loraInstalls[0].preview.includes('e000002_01'), 'Garder une époque l’installe avec @n1x3u, poids 1 et son image');
-  window.loraRun = null;
-  // Tags du projet : fréquences ; « Retirer » enlève le tag de toutes les légendes et enregistre
-  window.loraCaps = { 'training-a.png': 'safe, 1girl, frieren, smile', 'training-b.png': 'safe, 1girl, patreon username' };
-  KS.trainTab.invalidate(); await wait(() => !!document.querySelector('.lt-tagbox'));
-  document.querySelector('.lt-tagbox').open = true;
-  const chip = t => [...document.querySelectorAll('.lt-tag')].find(b => b.firstChild.textContent === t);
-  assert(chip('safe')?.classList.contains('all') && chip('safe').lastChild.textContent === '2' && chip('patreon username')?.lastChild.textContent === '1', 'Tags du projet : nombre d’images par tag, « présent partout » en surbrillance');
-  chip('patreon username').click(); await new Promise(r => setTimeout(r, 50));
-  [...document.querySelectorAll('.menu .mi')].find(i => i.textContent.startsWith('Retirer « patreon username »')).click();
-  await wait(() => window.loraCaps['training-b.png'] === 'safe, 1girl' && !chip('patreon username'));
-  assert(window.loraCaps['training-b.png'] === 'safe, 1girl' && window.loraCaps['training-a.png'] === 'safe, 1girl, frieren, smile' && !chip('patreon username'), 'Retirer un tag partout : légendes enregistrées sans lui, les autres intactes ' + JSON.stringify(window.loraCaps));
-  [...document.querySelectorAll('.lt-tagbox button')].find(b => b.textContent.startsWith('Annuler la dernière')).click();
-  await wait(() => window.loraCaps['training-b.png'] === 'safe, 1girl, patreon username');
-  assert(window.loraCaps['training-b.png'] === 'safe, 1girl, patreon username', 'Annuler la dernière modification des tags');
-  // Préréglage conseillé : affiché avec sa raison, « Choisir » change le type
-  window.loraSuggest = { kind: 'painterly', label: 'Peinture numérique', why: 'la même ambiance revient' };
-  KS.trainTab.invalidate(); await wait(() => !!document.querySelector('.lt-suggest'));
-  assert(document.querySelector('.lt-suggest').textContent.includes('Conseillé : Peinture numérique') && document.querySelector('.lt-suggest').textContent.includes('la même ambiance revient'), 'Lora : préréglage conseillé affiché avec sa raison');
-  [...document.querySelectorAll('.lt-suggest button')].find(b => b.textContent === 'Choisir Peinture numérique').click();
-  await wait(() => (window.loraSaves || []).some(x => x.patch && x.patch.lora_type === 'painterly'));
-  assert(document.querySelector('.lt-suggest.ok') && !document.querySelector('.lt-suggest button'), '« Choisir » applique le type conseillé et l’enregistre');
-  window.loraSuggest = null;
-  // File d'attente : ajouter, puis démarrer la file
-  KS.prefs.loraQueue = [];
-  [...document.querySelectorAll('.lt-go button')].find(b => b.textContent === 'Ajouter à la file').click();
-  await wait(() => !!document.querySelector('.lt-queue'));
-  assert((KS.prefs.loraQueue || []).join() === 'Import-test' && document.querySelectorAll('.lt-qitem').length === 1, 'Ajouter à la file : le projet attend son tour, avec ses réglages enregistrés');
-  [...document.querySelectorAll('.lt-queue button')].find(b => b.textContent === 'Démarrer la file').click();
-  await wait(() => window.loraStarts?.length === 1);
-  assert(window.loraStarts[0].name === 'Import-test' && !(KS.prefs.loraQueue || []).length, 'Démarrer la file lance le premier projet et le retire de la file');
-  window.loraRun = null; window.loraCaps = null; KS.prefs.loraQueue = []; KS.trainTab.invalidate();
+  // (l'atelier Lora est dans Lora Studio depuis la 1.34 : ses essais sont dans LoraStudio/tools)
   await KS.cmd.openStudioTab('txt2img');
   // Chercher / remplacer, nettoyer et historique des invites
   const pta = document.querySelector('.fx-prompts textarea.fx-prompt'), fbar = document.querySelector('.fx-prompts .kf-bar');

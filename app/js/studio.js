@@ -113,7 +113,7 @@
   let warmed = false, warming = false;
   async function warm() {
     if (warmed || warming || !N || !N.forgeWarm || BUSY || PREPARING || KS.animationBusy || !KS.engine || !KS.engine.ready()) return;
-    if (KS.trainTab && KS.trainTab.running && await KS.trainTab.running()) return;
+    if (await KS.trainingRunning()) return;
     warming = true; renderTop();
     try { const r = await N.forgeWarm(url()); warmed = !!(r && r.ok); } catch { /* sera chargé à la première génération */ }
     warming = false; renderTop();
@@ -239,7 +239,7 @@
   const els = {};
   let root = null;
   const RAIL = [['txt2img', 'Créer', 'file-plus'], ['img2img', 'Transformer', 'image'], ['angle', 'Angle', 'angle'], ['extras', 'Agrandir', 'upscale'], ['pnginfo', 'Paramètres PNG', 'info'],
-    ['train', 'Lora', 'layers'], ['merge', 'Merge', 'merge'], ['imgcut', 'Découper', 'crop'], ['settings', 'Réglages', 'settings']];
+    ['imgcut', 'Découper', 'crop'], ['settings', 'Réglages', 'settings']];
   function mountPage() {
     root = KS.$('#studio');
     root.className = 'fx';
@@ -368,17 +368,13 @@
       case 'extras': content = extrasTab(); break;
       case 'pnginfo': content = pngTab(); break;
       case 'settings': content = settingsTab(); break;
-      case 'train': content = h('div.fx-train'); break;
-      case 'merge': content = h('div.fx-train.mg-page'); break;
       case 'angle': content = h('div.ag-page'); break;
       default: FX.tab = 'txt2img'; content = t2iTab();
     }
     els.body.replaceChildren(content);
     els.body.classList.toggle('fx-fit', FX.tab === 'txt2img' || FX.tab === 'img2img');
-    if (FX.tab === 'train') KS.trainTab ? KS.trainTab.render(content) : content.append(h('div.fx-note', { text: 'Atelier indisponible.' }));
     document.body.classList.toggle('fx-angle', FX.tab === 'angle');
     if (FX.tab === 'angle') KS.angleTab ? KS.angleTab.render(content) : content.append(h('div.fx-note', { text: 'Angle indisponible.' }));
-    if (FX.tab === 'merge') KS.mergeTab ? KS.mergeTab.render(content) : content.append(h('div.fx-note', { text: 'Merge indisponible.' }));
   }
   function t2iTab() {
     const c = CTX.t2i;
@@ -1950,9 +1946,8 @@
   }
   // Un entraînement LoRA garde la carte graphique : comme dans Forge, les générations attendent sa fin
   async function trainingRuns() {
-    if (!KS.trainTab || !KS.trainTab.running) return false;
-    const r = await KS.trainTab.running();
-    if (r) KS.toast('Un entraînement LoRA est en cours (' + r + ') : la carte graphique est prise. Attendez sa fin ou arrêtez-le dans l’onglet Lora.', 'info', 6000);
+    const r = await KS.trainingRunning();
+    if (r) KS.toast('Un entraînement LoRA est en cours (' + r + ') : la carte graphique est prise. Attendez sa fin ou arrêtez-le dans Lora Studio.', 'info', 6000);
     return !!r;
   }
   async function generate(k) {
@@ -2352,7 +2347,18 @@
   // Infos de génération et LoRA : ce sont maintenant des onglets du Studio
   G.applyInfo = async t => { applyInfoTo('t2i', t); FX.tab = 'txt2img'; save(); await C.toggleStudio(true); render(); };
   C.pngInfo = async () => { const d = D(); if (d) OUT.png = { canvas: d.composite(), name: d.name, text: d.genInfo || '', chunks: d.genInfo ? { parameters: d.genInfo } : {} }; FX.tab = 'pnginfo'; save(); await C.toggleStudio(true); render(); };
-  C.loraStudio = async () => { FX.tab = 'train'; save(); await C.toggleStudio(true); render(); };
+  // l'entraînement et le Merge sont dans Lora Studio (1.34)
+  C.loraStudio = async () => { const r = await N.openLoraStudio(); if (!r.ok) KS.toast(r.error, 'info', 6000); };
+  // nom du projet que Lora Studio entraîne, sinon '' (les générations attendent sa fin) ; relu au plus toutes les 10 s
+  let trainSeen = { at: 0, name: '' };
+  KS.trainingRunning = async () => {
+    if (!N || !N.loraTrainingRunning) return '';
+    if (Date.now() - trainSeen.at < 10000) return trainSeen.name;
+    const r = await N.loraTrainingRunning().catch(() => null);
+    const run = r && r.ok && r.running;
+    trainSeen = { at: Date.now(), name: run ? (run.trigger || run.project) : '' };
+    return trainSeen.name;
+  };
   // Merge : relire les modèles de Forge après une fusion, et charger le checkpoint obtenu
   SD.refreshModels = async () => {
     if (!KS.engine || !KS.engine.ready()) return false;

@@ -1,3 +1,11 @@
+# 1.34.0 — L'entraînement Lora et le Merge passent dans Lora Studio
+
+- **Lora Studio** est une application à part. Elle reprend l'atelier d'entraînement Lora et le Merge (fusion de LoRA et de checkpoints), avec les mêmes projets et les mêmes moteurs.
+- Le Studio IA de KaneApp n'a plus les onglets Lora et Merge. L'utilisation des LoRA ne change pas : liste des LoRA, fiches, poids et déclencheurs dans Créer et Transformer.
+- Pendant un entraînement dans Lora Studio, le Studio attend sa fin avant de générer, comme avant.
+- « Essayer » dans Lora Studio ajoute le LoRA et son déclencheur à l'invite de Créer.
+- Menu Studio › « Lora Studio (entraînement, Merge)… » ouvre l'application.
+
 # 1.33.0 — KaneApp s'appelle KaneApp partout
 
 - Le programme devient **KaneApp.exe**, installé dans `Programs\KaneApp` (au lieu de `Programs\Kanevas\Kanevas.exe`). La mise à jour déplace l'installation toute seule et recrée les raccourcis.

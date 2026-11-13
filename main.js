@@ -39,6 +39,8 @@ const pending = [];          // fichiers reçus avant que la page soit prête
 // dans cet onglet du Studio IA (1.26.1)
 const STUDIO_TARGETS = ['img2img', 'inpaint', 'extras', 'pnginfo'];
 let pendingStudio = null;
+let pendingPrompt = null;
+const promptFromArgv = argv => { const a = argv.find(x => typeof x === 'string' && x.startsWith('--kane-prompt=')); return a ? a.slice('--kane-prompt='.length).slice(0, 2000) : null; };
 function studioFromArgv(argv) {
   const a = argv.find(x => typeof x === 'string' && x.startsWith('--kane-studio='));
   const t = a ? a.slice('--kane-studio='.length) : null;
@@ -57,13 +59,15 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   app.on('second-instance', (_e, argv) => {
     const files = filesFromArgv(argv);
-    const studio = studioFromArgv(argv);
-    if (!win) { pending.push(...files); if (studio && files.length) pendingStudio = studio; return; }
+    const studio = studioFromArgv(argv), prompt = promptFromArgv(argv);
+    if (!win) { pending.push(...files); if (studio && files.length) pendingStudio = studio; if (prompt) pendingPrompt = prompt; return; }
     if (win.isMinimized()) win.restore();
     win.focus();
     files.forEach(p => win.webContents.send('open-path', p));
     if (studio && files.length) win.webContents.send('open-studio', studio);
+    if (prompt) win.webContents.send('add-prompt', prompt);
   });
+  pendingPrompt = promptFromArgv(process.argv);
   pending.push(...filesFromArgv(process.argv));
   if (pending.length) pendingStudio = studioFromArgv(process.argv);
   app.whenReady().then(() => {
@@ -565,9 +569,12 @@ ipcMain.handle('forge-warm', forgeHandler(async base => {
   await forgeCall(base, '/sdapi/v1/txt2img', { prompt: 'a', steps: 1, width: 64, height: 64, batch_size: 1, n_iter: 1, save_images: false, send_images: false, do_not_save_samples: true, do_not_save_grid: true }, 240000);
   return {};
 }));
-/* ------------------------------------------------------------------ atelier LoRA */
+/* ------------------------------------------------------------------ Lora Studio */
+// L'entraînement LoRA et le Merge vivent dans Lora Studio (1.34). KaneApp garde ce qu'il faut pour cohabiter :
+// savoir qu'un entraînement occupe la carte graphique (run.json avec un pid vivant), ouvrir Lora Studio, et recevoir
+// « Essayer » (--kane-prompt=…). Les dossiers de Forge restent lus ici (forgeDirs) pour le reste du Studio.
 // Les dossiers de Forge viennent de son API (cmd-flags) ; la passerelle tourne avec le Python du venv de Forge
-// et réutilise son extension d'entraînement (lora_bridge.py). Aucun chemin n'est accepté de la page.
+// (l'atelier d'entraînement et le Merge, avec lora_bridge.py et merge_bridge.py, sont dans Lora Studio depuis la 1.34).
 let forgeDirs = null;
 const loadDirs = () => {
   if (!forgeDirs) try { forgeDirs = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'forge-dirs.json'), 'utf8')); } catch { /* jamais vu */ }
@@ -575,178 +582,34 @@ const loadDirs = () => {
   if (managed.active) forgeDirs = { data: managed.components.studio.directory, models: managed.models, lora: path.join(managed.models, 'Lora') };
 };
 const outputPaths = require('./output-paths.cjs')(() => engineDirs().root || app.getPath('userData'));
-const bridgePath = () => path.join(__dirname.replace('app.asar', 'app.asar.unpacked'), 'lora_bridge.py');
 const insideDir = (root, p) => { const r = path.resolve(root) + path.sep; const q = path.resolve(p); return q.startsWith(r); };
-ipcMain.handle('lora-call', async (_e, cmd, args = {}) => {
+const pidAlive = pid => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
+ipcMain.handle('lora-training-running', () => {
   try {
-    // dossiers mémorisés au dernier contact avec Forge : l'atelier marche aussi Forge éteint (carte graphique libre)
     loadDirs();
-    if (!forgeDirs || !forgeDirs.data) throw new Error('Démarrez Forge une fois depuis Kane OS : KaneApp y lit ses dossiers (entraîneur, modèles)');
-    const py = path.join(forgeDirs.data, 'venv', 'Scripts', 'python.exe');
-    if (!fs.existsSync(py)) throw new Error('Python de Forge introuvable : ' + py);
-    if (!/^[a-z_]+$/.test(cmd)) throw new Error('Commande invalide');
-    const output_dir = cmd === 'start' ? outputPaths.loraDirectory(forgeDirs.models) : outputPaths.directory('lora');
-    const input = JSON.stringify({ ...args, data_dir: forgeDirs.data, model_ref: forgeDirs.models, lora_dir: forgeDirs.lora, output_dir });
-    const out = await new Promise((resolve, reject) => {
-      const child = require('child_process').spawn(py, [bridgePath(), cmd], { cwd: forgeDirs.data, windowsHide: true, env: { ...managedRuntime.environment('studio'), PYTHONIOENCODING: 'utf-8' } });
-      let so = '', se = '';
-      child.stdout.on('data', d => { so += d; });
-      child.stderr.on('data', d => { se += d; if (se.length > 20000) se = se.slice(-20000); });
-      child.on('error', reject);
-      child.on('close', code => { try { resolve(JSON.parse(so)); } catch { reject(new Error('Passerelle : réponse illisible (' + code + ') ' + se.slice(-400))); } });
-      child.stdin.end(input);
-    });
-    return out;
-  } catch (err) { return { ok: false, error: String(err.message || err) }; }
-});
-/* ------------------------------------------------------------------ Merge (fusion de LoRA et de checkpoints) */
-// merge_bridge.py fait les calculs avec le Python du Studio. La page ne passe que des identifiants « ckpt:<chemin relatif> » /
-// « lora:<chemin relatif> » : ils sont résolus ici, dans les dossiers de modèles, et la sortie va toujours dans output/merge ou output/lora.
-const mergeBridgePath = () => path.join(__dirname.replace('app.asar', 'app.asar.unpacked'), 'merge_bridge.py');
-let mergeChild = null, mergeOut = '';
-const mergeRoots = () => {
-  loadDirs();
-  if (!forgeDirs || !forgeDirs.models) throw new Error('Démarrez Forge une fois depuis Kane OS : KaneApp y lit ses dossiers de modèles');
-  return { ckpt: path.join(forgeDirs.models, 'Stable-diffusion'), lora: forgeDirs.lora || path.join(forgeDirs.models, 'Lora'), vae: path.join(forgeDirs.models, 'VAE'), te: path.join(forgeDirs.models, 'text_encoder') };
-};
-const mergeResolve = id => {
-  const m = /^(ckpt|lora|vae|te):(.+)$/.exec(String(id || '')); if (!m) throw new Error('Modèle invalide');
-  const root = mergeRoots()[m[1]], file = path.resolve(root, m[2]);
-  if (!insideDir(root, file) || !/\.safetensors$/i.test(file) || !fs.existsSync(file)) throw new Error('Modèle introuvable : ' + m[2]);
-  return file;
-};
-const mergeSpawn = (cmd, input, onLine) => new Promise((resolve, reject) => {
-  const py = path.join(forgeDirs.data, 'venv', 'Scripts', 'python.exe');
-  if (!fs.existsSync(py)) return reject(new Error('Python du Studio introuvable : ' + py));
-  const child = require('child_process').spawn(py, [mergeBridgePath(), cmd], { cwd: forgeDirs.data, windowsHide: true, env: { ...managedRuntime.environment('studio'), PYTHONIOENCODING: 'utf-8' } });
-  mergeChild = child; let buf = '', last = null, err = '';
-  const feed = chunk => {
-    buf += chunk; let i;
-    while ((i = buf.indexOf('\n')) >= 0) {
-      const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (!line) continue;
-      try { last = JSON.parse(line); if (last.progress !== undefined && onLine) onLine(last); } catch { /* bruit de bibliothèque */ }
+    const root = forgeDirs && forgeDirs.data && path.join(forgeDirs.data, 'lora_training');
+    if (!root || !fs.existsSync(root)) return { ok: true, running: null };
+    for (const p of fs.readdirSync(root, { withFileTypes: true }).filter(e => e.isDirectory())) {
+      const runs = path.join(root, p.name, '_training', 'runs');
+      let ids = []; try { ids = fs.readdirSync(runs).sort().slice(-3); } catch { continue; }
+      for (const id of ids) {
+        let r = null; try { r = JSON.parse(fs.readFileSync(path.join(runs, id, 'run.json'), 'utf8')); } catch { continue; }
+        if (Number.isInteger(r.pid) && !r.finished_at && !r.stopped && pidAlive(r.pid)) return { ok: true, running: { project: r.project || p.name, trigger: (r.settings && r.settings.trigger) || '' } };
+      }
     }
-  };
-  child.stdout.setEncoding('utf8'); child.stdout.on('data', feed);
-  child.stderr.on('data', d => { err = (err + d).slice(-4000); });
-  child.on('error', reject);
-  child.on('close', code => {
-    mergeChild = null; feed('\n');
-    if (child.killedByUs) return resolve({ ok: false, cancelled: true, error: 'Fusion annulée' });
-    last && last.ok !== undefined ? resolve(last) : reject(new Error('Fusion interrompue (' + code + ') ' + err.slice(-300)));
-  });
-  child.stdin.end(JSON.stringify(input));
+    return { ok: true, running: null };
+  } catch (err) { return { ok: false, error: String(err.message || err) }; }
 });
-const walkModels = (dir, out = [], depth = 0) => {
-  let ents = []; try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }
-  for (const e of ents) {
-    const f = path.join(dir, e.name);
-    if (e.isDirectory() || (e.isSymbolicLink() && fs.statSync(f, { throwIfNoEntry: false })?.isDirectory())) { if (depth < 4) walkModels(f, out, depth + 1); }
-    else if (/\.safetensors$/i.test(e.name)) out.push(f);
-  }
-  return out;
+const loraStudioExe = () => {
+  const programs = path.join(app.getPath('home'), 'AppData', 'Local', 'Programs');
+  return ['LoraStudio', 'Lora Studio'].map(d => path.join(programs, d, 'LoraStudio.exe')).find(p => fs.existsSync(p)) || '';
 };
-ipcMain.handle('merge-list', () => {
-  try {
-    const roots = mergeRoots();
-    const list = kind => walkModels(roots[kind]).map(f => {
-      const st = fs.statSync(f), rel = path.relative(roots[kind], f).replace(/\\/g, '/');
-      return { id: kind + ':' + rel, name: rel.replace(/\.safetensors$/i, ''), size: st.size, mtime: st.mtimeMs };
-    }).sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
-    return { ok: true, checkpoints: list('ckpt'), loras: list('lora'), vaes: list('vae'), encoders: list('te') };
-  } catch (err) { return { ok: false, error: String(err.message || err) }; }
-});
-ipcMain.handle('merge-inspect', async (_e, ids) => {
-  try {
-    if (mergeChild) throw new Error('Une fusion est en cours');
-    mergeRoots(); if (!Array.isArray(ids) || !ids.length || ids.length > 8) throw new Error('Demande invalide');
-    return await mergeSpawn('inspect', { files: ids.map(mergeResolve) });
-  } catch (err) { return { ok: false, error: String(err.message || err) }; }
-});
-ipcMain.handle('merge-run', async (event, job) => {
-  let out = '';
-  try {
-    if (mergeChild) throw new Error('Une fusion est déjà en cours');
-    const roots = mergeRoots(), models = roots.ckpt.replace(/[\\/]Stable-diffusion$/i, '');
-    const kind = job && job.kind;
-    if (!['checkpoints', 'lora_into_checkpoint', 'loras', 'embed'].includes(kind)) throw new Error('Type de fusion inconnu');
-    const dtype = ['source', 'bf16', 'fp16', 'fp32'].includes(job.dtype) ? job.dtype : 'source';
-    const num = (v, lo, hi, d) => { v = Number(v); return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
-    const loraList = () => {
-      const l = (job.loras || []).slice(0, 12).map(x => ({ path: mergeResolve(x.id), weight: num(x.weight, -4, 4, 1) }));
-      if (!l.length) throw new Error('Choisissez au moins un LoRA');
-      return l;
-    };
-    const input = { dtype };
-    // VAE et encodeur de texte à intégrer au checkpoint produit (facultatif, sauf pour « embed »)
-    if (kind !== 'loras' && job.embed) input.embed = { vae: job.embed.vae ? mergeResolve(job.embed.vae) : null, text_encoder: job.embed.text_encoder ? mergeResolve(job.embed.text_encoder) : null };
-    if (kind === 'checkpoints') Object.assign(input, { models: (job.models || []).slice(0, 3).map(mergeResolve), mode: job.mode === 'diff' ? 'diff' : 'sum', alpha: num(job.alpha, -2, 3, 0.5), alpha_end: job.alpha_end == null ? null : num(job.alpha_end, -2, 3, 0.5) });
-    else if (kind === 'lora_into_checkpoint') Object.assign(input, { model: mergeResolve(job.model), loras: loraList() });
-    else if (kind === 'embed') Object.assign(input, { model: mergeResolve(job.model) });
-    else Object.assign(input, { loras: loraList(), method: job.method === 'svd' ? 'svd' : 'concat', rank: Math.round(num(job.rank, 1, 256, 32)) });
-    const dir = kind === 'loras' ? outputPaths.loraDirectory(models) : outputPaths.mergeDirectory(models);
-    const stem = String(job.name || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w .-]/g, '_').replace(/^\.+|\.+$/g, '').trim().slice(0, 80) || 'merge';
-    out = path.join(dir, stem + '.safetensors');
-    for (let i = 2; fs.existsSync(out); i++) out = path.join(dir, `${stem}_${i}.safetensors`);
-    input.out = out; mergeOut = out;
-    const send = m => { try { event.sender.send('merge-progress', m); } catch { /* fenêtre fermée */ } };
-    const r = await mergeSpawn(kind, input, send);
-    if (!r.ok) { try { fs.rmSync(out + '.tmp', { force: true }); } catch { /* rien */ } return r; }
-    return { ...r, name: path.basename(out, '.safetensors'), id: (kind === 'loras' ? 'lora:KaneApp/' : 'ckpt:KaneApp/') + path.basename(out) };
-  } catch (err) {
-    if (out) try { fs.rmSync(out + '.tmp', { force: true }); } catch { /* rien */ }
-    return { ok: false, error: String(err.message || err) };
-  }
-});
-ipcMain.handle('merge-cancel', () => {
-  if (!mergeChild) return { ok: true };
-  mergeChild.killedByUs = true; try { mergeChild.kill(); } catch { /* déjà fini */ }
-  if (mergeOut) try { fs.rmSync(mergeOut + '.tmp', { force: true }); } catch { /* rien */ }
+ipcMain.handle('pending-prompt', () => { const p = pendingPrompt; pendingPrompt = null; return p; });
+ipcMain.handle('open-lora-studio', () => {
+  const exe = loraStudioExe();
+  if (!exe) return { ok: false, error: 'Lora Studio n\'est pas installé : installez-le depuis Kane OS ou github.com/Kaynegiordano/LoraStudio' };
+  require('child_process').spawn(exe, [], { detached: true, stdio: 'ignore' }).unref();
   return { ok: true };
-});
-// Miniature d'une image du dossier des entraînements ou des LoRA (aperçus, échantillons)
-ipcMain.handle('lora-thumb', (_e, file, width = 256) => {
-  try {
-    loadDirs();
-    if (!forgeDirs || !(insideDir(path.join(forgeDirs.data, 'lora_training'), file) || (forgeDirs.lora && insideDir(forgeDirs.lora, file)))) throw new Error('Chemin refusé');
-    const ni = nativeImage.createFromPath(file);
-    if (ni.isEmpty()) throw new Error('Image illisible');
-    const sz = ni.getSize();
-    return { ok: true, data: new Uint8Array((sz.width > width ? ni.resize({ width, quality: 'good' }) : ni).toJPEG(85)), w: sz.width, h: sz.height };
-  } catch (err) { return { ok: false, error: String(err.message || err) }; }
-});
-// Image complète (pour l'ouvrir dans Kanevas)
-ipcMain.handle('lora-file', (_e, file) => {
-  try {
-    loadDirs();
-    if (!forgeDirs || !(insideDir(path.join(forgeDirs.data, 'lora_training'), file) || (forgeDirs.lora && insideDir(forgeDirs.lora, file)))) throw new Error('Chemin refusé');
-    return { ok: true, name: path.basename(file), data: fs.readFileSync(file) };
-  } catch (err) { return { ok: false, error: String(err.message || err) }; }
-});
-// Ajout d'une image venue de Kanevas (document, sélection) dans un projet
-ipcMain.handle('lora-write', (_e, project, name, data) => {
-  try {
-    loadDirs();
-    if (!forgeDirs) throw new Error('Forge non joint');
-    const safeProj = String(project).replace(/[^A-Za-z0-9 _-]/g, '').slice(0, 64).trim();
-    const dir = path.join(forgeDirs.data, 'lora_training', safeProj);
-    if (!safeProj || !fs.existsSync(path.join(dir, 'project.json'))) throw new Error('Projet introuvable');
-    let base = path.basename(String(name)).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w .-]/g, '_').replace(/\.[^.]*$/, '') || 'kanevas';
-    let f = path.join(dir, base + '.png'), i = 2;
-    while (fs.existsSync(f)) f = path.join(dir, `${base}_${i++}.png`);
-    fs.writeFileSync(f, Buffer.from(data));
-    return { ok: true, file: path.basename(f) };
-  } catch (err) { return { ok: false, error: String(err.message || err) }; }
-});
-ipcMain.handle('pick-image-paths', async () => {
-  const r = await dialog.showOpenDialog(win, { title: 'Images pour l\'entraînement', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp'] }] });
-  return r.canceled ? [] : r.filePaths;
-});
-ipcMain.handle('pick-folder-images', async () => {
-  const r = await dialog.showOpenDialog(win, { title: 'Dossier d\'images', properties: ['openDirectory'] });
-  if (r.canceled || !r.filePaths[0]) return [];
-  const d = r.filePaths[0];
-  return fs.readdirSync(d).filter(n => /\.(png|jpe?g|webp|bmp)$/i.test(n)).map(n => path.join(d, n));
 });
 // Export de plusieurs fichiers dans un dossier choisi (découpe pour les réseaux)
 ipcMain.handle('save-files', async (_e, title, files) => {
@@ -822,11 +685,6 @@ ipcMain.handle('lora-meta-write', async (_e, name, meta, preview) => {
     }
     return { ok: true };
   } catch (err) { return { ok: false, error: String(err.message || err) }; }
-});
-// « Éteindre le PC quand l'entraînement est terminé » (comme l'onglet Train LoRA de Forge) : shutdown /s différé, annulable
-ipcMain.handle('lora-shutdown', async (_e, on, message) => {
-  const args = on ? ['/s', '/t', '120', '/c', String(message || 'KaneApp : entraînement LoRA terminé. Le PC s\'éteint dans 2 minutes (shutdown /a pour annuler).').slice(0, 500)] : ['/a'];
-  return new Promise(res => require('child_process').execFile('shutdown', args, { windowsHide: true }, err => res({ ok: !err || !on, error: err ? String(err.message) : '' })));
 });
 ipcMain.handle('pick-folder', async (_e, title) => {
   const r = await dialog.showOpenDialog(win, { title: title || 'Dossier', properties: ['openDirectory'] });
