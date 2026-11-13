@@ -245,7 +245,13 @@
   KS.beforeClose = async () => {
     try { if ((await N.runtimeMigrationState?.())?.running) { KS.toast('La migration continue. Attendez sa fin avant de quitter KaneApp.', 'info', 5000); return false; } } catch { /* version sans migration */ }
     if (WX.el.video?.ready) { try { await WX.request('video', 'save'); } catch (e) { KS.toast(e.message, 'err'); return false; } }
-    if (WX.el.wallpaper?.ready) { try { await WX.request('wallpaper', 'flush'); } catch (e) { KS.toast(e.message, 'err'); return false; } }
+    // Un échec d'enregistrement d'Animation ne doit jamais empêcher de quitter : on demande (1.34.1)
+    if (WX.el.wallpaper?.ready) {
+      try { await WX.request('wallpaper', 'flush'); } catch (e) {
+        const quit = await KS.confirm(e.message + '. Quitter quand même ? Les dernières modifications des zones seront perdues.', { title: 'Animation', ok: 'Quitter sans enregistrer', danger: true });
+        if (!quit) return false;
+      }
+    }
     // Le dialogue natif de KaneClip reste disponible pour un montage non rattaché au projet.
     const V = WX.el.video;
     if (!V?.frame) return true;

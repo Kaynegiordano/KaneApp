@@ -1,3 +1,8 @@
+# 1.34.1 — KaneApp se ferme toujours
+
+- Un projet Animation supprimé pendant qu'il était ouvert bloquait la fermeture de KaneApp. À chaque essai, le message « Les zones de l'animation n'ont pas pu être enregistrées » s'ajoutait. Le projet disparu est maintenant refermé, sans rien bloquer.
+- Si l'enregistrement des zones échoue vraiment, KaneApp propose « Quitter sans enregistrer » au lieu de refuser de se fermer.
+
 # 1.34.0 — L'entraînement Lora et le Merge passent dans Lora Studio
 
 - **Lora Studio** est une application à part. Elle reprend l'atelier d'entraînement Lora et le Merge (fusion de LoRA et de checkpoints), avec les mêmes projets et les mêmes moteurs.

@@ -289,7 +289,7 @@
       if (KS.native.onOpenStudio) KS.native.onOpenStudio(t => queue(() => KS.cmd.sendToStudio(t)));
       // « Essayer » de Lora Studio : le LoRA et son déclencheur vont dans l'invite de Créer
       KS.native.onAddPrompt?.(t => queue(() => KS.studioApi.addToPrompt(t)));
-      KS.native.pendingPrompt?.().then(t => { if (t) queue(() => KS.studioApi.addToPrompt(t)); });
+      KS.native.pendingPrompt?.().then(t => { if (t) queue(() => KS.studioApi.addToPrompt(t)); }).catch(() => {});
       KS.native.getPending().then(list => {
         list.forEach(p => queue(() => KS.io.openPath(p)));
         if (list.length && KS.native.getPendingStudio) KS.native.getPendingStudio().then(t => { if (t) queue(() => KS.cmd.sendToStudio(t)); });

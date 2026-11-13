@@ -114,7 +114,16 @@ module.exports = function installSuiteBridge(kind) {
   async function flushAnimation() {
     if (typeof P !== 'undefined' && P && typeof enregistre === 'function') {
       if (typeof peint !== 'undefined' && peint) throw new Error('Terminez le trait de pinceau avant de changer d’image');
-      if (await enregistre() === false) throw new Error('Les zones de l’animation n’ont pas pu être enregistrées');
+      if (await enregistre() === false) {
+        // Projet supprimé (ou déplacé) pendant qu'il était ouvert : il n'y a plus rien à enregistrer, on le referme au lieu de
+        // bloquer chaque changement d'espace et la fermeture de KaneApp (1.34.1).
+        const list = await fetch('/api/projets').then(r => r.ok ? r.json() : null).catch(() => null);
+        if (Array.isArray(list) && !list.some(p => p.dossier === P)) {
+          P = null; try { localStorage.removeItem('atelier_projet'); } catch { /* rien */ }
+          return;
+        }
+        throw new Error('Les zones de l’animation n’ont pas pu être enregistrées');
+      }
     }
   }
   function theme(p) {
