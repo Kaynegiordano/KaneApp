@@ -1,3 +1,14 @@
+# 1.43.0 — Super résolution générative : aperçu des tuiles, créativité par tuile, hires fix par tuiles
+
+- **Voir les tuiles…** dans la fenêtre de super résolution : la source avec le contour de chaque tuile, et l'invite et le négatif que chacune recevra. Bleu : visage ou mains, la forme est tenue. Orange : zone floue, plus de liberté.
+- **Créativité par tuile** (cochée par défaut) : les visages et les mains gardent mieux leur forme, les zones floues ou plates reçoivent plus de détail.
+- **Garde-fou mémoire** : si d'autres programmes occupent plus de 2,5 Go de mémoire graphique (Animation, un jeu…), la fenêtre le dit avant de lancer. Sinon le calcul déborde et devient des dizaines de fois plus lent.
+- Au-delà de ×2, la seconde passe agrandit avec Lanczos au lieu du modèle ESRGAN (environ 20 s gagnées sur un ×3) : la passe de diffusion redonne le détail.
+- L'étiquetage WD14 tourne pendant l'agrandissement de la source, au lieu de s'ajouter après.
+- **Studio, Créer › Hires fix › « Par tuiles (Kane MultiDiffusion) »** : la seconde passe se fait par tuiles, avec l'invite de ce que chaque tuile montre. Structure, détail en plus, couleurs d'origine et invite par tuile sont réglables.
+- Studio, image vers image › MultiDiffusion : réglages « Tuiles par lot (0 = auto) » et « Créativité par tuile ».
+- Il faut le moteur du Studio à jour (Kane MultiDiffusion 1.2).
+
 # 1.42.1 — Super résolution générative : revue
 
 - Créativité basse (0,15 à 0,25) : le calcul fait maintenant au moins 8 pas. Avant, il n'en restait que 4 ou 5, trop peu pour fondre les raccords entre tuiles.

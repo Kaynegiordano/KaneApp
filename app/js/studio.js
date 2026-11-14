@@ -32,12 +32,14 @@
     editor: { target: 'selection', prompt: '', strength: 0.5, variants: 1, fillVersion: 1 },
     t2i: { ...COMMON(), width: 1920, height: 1024, enable_hr: false, hr_upscaler: 'Latent', hr_second_pass_steps: 32, denoising_strength: 0.6, hr_scale: 2, hr_resize_x: 0, hr_resize_y: 0,
       hr_distilled_cfg: 3, hr_cfg: 4, hr_checkpoint_name: 'Use same checkpoint', hr_additional_modules: ['Use same choices'], hr_sampler_name: 'Use same sampler', hr_scheduler: 'Use same scheduler',
-      hr_prompt: '', hr_negative_prompt: '' },
+      hr_prompt: '', hr_negative_prompt: '',
+      // seconde passe du hires fix par tuiles (Kane MultiDiffusion) : au-delà de la résolution du modèle, sans doublons
+      hrTiles: { enabled: false, prompts: true, structure: 0.3, detail: 0.2, colors: 0.6 } },
     i2i: { ...COMMON(), steps: 32, resize_mode: 1, sizeTab: 'to', scale_by: 1, autoSize: true, denoising_strength: 0.6, mask_blur: 4, inpainting_mask_invert: 0, inpainting_fill: 1,
       inpaint_full_res: 1, inpaint_full_res_padding: 32,
       soft: { enabled: false, bias: 1, preserve: 0.5, contrast: 4, influence: 0, diffThr: 0.5, diffContrast: 2 },
       md: { enabled: false, method: 'Kane', tw: 768, th: 768, overlap: 64, batch: 1,
-        kane: { tile: 0, overlap: 128, structure: 0.5, detail: 0.3, colors: 1, prompts: true } } },
+        kane: { tile: 0, overlap: 128, structure: 0.5, detail: 0.3, colors: 1, prompts: true, adaptive: false, batch: 1 } } },
     ex: { mode: 'by', resize: 4, w: 1024, h: 1024, crop: true, up1: 'None', up2: 'None', vis2: 0, batch: false },
   };
   const FREE = new Set(['scriptArgs', 'open', 'forces']);   // dictionnaires sans clés fixes
@@ -1119,6 +1121,7 @@
       row2(select('Échantillonneur', [['Use same sampler', 'Le même'], ...cat.samplers], st, 'hr_sampler_name', 'Hires sampling method'), select('Planificateur', [['Use same scheduler', 'Le même'], ...cat.schedulers], st, 'hr_scheduler', 'Hires schedule type')),
       text('', st, 'hr_prompt', { placeholder: 'Invite de la passe hires\n(vide : la même que la première passe)' }),
       text('', st, 'hr_negative_prompt', { placeholder: 'Invite négative de la passe hires\n(vide : la même que la première passe)' }),
+      ...hrTilesBody(st),
     ], { on: [st, 'enable_hr'], tip: 'Seconde passe plus grande : plus de détails' });
     const swap = ebtn('⇅', 'Inverser largeur et hauteur', () => { [st.width, st.height] = [st.height, st.width]; save(); rp(); });
     return h('div.fx-panel.fx-plain',
@@ -1207,12 +1210,29 @@
       row2(slider('Couleurs d’origine', k, 'colors', 0, 1, 0.05, 'Teinte et lumière d’ensemble de la source gardées (ondelettes)'),
         slider('Chevauchement', k, 'overlap', 32, 512, 16, 'Chevauchement minimal entre tuiles, en pixels')),
       row2(slider('Tuile max (0 = auto)', k, 'tile', 0, 2048, 64, 'Côté maximal d’une tuile ; auto : 1,125 × la résolution du modèle (1152 px pour ANIMA)'),
-        check('Invite par tuile (WD14)', k, 'prompts', 'Chaque tuile ne reçoit que ce qu’elle montre, et un négatif contre les visages là où il n’y en a pas')));
+        slider('Tuiles par lot (0 = auto)', k, 'batch', 0, 4, 1, 'Tuiles évaluées ensemble ; auto : selon la mémoire graphique libre')),
+      row2(check('Invite par tuile (WD14)', k, 'prompts', 'Chaque tuile ne reçoit que ce qu’elle montre, et un négatif contre les visages là où il n’y en a pas'),
+        check('Créativité par tuile', k, 'adaptive', 'Visages et mains gardent mieux leur forme ; zones floues ou plates plus libres')));
+  }
+  // Hires fix par tuiles : la seconde passe se fait par tuiles avec l'invite de ce que chacune montre (Kane MultiDiffusion)
+  function hrTilesBody(st) {
+    if (!(cat && cat.kmdInfo && cat.kmdInfo.hires)) return [];
+    const t = st.hrTiles;
+    const out = [check('Par tuiles (Kane MultiDiffusion)', t, 'enabled', 'Seconde passe par tuiles : agrandir au-delà de la résolution du modèle sans personnages en double ni manque de mémoire', () => renderParams())];
+    if (t.enabled) out.push(
+      row2(slider('Structure', t, 'structure', 0, 1, 0.05, 'Formes de la première passe tenues'), slider('Détail en plus', t, 'detail', 0, 1, 0.05, 'Grain et finesse ajoutés au milieu du calcul')),
+      row2(slider('Couleurs d’origine', t, 'colors', 0, 1, 0.05, 'Teinte et lumière de la première passe gardées'), check('Invite par tuile (WD14)', t, 'prompts', 'Chaque tuile ne reçoit que ce qu’elle montre')));
+    return out;
+  }
+  function hrTilesScripts(st) {
+    const t = st.hrTiles;
+    if (!(t && t.enabled && cat && cat.kmdInfo && cat.kmdInfo.hires)) return {};
+    return { 'Kane MultiDiffusion': { args: [{ enabled: true, prompts: !!t.prompts, negatives: !!t.prompts, structure: +t.structure, detail: +t.detail, colors: +t.colors }] } };
   }
   function mdScripts(st) {
     if (st.md.method === 'Kane' && cat && cat.kmdInfo) {
       const k = st.md.kane;
-      return { 'Kane MultiDiffusion': { args: [{ enabled: true, tile: +k.tile || 0, overlap: +k.overlap || 128, structure: +k.structure, detail: +k.detail, colors: +k.colors, prompts: !!k.prompts, negatives: !!k.prompts }] } };
+      return { 'Kane MultiDiffusion': { args: [{ enabled: true, tile: +k.tile || 0, overlap: +k.overlap || 128, structure: +k.structure, detail: +k.detail, colors: +k.colors, prompts: !!k.prompts, negatives: !!k.prompts, adaptive: !!k.adaptive, batch: k.batch == null ? 1 : +k.batch }] } };
     }
     const method = st.md.method === 'Kane' ? 'Mixture of Diffusers' : st.md.method;
     return { 'MultiDiffusion Integrated': { args: [true, method, +st.md.tw, +st.md.th, +st.md.overlap, +st.md.batch] } };
@@ -1949,6 +1969,7 @@
     });
     if (st.kd.enabled && st.kd.parts.length && cat && cat.kdInfo) p.alwayson_scripts['Kane Detailer'] = { args: [{ enabled: true, parts: st.kd.parts, forces: { ...st.kd.forces }, skip: k === 'i2i' && !!st.kd.skip, keep: +st.kd.keep, resolution: +st.kd.resolution, detail: +st.kd.detail || 0, upscale: +st.kd.upscale || 1, tries: +st.kd.tries || 1, repair: !!st.kd.repair, grain: +st.kd.grain || 0, glow: !!st.kd.glow, age: !!st.kd.age, autotag: st.kd.autotag !== false, soft: st.kd.soft !== false, wd: st.kd.wd !== false }] };
     if (st.noom.unet || st.noom.vae) p.alwayson_scripts['Never OOM Integrated'] = { args: [!!st.noom.unet, !!st.noom.vae] };
+    if (k === 't2i' && st.enable_hr) Object.assign(p.alwayson_scripts, hrTilesScripts(st));
     if (k === 'i2i') {
       if (st.md.enabled) Object.assign(p.alwayson_scripts, mdScripts(st));
       if (st.soft.enabled && INPAINT_MODES.includes(FX.i2iMode)) p.alwayson_scripts['Soft inpainting'] = { args: [true, +st.soft.bias, +st.soft.preserve, +st.soft.contrast, +st.soft.influence, +st.soft.diffThr, +st.soft.diffContrast] };

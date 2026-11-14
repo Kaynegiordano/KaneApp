@@ -437,6 +437,13 @@ ipcMain.handle('forge-kane-detect', forgeHandler(async (base, payload, png) => {
 // Kane MultiDiffusion (extension du moteur du Studio) : réglages par défaut, et tuiles prévues pour une taille d'image
 ipcMain.handle('forge-kmd-info', forgeHandler(async base => ({ info: await forgeCall(base, '/kane-multidiffusion/v1/info', null, 4000) })));
 ipcMain.handle('forge-kmd-plan', forgeHandler(async (base, payload) => ({ plan: await forgeCall(base, '/kane-multidiffusion/v1/plan', payload, 4000) })));
+// mémoire graphique prise par d'autres programmes (Animation, un jeu…) : la super résolution déborderait et ramperait
+ipcMain.handle('forge-kmd-memory', forgeHandler(async base => ({ memory: await forgeCall(base, '/kane-multidiffusion/v1/memory', null, 4000) })));
+// aperçu des tuiles : invite, négatif et créativité de chaque tuile, et une vignette de la source
+ipcMain.handle('forge-kmd-prompts', forgeHandler(async (base, payload, png) => {
+  const r = await forgeCall(base, '/kane-multidiffusion/v1/prompts', { ...payload, image: b64(png) }, 120000);
+  return { ...r, preview: r.preview ? unb64(r.preview) : null };
+}));
 ipcMain.handle('forge-upscale', forgeHandler(async (base, payload, png) => {
   const r = await forgeCall(base, '/sdapi/v1/extra-single-image', { ...payload, image: b64(png) });
   if (!r || !r.image) throw new Error('Forge n\'a renvoyé aucune image');

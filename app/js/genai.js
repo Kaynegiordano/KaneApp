@@ -473,7 +473,8 @@
   // ce modèle est repeinte par tuiles par le moteur du Studio (Kane MultiDiffusion) : du vrai détail à la nouvelle taille.
   // Chaque tuile reçoit l'invite de ce qu'elle montre (WD14) et une invite négative contre les visages là où il n'y en a
   // pas ; les formes et les couleurs de la source sont tenues. Au-delà de ×2, deux passes (×2 puis la taille finale).
-  const SR = { method: 'gen', factor: 2, creativity: 0.35, detail: 0.3, tilePrompts: true };
+  const SR = { method: 'gen', factor: 2, creativity: 0.35, detail: 0.3, tilePrompts: true, adaptive: true };
+  const OTHERS_MB = 2500;   // au-delà, d'autres programmes prennent la mémoire graphique dont le calcul a besoin
   const genPrompt = info => { const t = String(info || ''); const i = t.search(/\n(Negative prompt:|Steps:)/); return (i < 0 ? t : t.slice(0, i)).trim(); };
   const genNegative = info => { const m = /\nNegative prompt: ([^\n]*)/.exec(String(info || '')); return m ? m[1].trim() : ''; };
   C.superResolution = async (opts = {}) => {
@@ -488,6 +489,10 @@
     const o = { ...SR, ...(KS.prefs.superRes || {}), ...opts, model: def, prompt: genPrompt(d.genInfo) };
     if (!kmd.ok) o.method = 'classic';
     const gen = () => o.method === 'gen';
+    const mem = kmd.ok && N.forgeKmdMemory ? await N.forgeKmdMemory(G.url()).catch(() => null) : null;
+    const others = mem && mem.ok && mem.memory && mem.memory.cuda ? +mem.memory.others || 0 : 0;
+    const memWarn = h('div.note', { text: others > OTHERS_MB ? `⚠ D’autres programmes occupent ${(others / 1024).toFixed(1).replace('.', ',')} Go de mémoire graphique (Animation, un jeu, un autre moteur…). La super résolution générative risque d’être des dizaines de fois plus lente : fermez-les d’abord.` : '' });
+    memWarn.style.color = 'var(--warn, #d97706)';
     const size = () => ({ W: Math.round(d.width * o.factor), H: Math.round(d.height * o.factor) });
     const info = h('div.note');
     let planSeq = 0;
@@ -523,8 +528,11 @@
         ...(kmd.ok && kmd.info && kmd.info.wd14 === false
           ? row('', h('div.note', { text: 'Invite par tuile indisponible : le tagger WD14 n’est pas installé (models/adetailer/autotag). Baissez la créativité si un visage apparaît dans le décor.' }))
           : row('', ui.check('Invite par tuile (ce que chaque tuile montre)', o.tilePrompts, v => { o.tilePrompts = v; }, 'WD14 décrit chaque tuile : le personnage n’est demandé que là où il se trouve, plus de visages inventés dans le décor'))),
+        ...row('', ui.check('Créativité par tuile (visages et mains plus fidèles)', o.adaptive, v => { o.adaptive = v; }, 'Les tuiles avec un visage ou des mains gardent mieux leur forme ; les zones floues ou plates reçoivent plus de détail')),
+        ...(others > OTHERS_MB ? row('', memWarn) : []),
         h('span'), info,
         h('span'), h('div.note', { text: 'Calcul local par le moteur du Studio. Générative : environ une minute pour ×2 d’une image de 2 mégapixels sur une RTX 5080.' })),
+      left: kmd.ok && N.forgeKmdPrompts ? [ui.btn('Voir les tuiles…', () => { if (gen()) showTiles(d, o, size()); else KS.toast('Les tuiles ne concernent que la méthode générative', 'info'); })] : [],
       buttons: [{ label: 'Annuler', value: null }, { label: 'Agrandir', primary: true, value: 'ok' }],
       onClose: v => res(v === 'ok'),
     }));
@@ -534,7 +542,7 @@
     const maxSide = gen() ? 8192 : 16384, maxPx = gen() ? 40e6 : 150e6;
     if (Math.max(W, H) > maxSide || W * H > maxPx) { KS.toast(`Résultat trop grand (${maxSide.toLocaleString('fr-FR')} px de côté, ${maxPx / 1e6} mégapixels au plus${gen() ? ' en générative' : ''})`, 'err', 5000); return; }
     KS.prefs.upscaler = o.model;
-    KS.prefs.superRes = { method: o.method, factor: o.factor, creativity: o.creativity, detail: o.detail, tilePrompts: o.tilePrompts };
+    KS.prefs.superRes = { method: o.method, factor: o.factor, creativity: o.creativity, detail: o.detail, tilePrompts: o.tilePrompts, adaptive: o.adaptive };
     KS.prefs.save();
     const comp = d.composite();
     // transparence : l'agrandisseur travaille en RVB, l'alpha est agrandi à part
@@ -565,6 +573,41 @@
     }
   };
 
+  // Aperçu des tuiles de la (première) passe : la source avec le contour de chaque tuile, coloré selon sa créativité, et
+  // l'invite et le négatif que chacune recevra. Calculé par le moteur (WD14), sans rien générer.
+  async function showTiles(d, o, { W, H }) {
+    const [pw, ph] = o.factor > 2 ? [d.width * 2, d.height * 2] : [W, H];
+    const comp = d.composite();
+    let r;
+    try {
+      r = await G.task('Analyse des tuiles…', async () => N.forgeKmdPrompts(G.url(), { width: pw - pw % 8, height: ph - ph % 8, prompt: o.prompt || '', negative_prompt: '', preview: 960 }, await pngBytes(comp)));
+    } catch (e) { r = { ok: false, error: e.message }; }
+    if (!r || !r.ok) { KS.toast('Aperçu des tuiles impossible : ' + ((r && r.error) || 'moteur injoignable'), 'err', 5000); return; }
+    const img = r.preview ? await U.canvasFromBlob(new Blob([r.preview], { type: 'image/jpeg' })) : scaled(comp, 960, Math.round(960 * comp.height / comp.width));
+    const cv = U.canvas(img.width, img.height), x = cv.getContext('2d');
+    x.drawImage(img, 0, 0);
+    const kx = img.width / r.width, ky = img.height / r.height;
+    const color = c => c < 0.8 ? '#3b82f6' : c > 1.15 ? '#f97316' : '#e5e7eb';
+    r.tiles.forEach((t, i) => {
+      const [bx, by, bw, bh] = t.box;
+      x.lineWidth = 2; x.strokeStyle = color(t.creativity); x.setLineDash([6, 4]);
+      x.strokeRect(bx * kx + 1, by * ky + 1, bw * kx - 2, bh * ky - 2);
+      x.setLineDash([]); x.fillStyle = 'rgba(0,0,0,.65)'; x.fillRect(bx * kx + 6, by * ky + 6, 26, 20);
+      x.fillStyle = '#fff'; x.font = '600 13px system-ui'; x.fillText(String(i + 1), bx * kx + 12, by * ky + 21);
+    });
+    cv.style.maxWidth = '100%'; cv.style.borderRadius = '6px';
+    const list = h('div', { style: { maxHeight: '260px', overflow: 'auto', marginTop: '10px', fontSize: '12px', lineHeight: '1.45' } },
+      ...r.tiles.map((t, i) => h('div', { style: { padding: '6px 0', borderTop: '1px solid var(--line, #8883)' } },
+        h('b', { text: `Tuile ${i + 1}` }), h('span.note', { text: ` · créativité ${String(t.creativity).replace('.', ',')}` + (t.creativity < 0.8 ? ' (visage ou mains : tenue)' : t.creativity > 1.15 ? ' (zone floue : plus libre)' : '') }),
+        h('div', { text: t.prompt || '(invite vide)' }),
+        t.negative_prompt ? h('div.note', { text: 'Négatif : ' + t.negative_prompt }) : null)));
+    KS.modal({
+      title: `Tuiles${o.factor > 2 ? ' de la première passe' : ''} · ${r.describe}`, width: Math.min(1040, img.width + 48),
+      body: h('div', cv, r.wd14 ? null : h('div.note', { text: 'WD14 absent : toutes les tuiles reçoivent l’invite de l’image.' }), list),
+      buttons: [{ label: 'Fermer', primary: true, value: null }],
+    });
+  }
+
   // Super résolution générative : une ou deux passes d'image vers image par tuiles (Kane MultiDiffusion). L'agrandisseur
   // choisi prépare l'image à la taille de la passe (réglage upscaler_for_img2img, le temps de la requête).
   G.superGen = async (comp, W, H, o, forge) => {
@@ -577,10 +620,12 @@
     // pas de « personne » en négatif ici : l'image en a peut-être une ; les tuiles sans visage ont leur propre négatif
     const negative = (fromInfo && genNegative(o.info)) || [st.negative, 'nsfw, nude'].filter(Boolean).join(', ');
     const r8 = v => Math.max(64, Math.floor(v / 8) * 8);
-    const stages = o.factor > 2 ? [[r8(comp.width * 2), r8(comp.height * 2), 1], [r8(W), r8(H), 0.8]] : [[r8(W), r8(H), 1]];
+    // au-delà de ×2 : la seconde passe part d'une image déjà détaillée, agrandie de ×1,5 ou ×2 seulement. Le modèle ESRGAN
+    // (×4 puis réduit) y coûtait 20 s pour presque rien : Lanczos, la passe de diffusion redonne le détail.
+    const stages = o.factor > 2 ? [[r8(comp.width * 2), r8(comp.height * 2), 1, o.model], [r8(W), r8(H), 0.8, 'Lanczos']] : [[r8(W), r8(H), 1, o.model]];
     let cur = comp;
     for (let i = 0; i < stages.length; i++) {
-      const [sw, sh, k] = stages[i];
+      const [sw, sh, k, upscaler] = stages[i];
       const ov = pp.extra.override_settings || {};
       // l'image vers image ne fait que « pas × force » pas : à faible créativité il n'en restait que 4 ou 5, trop peu pour
       // que les raccords entre tuiles se fondent. On en garantit 8.
@@ -590,9 +635,9 @@
         batch_size: 1, n_iter: 1, seed: st.seed != null && st.seed !== '' ? +st.seed : -1, denoising_strength: force,
         resize_mode: 0, save_images: false, send_images: true, distilled_cfg_scale: pp.extra.distilled_cfg_scale,
         // aperçu en direct approché (RVB) : un aperçu complet décoderait plusieurs mégapixels à chaque pas
-        override_settings: { ...ov, upscaler_for_img2img: o.model, live_previews_enable: true, show_progress_type: 'RGB', show_progress_every_n_steps: 1 },
+        override_settings: { ...ov, upscaler_for_img2img: upscaler, live_previews_enable: true, show_progress_type: 'RGB', show_progress_every_n_steps: 1 },
         override_settings_restore_afterwards: pp.extra.override_settings ? pp.extra.override_settings_restore_afterwards : true,
-        alwayson_scripts: { 'Kane MultiDiffusion': { args: [{ enabled: true, prompts: o.tilePrompts !== false, negatives: o.tilePrompts !== false, structure: 0.5, detail: +o.detail || 0, colors: 1 }] } },
+        alwayson_scripts: { 'Kane MultiDiffusion': { args: [{ enabled: true, prompts: o.tilePrompts !== false, negatives: o.tilePrompts !== false, structure: 0.5, detail: +o.detail || 0, colors: 1, adaptive: o.adaptive !== false }] } },
       };
       if (pp.sampler) payload.sampler_name = pp.sampler;
       if (pp.scheduler) payload.scheduler = pp.scheduler;
