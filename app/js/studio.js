@@ -1199,6 +1199,8 @@
       row2(slider('Largeur de tuile', st.md, 'tw', 256, 2048, 64, 'Tile width'), slider('Hauteur de tuile', st.md, 'th', 256, 2048, 64, 'Tile height')),
       row2(slider('Chevauchement', st.md, 'overlap', 0, 1024, 16, 'Tile overlap'), slider('Tuiles par lot', st.md, 'batch', 1, 8, 1, 'Tile batch size')));
     if (cat && !cat.kmdInfo) out.push(h('div.fx-info', { text: 'Kane MultiDiffusion n’est pas dans ce moteur : mettez Kane OS à jour puis redémarrez le moteur du Studio (MultiDiffusion classique en attendant).' }));
+    else if (INPAINT_MODES.includes(FX.i2iMode)) out.push(h('div.fx-info', { text: 'Retouche de zone : seuls les tuiles et le détail en plus s’appliquent. Structure, couleurs d’origine et invite par tuile retiendraient la zone à repeindre.' }));
+    else if (cat && cat.kmdInfo && cat.kmdInfo.wd14 === false) out.push(h('div.fx-info', { text: 'Tagger WD14 absent : une seule invite pour toutes les tuiles.' }));
     return out.concat(
       row2(slider('Structure', k, 'structure', 0, 1, 0.05, 'Formes de la source tenues pendant le calcul : permet une force de 0,35 à 0,5 sans perdre la composition'),
         slider('Détail en plus', k, 'detail', 0, 1, 0.05, 'Grain et finesse ajoutés au milieu du calcul')),

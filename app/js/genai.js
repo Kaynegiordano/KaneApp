@@ -520,7 +520,9 @@
         ...row('Créativité', ui.scrub({ value: o.creativity, min: 0.15, max: 0.6, step: 0.05, onInput: v => { o.creativity = v; } }), 'Force du repeint : 0,25 fidèle, 0,35 conseillé, 0,5 et plus redessine'),
         ...row('Détail en plus', ui.scrub({ value: o.detail, min: 0, max: 1, step: 0.05, onInput: v => { o.detail = v; } }), 'Grain et finesse ajoutés au milieu du calcul'),
         ...row('Invite', prompt),
-        ...row('', ui.check('Invite par tuile (ce que chaque tuile montre)', o.tilePrompts, v => { o.tilePrompts = v; }, 'WD14 décrit chaque tuile : le personnage n’est demandé que là où il se trouve, plus de visages inventés dans le décor')),
+        ...(kmd.ok && kmd.info && kmd.info.wd14 === false
+          ? row('', h('div.note', { text: 'Invite par tuile indisponible : le tagger WD14 n’est pas installé (models/adetailer/autotag). Baissez la créativité si un visage apparaît dans le décor.' }))
+          : row('', ui.check('Invite par tuile (ce que chaque tuile montre)', o.tilePrompts, v => { o.tilePrompts = v; }, 'WD14 décrit chaque tuile : le personnage n’est demandé que là où il se trouve, plus de visages inventés dans le décor'))),
         h('span'), info,
         h('span'), h('div.note', { text: 'Calcul local par le moteur du Studio. Générative : environ une minute pour ×2 d’une image de 2 mégapixels sur une RTX 5080.' })),
       buttons: [{ label: 'Annuler', value: null }, { label: 'Agrandir', primary: true, value: 'ok' }],
@@ -557,7 +559,10 @@
       nd.addLayer(new KS.Layer({ name: `Super résolution ×${label}` + (gen() ? ' (générative)' : ''), canvas: out }), 0);
       KS.addDoc(nd);
       KS.toast(`Agrandi ×${label} (${gen() ? 'générative, ' : ''}${o.model})`, 'ok');
-    } catch (e) { KS.toast('Super résolution impossible : ' + e.message, 'err', 6000); }
+    } catch (e) {
+      if (/annul/i.test(e.message)) KS.toast('Super résolution annulée', 'info', 2500);
+      else KS.toast('Super résolution impossible : ' + e.message, 'err', 6000);
+    }
   };
 
   // Super résolution générative : une ou deux passes d'image vers image par tuiles (Kane MultiDiffusion). L'agrandisseur
@@ -577,9 +582,12 @@
     for (let i = 0; i < stages.length; i++) {
       const [sw, sh, k] = stages[i];
       const ov = pp.extra.override_settings || {};
+      // l'image vers image ne fait que « pas × force » pas : à faible créativité il n'en restait que 4 ou 5, trop peu pour
+      // que les raccords entre tuiles se fondent. On en garantit 8.
+      const force = U.clamp(+o.creativity * k, 0.1, 0.75), steps = Math.max(+st.steps || 30, Math.ceil(8 / force));
       const payload = {
-        prompt: pp.prompt, negative_prompt: negative, steps: +st.steps || 30, cfg_scale: +st.cfg || 4.5, width: sw, height: sh,
-        batch_size: 1, n_iter: 1, seed: st.seed != null && st.seed !== '' ? +st.seed : -1, denoising_strength: U.clamp(+o.creativity * k, 0.1, 0.75),
+        prompt: pp.prompt, negative_prompt: negative, steps, cfg_scale: +st.cfg || 4.5, width: sw, height: sh,
+        batch_size: 1, n_iter: 1, seed: st.seed != null && st.seed !== '' ? +st.seed : -1, denoising_strength: force,
         resize_mode: 0, save_images: false, send_images: true, distilled_cfg_scale: pp.extra.distilled_cfg_scale,
         // aperçu en direct approché (RVB) : un aperçu complet décoderait plusieurs mégapixels à chaque pas
         override_settings: { ...ov, upscaler_for_img2img: o.model, live_previews_enable: true, show_progress_type: 'RGB', show_progress_every_n_steps: 1 },

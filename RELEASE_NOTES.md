@@ -1,3 +1,11 @@
+# 1.42.1 — Super résolution générative : revue
+
+- Créativité basse (0,15 à 0,25) : le calcul fait maintenant au moins 8 pas. Avant, il n'en restait que 4 ou 5, trop peu pour fondre les raccords entre tuiles.
+- Annuler une super résolution affiche « Super résolution annulée », plus un message d'erreur.
+- Sans tagger WD14 dans le moteur, la fenêtre le dit au lieu de proposer une case sans effet.
+- Studio, image vers image › MultiDiffusion : en retouche de zone, une note rappelle que seuls les tuiles et le détail en plus s'appliquent.
+- Avec le moteur du Studio à jour (Kane MultiDiffusion 1.1) : retouche de zone et source recadrée corrigées, étiquettes d'ambiance gardées dans toutes les tuiles.
+
 # 1.42.0 — Animation Wallpaper Engine : l'ancien atelier revient
 
 - L'ancien atelier **Animation** revient, sous le nom **Animation Wallpaper Engine** : on peint les zones, on règle leurs mouvements (respiration, cheveux, voile, reflets, scintillement, clignement…) et on obtient une boucle ou un fond d'écran interactif pour Wallpaper Engine.
