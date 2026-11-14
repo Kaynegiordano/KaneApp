@@ -1,7 +1,7 @@
 {
   "name": "kaneapp",
   "productName": "KaneApp",
-  "version": "1.38.0",
+  "version": "1.39.0",
   "description": "KaneApp — éditeur d'images, Studio IA, Animer, Vidéo IA et Montage",
   "main": "main.js",
   "private": true,

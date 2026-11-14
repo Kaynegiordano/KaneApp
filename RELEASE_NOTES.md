@@ -1,3 +1,14 @@
+# 1.39.0 — Animer 2 : tout l'éditeur de Wallpaper Engine, en plus simple
+
+- **Tous les effets de Wallpaper Engine** dans Animer : Oscillation Feuillage, Secousse, Vagues d'eau, Débit d'eau, Mouvement Iris, À impulsion, Tournoyer, Rayons divins, Brillance, Flous, Teinte, Profondeur de parallax… (45), avec leurs vrais réglages et leurs noms français. Ils s'ajoutent comme dans Wallpaper Engine (« Ajouter un effet », par groupes, avec recherche).
+- L'aperçu les joue avec **leurs propres shaders** : ce que vous voyez est ce que le fond d'écran jouera.
+- **Masques** : *Peindre* au pinceau, *Retouche* pour affiner avec la sélection rapide, la baguette, Sélection › Sujet ou le masque rapide (bandeau « Renvoyer à Animer »), ou *Auto* : sujet, arrière-plan, cheveux, yeux, visage, vêtements… détectés par l'IA, ou la profondeur de l'image.
+- **Ambiances** : les 68 préréglages de particules de Wallpaper Engine (pluie, braises, feu, feux d'artifice, éclairs, magie, neige, fumée…).
+- Écran organisé comme l'éditeur de Wallpaper Engine : **Couches** à gauche, **Propriétés** à droite.
+- Corrigé : le curseur disparaissait sur l'image hors peinture ; la zone peinte se voit maintenant en rouge.
+- Vos animations d'Animer 1.38 s'ouvrent toujours (converties en effets de Wallpaper Engine).
+- La détection des cheveux, yeux et vêtements demande le moteur du Studio IA à jour (Kane OS).
+
 # 1.38.0 — Animer : vos images bougent dans Wallpaper Engine
 
 - Nouvel espace **Animer**. Ouvrez une image (fichier, document de Retouche, média du projet, ou glissez-la), ajoutez un mouvement et **peignez où il agit** : l'aperçu bouge tout de suite, sans bouton « Animer » ni attente.

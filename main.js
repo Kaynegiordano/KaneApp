@@ -414,6 +414,11 @@ ipcMain.handle('forge-kane-zones', forgeHandler(async (base, seed) => {
   const r = await forgeCall(base, '/kane-detailer/v1/zones/' + encodeURIComponent(String(seed)), null, 20000);
   return { zones: unb64(r.zones) };
 }));
+// Kane Detailer : masques par partie (cheveux, yeux…) pour l'atelier Animer
+ipcMain.handle('forge-kane-masks', forgeHandler(async (base, payload, png) => {
+  const r = await forgeCall(base, '/kane-detailer/v1/masks', { ...payload, image: b64(png) }, 180000);
+  return { masks: Object.fromEntries(Object.entries((r && r.masks) || {}).map(([k, v]) => [k, v ? unb64(v) : null])) };
+}));
 ipcMain.handle('forge-kane-detect', forgeHandler(async (base, payload, png) => {
   const r = await forgeCall(base, '/kane-detailer/v1/detect', { ...payload, image: b64(png) }, 120000);
   return { regions: r.regions, preview: unb64(r.preview) };
