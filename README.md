@@ -20,6 +20,22 @@ et les trois copies ICO utilisées par la fenêtre, les raccourcis et l'installa
 dix tailles de 16 à 256 pixels ; le symbole reste transparent et indépendant du thème de l'interface.
 
 ## Outils récents
+### Animer : sélection rapide et zones cumulées (1.40.0)
+
+- **Sélectionner** (à côté de *Peindre* sous chaque masque) ouvre les outils de sélection de Retouche directement dans
+  Animer, sans changer d'espace : **sélection rapide** (W, on glisse et la zone s'étend aux couleurs voisines, même calcul
+  que Retouche, masque mis à jour pendant le geste), **baguette magique** (Maj+W, tolérance, pixels contigus) et
+  **sélection d'objet** (O, on encadre, BiRefNet détoure ce qu'il y a dans le cadre, comme l'outil de Retouche).
+- **Zones cumulées** : une fois le masque commencé, la zone suivante (*Auto*, sélection) le **remplace**, s'y **ajoute**,
+  s'en **retire** ou le **croise** (choix sous la texture et dans la barre ; Maj = ajouter, Alt = retirer, les deux =
+  croiser, comme dans Retouche). Ex. : Sujet, puis Alt + clic sur les yeux ; Cheveux + Visage. Sans masque, retirer part
+  d'un masque plein (l'effet agissait partout).
+- Cartes de direction (Secousse…) : la zone sélectionnée prend le sens choisi une fois (bouton *Sens* de la barre) ;
+  retirer la ramène au neutre, croiser ne garde la direction que dans la zone.
+- Barre du masque sur deux lignes si la scène est étroite (elle débordait).
+- Test : `tools/test-animer.cjs` (36 vérifications : baguette, Alt + clic, sélection rapide, croiser, cadre d'objet,
+  direction, annulation).
+
 ### Animer 2 : l'éditeur de Wallpaper Engine, en plus direct (1.39.0)
 
 Après un premier essai jugé trop basique (cinq mouvements maison), Animer reprend l'organisation et le contenu de
@@ -726,6 +742,7 @@ Maintenir Alt + bouton droit dans la zone de travail : glisser horizontalement p
 - **1.34.0** : l’atelier d’entraînement Lora et le Merge partent dans **Lora Studio** (`C:\KaneOS\LoraStudio`, avec `lora_bridge.py` et `merge_bridge.py`). KaneApp garde `lora-training-running` (lit les `run.json` : pid vivant, pas fini) pour faire attendre ses générations, `open-lora-studio` (menu Studio) et `--kane-prompt=` (« Essayer » de Lora Studio → invite de Créer).
 - **1.34.1** : `suite-bridges.cjs` `flushAnimation` : si `enregistre()` échoue et que le projet n’est plus dans `/api/projets`, il est refermé (`P = null`) au lieu de bloquer ; `KS.beforeClose` propose « Quitter sans enregistrer » sur un vrai échec. Test : `tools/test-animation-flush.cjs`.
 - **1.36.0** : Animation 4.0, découpe dans Retouche sans SAM. `app/js/animcut.js` : IA › *Découper en calques pour l’animation* (silhouette `KS.ai.segment` BiRefNet → IPC `animation-cut` → `POST /api/decoupe-calques` d’Animation : pose, GrabCut, LaMa) ; groupes Décor / Personnage, un masque de fusion par pièce. `C.toWallpaper` envoie un document à groupe « Personnage » en PSD (`S.animate(it, psd)`, toujours une nouvelle animation). Bouton ✂ de l’atelier : `window.kaneDecoupeRetouche` → `C.cutAnimationProject` (`animation-scene`, `animation-write-document` : `calques.psd` du projet, l’ancien en « calques (précédent).psd », ouvert dans Retouche). `WX.ensure(id, { quiet })` démarre un moteur sans changer d’espace. Test : `tools/test-animation-decoupe.cjs` (vraie fenêtre, vrai BiRefNet, vrai moteur Animation ; `KANEVAS_TEST_IMAGE`).
+- **1.40.0** : Animer — outils de sélection dans la barre du masque (`tool` : `quick`, `wand`, `object` ; `KS.floodMask`, `KS.maskToCanvas` et `KS.ai.segment` de Retouche, calculés à la taille des masques) et zones cumulées (`combine` : `new`/`add`/`sub`/`int`, `mixer`, `mergeZone` ; Maj/Alt). Test : `tools/test-animer.cjs`.
 - **1.39.0** : Animer 2 — tous les effets de Wallpaper Engine exécutés avec leurs propres shaders traduits (`animer-gl.js`), définitions lues par `wallpaper-engine.cjs` (`effects`, `effectDef`, `presets`, `presetVariant`), interface couches / propriétés, masques dans Retouche (`A.editInRetouche`, bandeau), masques automatiques (BiRefNet, Kane Detailer `forge-kane-masks`, Depth Anything), 68 préréglages de particules, projets version 2 et reprise des projets 1.38.0. Test : `tools/test-animer.cjs`.
 - **1.38.0** : espace **Animer** (`animer.js`, `animer-gl.js`, `animer-host.cjs`, `wallpaper-engine.cjs`) : effets natifs de Wallpaper Engine peints au pinceau, aperçu WebGL aux formules de Wallpaper Engine, ambiances (préréglages) et halo, envoi d'une scène compilée dans `projects/myprojects`, fenêtre de test. Sorties `output/animer`. Test : `tools/test-animer.cjs`.
 - **1.37.0** : Animation retirée (fichiers `animation-*`, `animcut.js`, tests `test-animation-*` ; `services.cjs` sans service `wallpaper` ni relais 8601 ; `managed-runtimes` et `runtime-migrate` à trois moteurs). ComfyUI devient l'espace **Vidéo IA**.

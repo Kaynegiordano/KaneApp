@@ -1,7 +1,8 @@
 // Atelier Animer : l'éditeur de fonds animés de KaneApp, construit comme celui de Wallpaper Engine (couches, effets,
 // propriétés) mais plus direct. Les effets sont ceux de Wallpaper Engine, avec leurs réglages et libellés ; l'aperçu les
-// exécute avec leurs propres shaders (animer-gl.js). Les masques se peignent ici ou s'affinent dans Retouche (sélection
-// rapide, Sujet, masque rapide…), ou se calculent par IA (sujet, profondeur). « Envoyer » écrit une vraie scène dans les
+// exécute avec leurs propres shaders (animer-gl.js). Les masques se peignent ou se sélectionnent ici (sélection rapide,
+// baguette, objet : les outils de Retouche), s'affinent dans Retouche ou se calculent par IA (sujet, parties, profondeur),
+// et les zones se cumulent (remplacer, ajouter, retirer, croiser). « Envoyer » écrit une vraie scène dans les
 // projets de Wallpaper Engine (animer-host.cjs, wallpaper-engine.cjs).
 'use strict';
 (() => {
@@ -31,6 +32,10 @@
   let tool = 'paint', overlayOn = true, playing = true, time = 0, last = 0, raf = 0, visible = false;
   let view = { z: 1, x: 0, y: 0 }, fitted = true;
   const brush = { size: 60, intensity: 1, hardness: 0.35 };
+  // outils de sélection repris de Retouche : sensibilité de la sélection rapide, tolérance de la baguette
+  const pick = { tolerance: 26, wand: 32, contiguous: true };
+  const SELECT_TOOLS = new Set(['quick', 'wand', 'object']);
+  let combine = 'add';   // une nouvelle zone remplace le masque, s'y ajoute, s'en retire ou le croise
   let saveTimer = 0, saving = null, undo = [];
 
   const uid = () => Math.random().toString(36).slice(2, 9);
@@ -116,6 +121,53 @@
     const d = x.getImageData(0, 0, S.mw, S.mh);
     for (let i = 0; i < d.data.length; i += 4) { const a = d.data[i + 3]; d.data[i] = d.data[i + 1] = d.data[i + 2] = a; d.data[i + 3] = 255; }
     x.putImageData(d, 0, 0); return c;
+  }
+
+  /* ---------------------------------------------------------------- zones : remplacer, ajouter, retirer, croiser */
+  // Comme les sélections de Retouche (Maj = ajouter, Alt = retirer, les deux = croiser). z (0..1) = la zone.
+  // Masque gris : ajouter = max, retirer = ×(1 − z), croiser = min. Carte de direction : la zone prend la direction
+  // choisie (ajouter), revient au neutre (retirer), ou seule la zone garde sa direction (croiser).
+  const ZONE_MODES = [['new', 'marquee-rect', 'Remplacer le masque'], ['add', 'plus', 'Ajouter au masque (Maj)'], ['sub', 'minus', 'Retirer du masque (Alt)'], ['int', 'select-invert', 'Garder l’intersection (Maj+Alt)']];
+  const ZONE_NAMES = { new: 'remplace le masque', add: 's’ajoute au masque', sub: 'se retire du masque', int: 'croise le masque' };
+  const modeOf = ev => ev?.shiftKey && ev?.altKey ? 'int' : ev?.shiftKey ? 'add' : ev?.altKey ? 'sub' : combine;
+  // sans masque, l'effet agit partout : retirer part d'un masque plein, ajouter et croiser donnent la zone seule
+  const effMode = (key, mode) => !masks.has(key) && mode !== 'sub' ? 'new' : mode;
+  const needsDir = (key, mode) => isFlow(key) && (mode === 'new' || mode === 'add');
+  function mixer(key, mode, o = {}) {
+    const N = 127.5, amt = o.amount ?? 1;
+    if (!isFlow(key)) return (b, d, i, z) => {
+      const m = b[i], v = z * amt * 255;
+      d[i] = d[i + 1] = d[i + 2] = mode === 'new' ? v : mode === 'add' ? Math.max(m, v) : mode === 'sub' ? m * (1 - z * amt) : Math.min(m, v);
+      d[i + 3] = 255;
+    };
+    const dir = o.dir || { angle: 0, force: 1 }, s = Math.min(S.W, S.H);
+    const tx = N - Math.sin(dir.angle) * s / S.W * dir.force * N, ty = N + Math.cos(dir.angle) * s / S.H * dir.force * N;   // = flowFromGray
+    return (b, d, i, z) => {
+      const r = b[i], g = b[i + 1];
+      if (mode === 'new') { d[i] = N + (tx - N) * z; d[i + 1] = N + (ty - N) * z; }
+      else if (mode === 'add') { d[i] = r + (tx - r) * z; d[i + 1] = g + (ty - g) * z; }
+      else if (mode === 'sub') { d[i] = r + (N - r) * z; d[i + 1] = g + (N - g) * z; }
+      else { d[i] = N + (r - N) * z; d[i + 1] = N + (g - N) * z; }
+      d[i + 2] = 0; d[i + 3] = 255;
+    };
+  }
+  function baseOf(key, mode) {
+    const c = masks.get(key) || blankMask(isFlow(key), mode === 'sub' || slotOf(key)?.paint === 1);
+    return c.getContext('2d').getImageData(0, 0, S.mw, S.mh);
+  }
+  const showEffect = key => { const e = effectOf(parseKey(key)?.effect); if (e && e.visible === false) { e.visible = true; syncEngine(); renderLeft(); } };
+  // zone (canevas gris, r = 0..255) combinée au masque de la texture
+  function mergeZone(key, zone, mode, o = {}) {
+    mode = effMode(key, mode);
+    const base = baseOf(key, mode), fresh = !masks.has(key);
+    pushUndo(key);
+    const c = ensureMask(key), zd = fit2(zone).getContext('2d').getImageData(0, 0, S.mw, S.mh).data;
+    const out = new ImageData(S.mw, S.mh), d = out.data, b = base.data, f = mixer(key, mode, o);
+    for (let i = 0; i < d.length; i += 4) f(b, d, i, zd[i] / 255);
+    c.getContext('2d').putImageData(out, 0, 0);
+    showEffect(key);
+    engine.setMask(key, c); if (fresh) syncEngine();
+    changed(key); measure(key); renderLeft(); renderRight(); kick();
   }
 
   /* ---------------------------------------------------------------- vue */
@@ -209,7 +261,7 @@
     const m = await migrate(project, maskBytes);
     A.project = m.p; A.id = id; time = 0;
     ensureEngine();
-    image = img; S.W = img.width; S.H = img.height;
+    image = img; imgData = null; S.W = img.width; S.H = img.height;
     const k = Math.min(1, MASK_MAX / Math.max(S.W, S.H)); S.mw = Math.max(1, Math.round(S.W * k)); S.mh = Math.max(1, Math.round(S.H * k));
     engine.setImage(img, S.W, S.H);
     const problems = [];
@@ -336,15 +388,116 @@
     const fresh = !masks.has(paint.key);
     pushUndo(paint.key); ensureMask(paint.key);
     if (fresh) syncEngine();
-    const e = effectOf(parseKey(paint.key).effect); if (e && e.visible === false) { e.visible = true; syncEngine(); renderLeft(); }
+    showEffect(paint.key);
     const p = toImage(ev.clientX, ev.clientY);
     stroke = { key: paint.key, last: p, dir: null, flow: isFlow(paint.key) };
     if (!stroke.flow) paintTo(p);
     return true;
   }
   function endStroke() { if (!stroke) return; const k = stroke.key; stroke = null; changed(k); const was = painted.get(k); measure(k); if (was !== painted.get(k)) renderLeft(); }
-  function startPaint(key) { paint = { key }; tool = 'paint'; overlayOn = true; sel = { kind: 'effect', id: parseKey(key).effect }; stage.classList.add('painting'); renderPaintBar(); renderRight(); kick(); }
-  function stopPaint() { paint = null; stage?.classList.remove('painting'); if (brushRing) brushRing.hidden = true; renderPaintBar(); renderRight(); kick(); }
+  function startPaint(key, t = 'paint') {
+    paint = { key, dir: null }; tool = 'paint'; overlayOn = true; sel = { kind: 'effect', id: parseKey(key).effect };
+    stage.classList.add('painting'); stage.classList.remove('cross'); renderPaintBar(); renderRight(); kick();
+    if (t !== 'paint') return setTool(t);
+  }
+  function stopPaint() { cancelSelect(); paint = null; stage?.classList.remove('painting', 'cross'); if (brushRing) brushRing.hidden = true; renderPaintBar(); renderRight(); kick(); }
+  // les outils de sélection sur une carte de direction demandent une fois le sens du mouvement
+  async function setTool(t) {
+    if (!paint) return;
+    if (SELECT_TOOLS.has(t) && isFlow(paint.key) && !paint.dir) {
+      const e = effectOf(parseKey(paint.key).effect), d = await askDirection(e?.name || 'Direction');
+      if (!paint) return;
+      if (!d) { renderPaintBar(); return; }
+      paint.dir = d;
+    }
+    tool = t; stage.classList.toggle('cross', t === 'wand' || t === 'object'); if (brushRing) brushRing.hidden = true;
+    renderPaintBar(); renderRight();
+  }
+
+  /* ---------------------------------------------------------------- sélection rapide, baguette, objet (comme dans Retouche) */
+  let imgData = null, quick = null, marquee = null, marqueeEl = null;
+  // l'image à la taille des masques : c'est à cette taille que la zone est calculée
+  function imageData() {
+    if (!imgData) { const c = U.canvas(S.mw, S.mh), x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(image, 0, 0, S.mw, S.mh); imgData = x.getImageData(0, 0, S.mw, S.mh); }
+    return imgData;
+  }
+  // Sélection rapide : on glisse, la zone s'étend aux couleurs voisines depuis le pinceau (même calcul que Retouche),
+  // le masque se met à jour pendant le geste
+  function beginQuick(ev) {
+    const key = paint.key, mode = effMode(key, modeOf(ev)), fresh = !masks.has(key), base = baseOf(key, mode);
+    pushUndo(key); const c = ensureMask(key); if (fresh) syncEngine(); showEffect(key);
+    const f = mixer(key, mode, { dir: paint.dir, amount: brush.intensity }), out = new ImageData(S.mw, S.mh);
+    for (let i = 0; i < out.data.length; i += 4) f(base.data, out.data, i, 0);
+    quick = { key, mode, c, f, base: base.data, out, acc: new Uint8Array(S.mw * S.mh), scratch: new Uint8Array(S.mw * S.mh), last: null };
+    quickTo(toImage(ev.clientX, ev.clientY));
+  }
+  function quickTo(p) {
+    const q = quick, W = S.mw, H = S.mh, k = S.mw / S.W, x = p.x * k, y = p.y * k, r = Math.max(1, brush.size * k / 2);
+    const pts = [];
+    if (q.last) { const d = Math.hypot(x - q.last.x, y - q.last.y), n = Math.max(1, Math.ceil(d / Math.max(2, r / 2))); for (let i = 1; i <= n; i++) pts.push({ x: q.last.x + (x - q.last.x) * i / n, y: q.last.y + (y - q.last.y) * i / n }); }
+    else pts.push({ x, y });
+    q.last = { x, y };
+    const px = imageData().data, sc = q.scratch, acc = q.acc;
+    let dirty = null;
+    for (const pt of pts) {
+      const cx = Math.floor(pt.x), cy = Math.floor(pt.y);
+      if (cx < 0 || cy < 0 || cx >= W || cy >= H) continue;
+      const R = Math.ceil(r * 3), reg = U.rectIntersect({ x: cx - R, y: cy - R, w: R * 2 + 1, h: R * 2 + 1 }, { x: 0, y: 0, w: W, h: H });
+      for (let yy = reg.y; yy < reg.y + reg.h; yy++) sc.fill(0, yy * W + reg.x, yy * W + reg.x + reg.w);
+      for (const [sx, sy] of [[cx, cy], [cx - r / 2, cy], [cx + r / 2, cy], [cx, cy - r / 2], [cx, cy + r / 2]]) {
+        const X = Math.round(sx), Y = Math.round(sy);
+        if (X >= 0 && Y >= 0 && X < W && Y < H) KS.floodMask(px, W, H, X, Y, pick.tolerance, true, reg, sc);
+      }
+      for (let yy = reg.y; yy < reg.y + reg.h; yy++) for (let xx = reg.x, i = yy * W + xx; xx < reg.x + reg.w; xx++, i++) if (sc[i]) acc[i] = 1;
+      for (let yy = Math.max(0, Math.floor(cy - r)); yy < Math.min(H, cy + r); yy++) for (let xx = Math.max(0, Math.floor(cx - r)); xx < Math.min(W, cx + r); xx++) if (Math.hypot(xx - cx, yy - cy) <= r) acc[yy * W + xx] = 1;
+      dirty = U.rectUnion(dirty, reg);
+    }
+    if (!dirty) return;
+    const d = q.out.data;
+    for (let yy = dirty.y; yy < dirty.y + dirty.h; yy++) for (let xx = dirty.x, i = yy * W + xx; xx < dirty.x + dirty.w; xx++, i++) q.f(q.base, d, i * 4, acc[i]);
+    q.c.getContext('2d').putImageData(q.out, 0, 0, dirty.x, dirty.y, dirty.w, dirty.h);
+    engine.setMask(q.key, q.c); kick();
+  }
+  function endQuick() {
+    const q = quick; if (!q) return; quick = null;
+    // bord adouci comme dans Retouche
+    const soft = KS.maskToCanvas(q.acc, S.mw, S.mh, true), sd = soft.getContext('2d').getImageData(0, 0, S.mw, S.mh).data;
+    for (let i = 0; i < sd.length; i += 4) q.f(q.base, q.out.data, i, sd[i + 3] / 255);
+    q.c.getContext('2d').putImageData(q.out, 0, 0);
+    engine.setMask(q.key, q.c); changed(q.key); const was = painted.get(q.key); measure(q.key); if (was !== painted.get(q.key)) renderLeft(); kick();
+  }
+  // Baguette magique : un clic prend la couleur et ses voisines (tolérance, pixels contigus)
+  function wandAt(ev) {
+    const key = paint.key, p = toImage(ev.clientX, ev.clientY), k = S.mw / S.W, x = Math.floor(p.x * k), y = Math.floor(p.y * k);
+    if (x < 0 || y < 0 || x >= S.mw || y >= S.mh) return;
+    const m = KS.floodMask(imageData().data, S.mw, S.mh, x, y, pick.wand, pick.contiguous);
+    mergeZone(key, grayFromAlpha(KS.maskToCanvas(m, S.mw, S.mh, true)), modeOf(ev), { dir: paint.dir, amount: brush.intensity });
+  }
+  // Sélection d'objet : on encadre, l'IA de détourage de Retouche (BiRefNet) détoure ce qu'il y a dans le cadre
+  function drawMarquee() {
+    marqueeEl.hidden = !marquee; if (!marquee) return;
+    const r = U.normRect(marquee.a, marquee.b);
+    Object.assign(marqueeEl.style, { left: (view.x + r.x * view.z) + 'px', top: (view.y + r.y * view.z) + 'px', width: (r.w * view.z) + 'px', height: (r.h * view.z) + 'px' });
+  }
+  function endMarquee() {
+    const q = marquee; if (!q) return; marquee = null; drawMarquee();
+    const r0 = U.normRect(q.a, q.b);
+    if (r0.w * view.z < 6 || r0.h * view.z < 6) return;
+    const pad = Math.max(r0.w, r0.h) * 0.12;
+    const R = U.rectIntersect(U.rectInt({ x: r0.x - pad, y: r0.y - pad, w: r0.w + pad * 2, h: r0.h + pad * 2 }), { x: 0, y: 0, w: S.W, h: S.H });
+    if (!R) return;
+    return KS.suite.run('Sélection d’objet par IA', async () => {
+      if (!KS.ai?.available) throw new Error('Le détourage par IA n’est pas disponible');
+      const id = await KS.ai.ensureModel(); if (!id) throw new Error('Modèle de détourage non installé');
+      const m = await KS.ai.segment(U.copyCanvas(image, R), id);
+      const full = U.canvas(S.W, S.H), x = full.getContext('2d'), e = 4;
+      x.drawImage(m, R.x, R.y);
+      x.globalCompositeOperation = 'destination-in'; x.fillRect(r0.x - e, r0.y - e, r0.w + e * 2, r0.h + e * 2);
+      if (!slotOf(q.key)) return;
+      mergeZone(q.key, grayFromAlpha(full), q.mode, { dir: q.dir, amount: q.amount });
+    }).catch(() => {});
+  }
+  function cancelSelect() { if (quick) endQuick(); marquee = null; if (marqueeEl) drawMarquee(); }
 
   /* ---------------------------------------------------------------- masques automatiques et Retouche */
   async function subjectMask() {
@@ -389,17 +542,19 @@
     ox.putImageData(id, 0, 0); return fit2(o);
   }
   // direction d'une carte de direction remplie depuis une zone (IA, Retouche) : petite fenêtre avec un cadran
-  async function askDirection(title) {
-    let angle = 0, force = 1;
-    const d = dial(0, v => { angle = v; });
-    const f = ui.paramRow({ label: 'Force', min: 5, max: 100, step: 1, unit: '%' }, 100, v => { force = v / 100; });
+  async function askDirection(title, init) {
+    let angle = init?.angle || 0, force = init?.force ?? 1;
+    const d = dial(angle, v => { angle = v; });
+    const f = ui.paramRow({ label: 'Force', min: 5, max: 100, step: 1, unit: '%' }, Math.round(force * 100), v => { force = v / 100; });
     const ok = await KS.modal({ title: 'Direction · ' + title, width: 380, body: h('div.an-ask', h('p.an-help', { text: 'Le contenu de la zone se déplacera dans cette direction (0° = vers le haut).' }), d, f),
       buttons: [{ label: 'Annuler', value: false }, { label: 'Appliquer', primary: true, value: true }] }).done;
     return ok ? { angle, force } : null;
   }
-  async function applyZone(key, gray, label) {
-    if (isFlow(key)) { const dir = await askDirection(label); if (!dir) return; gray = flowFromGray(gray, dir.angle, dir.force); }
-    replaceMask(key, gray); renderRight();
+  async function applyZone(key, gray, label, mode = 'new') {
+    mode = effMode(key, mode);
+    let dir = null;
+    if (needsDir(key, mode)) { dir = await askDirection(label); if (!dir) return; }
+    mergeZone(key, gray, mode, { dir });
   }
   // Le masque devient la sélection d'un document de Retouche : sélection rapide, baguette, Sujet, masque rapide (Q),
   // « Sélectionner et masquer »… puis « Renvoyer à Animer ».
@@ -454,8 +609,8 @@
     if (!handle.hidden) { handle.style.left = (view.x + l.x * view.z) + 'px'; handle.style.top = (view.y + l.y * view.z) + 'px'; }
   }
   function showRing(ev) {
-    brushRing.hidden = !paint || !ev;
-    if (!paint || !ev) return;
+    brushRing.hidden = !paint || !ev || tool === 'wand' || tool === 'object';
+    if (brushRing.hidden) return;
     const r = stage.getBoundingClientRect(), d = brush.size * view.z;
     Object.assign(brushRing.style, { width: d + 'px', height: d + 'px', left: (ev.clientX - r.left - d / 2) + 'px', top: (ev.clientY - r.top - d / 2) + 'px' });
     brushRing.classList.toggle('erase', tool === 'erase');
@@ -475,6 +630,9 @@
       if (ev.button === 1 || ev.button === 2 || space) { pan = { x: ev.clientX, y: ev.clientY, vx: view.x, vy: view.y }; stage.classList.add('panning'); return; }
       if (ev.button !== 0) return;
       if (ev.target === handle) { const l = layerOf(sel.id), p = toImage(ev.clientX, ev.clientY); drag = { l, dx: l.x - p.x, dy: l.y - p.y }; return; }
+      if (paint && tool === 'quick') { beginQuick(ev); return; }
+      if (paint && tool === 'wand') { wandAt(ev); return; }
+      if (paint && tool === 'object') { const p = toImage(ev.clientX, ev.clientY); marquee = { key: paint.key, a: p, b: p, mode: effMode(paint.key, modeOf(ev)), dir: paint.dir, amount: brush.intensity }; drawMarquee(); return; }
       beginStroke(ev);
     });
     stage.addEventListener('pointermove', ev => {
@@ -483,14 +641,18 @@
       const p = toImage(ev.clientX, ev.clientY); engine?.setPointer(U.clamp(p.x / S.W, 0, 1), U.clamp(p.y / S.H, 0, 1));
       if (pan) { view.x = pan.vx + ev.clientX - pan.x; view.y = pan.vy + ev.clientY - pan.y; fitted = false; kick(); return; }
       if (drag) { drag.l.x = Math.round(p.x + drag.dx); drag.l.y = Math.round(p.y + drag.dy); syncEngine(); return; }
-      if (stroke) for (const pe of ev.getCoalescedEvents?.() || [ev]) paintTo(toImage(pe.clientX, pe.clientY));
+      const co = stroke || quick ? ev.getCoalescedEvents?.() : null, pts = co?.length ? co : [ev];
+      if (stroke) for (const pe of pts) paintTo(toImage(pe.clientX, pe.clientY));
+      if (quick) for (const pe of pts) quickTo(toImage(pe.clientX, pe.clientY));
+      if (marquee) { marquee.b = p; drawMarquee(); }
     });
     const end = () => {
       if (pan) { pan = null; stage.classList.remove('panning'); }
       if (drag) { drag = null; changed(); renderRight(); }
-      endStroke();
+      endStroke(); endQuick(); endMarquee();
     };
-    stage.addEventListener('pointerup', end); stage.addEventListener('pointercancel', end);
+    stage.addEventListener('pointerup', end);
+    stage.addEventListener('pointercancel', () => { marquee = null; drawMarquee(); end(); });
     stage.addEventListener('pointerleave', () => { brushRing.hidden = true; });
     stage.addEventListener('contextmenu', ev => ev.preventDefault());
     stage.addEventListener('dblclick', ev => { if (ev.target === canvas && !paint) { fit(); kick(); } });
@@ -507,8 +669,10 @@
       if ((ev.ctrlKey || ev.metaKey) && k === 'z') { if (A.undo()) ev.preventDefault(); ev.stopPropagation(); return; }
       if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
       if (k === 'escape' && paint) stopPaint();
-      else if (k === 'b' && paint) { tool = 'paint'; renderPaintBar(); }
-      else if (k === 'e' && paint) { tool = 'erase'; renderPaintBar(); }
+      else if (k === 'b' && paint) setTool('paint');
+      else if (k === 'e' && paint) setTool('erase');
+      else if (k === 'w' && paint) setTool(ev.shiftKey ? 'wand' : 'quick');
+      else if (k === 'o' && paint) setTool('object');
       else if (k === 'm' && paint) { overlayOn = !overlayOn; renderPaintBar(); kick(); }
       else if ((k === '[' || k === ']') && paint) { brush.size = Math.max(2, Math.min(1200, brush.size * (k === ']' ? 1.15 : 1 / 1.15))); renderPaintBar(); }
       else if (k === 'p' && P()) { playing = !playing; renderBar(); kick(); }
@@ -692,7 +856,7 @@
         ui.paramRow({ label: 'Force', min: 0, max: 4, step: 0.05 }, b.strength ?? 0.8, v => { b.strength = v; syncEngine(); changed(); }),
         ui.paramRow({ label: 'Seuil', min: 0, max: 0.99, step: 0.01 }, b.threshold ?? 0.65, v => { b.threshold = v; syncEngine(); changed(); }),
         h('div.an-sec', h('b', { text: 'Raccourcis' })),
-        h('p.an-note', { text: 'Molette : zoom · Espace ou clic droit + glisser : déplacer · 0 : ajuster · P : lecture. En peinture : B pinceau, E gomme, [ ] ou Maj + molette : taille, M : voir la zone, Échap : terminer, Ctrl+Z : annuler.' }));
+        h('p.an-note', { text: 'Molette : zoom · Espace ou clic droit + glisser : déplacer · 0 : ajuster · P : lecture. Masque : B pinceau, E gomme, W sélection rapide, Maj+W baguette, O sélection d’objet (Maj : ajouter, Alt : retirer), [ ] : taille, M : voir la zone, Échap : terminer, Ctrl+Z : annuler.' }));
     }
     left.replaceChildren(tabs, h('div.an-left-body', body));
   }
@@ -703,18 +867,21 @@
     const has = masks.has(key), label = t.label || MODES[t.mode] || 'Texture', actions = [];
     if (paintable) {
       const painting = paint?.key === key;
-      if (t.mode !== 'depth') actions.push(ui.btn(painting ? 'Terminer' : 'Peindre', () => painting ? stopPaint() : startPaint(key), '.small' + (painting ? '.primary' : ''), 'brush'));
+      const selecting = painting && SELECT_TOOLS.has(tool);
+      if (t.mode !== 'depth') actions.push(ui.btn(painting && !selecting ? 'Terminer' : 'Peindre', () => painting && !selecting ? stopPaint() : painting ? setTool('paint') : startPaint(key), '.small' + (painting && !selecting ? '.primary' : ''), 'brush'));
+      if (t.mode !== 'depth') { const b = ui.btn(selecting ? 'Terminer' : 'Sélectionner', () => selecting ? stopPaint() : painting ? setTool('quick') : startPaint(key, 'quick'), '.small' + (selecting ? '.primary' : ''), 'quick-select'); b.title = 'Sélection rapide (W), baguette magique (Maj+W), sélection d’objet par IA (O)'; actions.push(b); }
       if (t.mode !== 'depth') actions.push(ui.btn('Retouche', () => A.editInRetouche(key).catch(err => KS.toast(err.message, 'err')), '.small', 'image'));
       actions.push(ui.btn('Auto', ev => {
-        const r = ev.currentTarget.getBoundingClientRect();
-        const z = (fn, title) => KS.suite.run(title, async () => applyZone(key, await fn(), label)).catch(() => {});
+        const r = ev.currentTarget.getBoundingClientRect(), mode = t.mode === 'depth' ? 'new' : effMode(key, combine);
+        const z = (fn, title, m = mode) => KS.suite.run(title, async () => applyZone(key, await fn(), label, m)).catch(() => {});
         ui.menu([
+          t.mode !== 'depth' && masks.has(key) ? { head: 'La zone ' + ZONE_NAMES[mode] } : null,
           t.mode === 'depth' ? { label: 'Profondeur (IA)', icon: 'sparkles', action: () => KS.suite.run('Profondeur par IA', async () => replaceMask(key, await depthMask())).catch(() => {}) } : null,
           { label: 'Sujet (IA)', icon: 'sparkles', action: () => z(subjectMask, 'Sujet par IA') },
           { label: 'Partie détectée (Studio IA)', icon: 'sparkles', sub: PARTS.map(([k, l]) => ({ label: l, action: () => z(() => partMask(k, l), l + ' par IA') })) },
           { label: 'Arrière-plan (IA)', action: () => z(async () => { const g = await subjectMask(), x = g.getContext('2d'); x.globalCompositeOperation = 'difference'; x.fillStyle = '#fff'; x.fillRect(0, 0, g.width, g.height); return g; }, 'Arrière-plan par IA') },
           { sep: true },
-          { label: 'Tout', action: () => z(async () => blankMask(false, true), 'Masque plein') },
+          { label: 'Tout', action: () => z(async () => blankMask(false, true), 'Masque plein', 'new') },
           { label: 'Rien', action: () => replaceMask(key, blankMask(t.mode === 'flowmask', false)) },
           { label: 'Inverser', disabled: !has || t.mode === 'flowmask', action: () => { const c = U.copyCanvas(masks.get(key)), x = c.getContext('2d'); x.globalCompositeOperation = 'difference'; x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); replaceMask(key, c); } },
         ].filter(Boolean), r.left, r.bottom + 4);
@@ -724,7 +891,14 @@
     const note = !paintable ? (t.default ? 'Texture fournie : ' + t.default : 'Texture non modifiable ici')
       : !has ? (t.mode === 'flowmask' ? 'Glissez le pinceau dans le sens du mouvement.' : t.mode === 'depth' ? 'Auto › Profondeur (IA) calcule la carte.' : 'Sans masque, l’effet agit sur tout le calque.')
       : painted.get(key) ? '' : 'Masque vide : l’effet n’agit nulle part.';
-    return h('div.an-tex', th, h('div.an-tex-r', h('b', { text: label }), note ? h('small', { text: note }) : null, h('div.an-tex-a', actions)));
+    // une fois le masque commencé : la zone suivante (Auto, Sélectionner) le remplace, s'y ajoute, s'en retire ou le croise
+    const zone = paintable && has && t.mode !== 'depth' ? h('div.an-zone', h('span', { text: 'Zone suivante (Auto, sélection)' }), zoneSeg()) : null;
+    return h('div.an-tex', th, h('div.an-tex-r', h('b', { text: label }), note ? h('small', { text: note }) : null, h('div.an-tex-a', actions)), zone);
+  }
+  const zoneSegs = new Set();
+  function zoneSeg() {
+    const s = ui.seg(ZONE_MODES, combine, v => { combine = v; for (const x of zoneSegs) if (x.isConnected) x.set(v); else zoneSegs.delete(x); });
+    s.classList.add('an-zone-seg'); zoneSegs.add(s); return s;
   }
   function renderRight() {
     if (!right) return;
@@ -807,14 +981,24 @@
     if (!paintBar) return;
     paintBar.hidden = !paint;
     if (!paint) return;
-    const slot = slotOf(paint.key), e = effectOf(parseKey(paint.key).effect), flow = slot?.mode === 'flowmask';
-    const seg = ui.seg([['paint', 'brush', 'Pinceau (B)'], ['erase', 'eraser', 'Gomme (E)']], tool, v => { tool = v; });
+    const slot = slotOf(paint.key), e = effectOf(parseKey(paint.key).effect), flow = slot?.mode === 'flowmask', selTool = SELECT_TOOLS.has(tool);
+    const seg = ui.seg([['paint', 'brush', 'Pinceau (B)'], ['erase', 'eraser', 'Gomme (E)'],
+      ['quick', 'quick-select', 'Sélection rapide (W) : glissez sur la zone, elle s’étend aux couleurs voisines'],
+      ['wand', 'wand', 'Baguette magique (Maj+W) : cliquez sur une couleur'],
+      ['object', 'object-select', 'Sélection d’objet (O) : encadrez un objet, l’IA le détoure']], tool, v => setTool(v));
     const size = ui.scrub({ label: 'Taille', value: Math.round(brush.size), min: 2, max: 1200, step: 1, unit: 'px', width: 44, onInput: v => { brush.size = v; } });
-    const inten = ui.scrub({ label: flow ? 'Force' : 'Intensité', value: Math.round(brush.intensity * 100), min: 1, max: 100, step: 1, unit: '%', width: 36, onInput: v => { brush.intensity = v / 100; } });
+    const dir = paint.dir || { angle: 0, force: 1 };
+    const inten = flow && selTool
+      ? ui.btn('Sens ' + Math.round(dir.angle * 180 / Math.PI) + '° · ' + Math.round(dir.force * 100) + ' %', async () => { const d = await askDirection(e?.name || 'Direction', dir); if (d && paint) { paint.dir = d; renderPaintBar(); } }, '.small')
+      : ui.scrub({ label: flow ? 'Force' : 'Intensité', value: Math.round(brush.intensity * 100), min: 1, max: 100, step: 1, unit: '%', width: 36, onInput: v => { brush.intensity = v / 100; } });
     const hard = ui.scrub({ label: 'Dureté', value: Math.round(brush.hardness * 100), min: 0, max: 95, step: 1, unit: '%', width: 36, onInput: v => { brush.hardness = v / 100; } });
-    const see = ui.btn('Voir la zone', () => { overlayOn = !overlayOn; renderPaintBar(); kick(); }, '.small' + (overlayOn ? '.on' : ''), 'mask'); see.title = 'Montrer le masque peint (M)';
-    paintBar.replaceChildren(...[h('b.an-pb-t', { text: (e?.name || '') + ' · ' + (slot?.label || 'Masque') }), seg, size, inten, hard, see,
-      flow ? h('span.an-pb-tip', { text: 'Glissez dans le sens du mouvement' }) : null, ui.btn('Terminé', () => stopPaint(), '.small.primary', 'check')].filter(Boolean));
+    const see = ui.iconBtn('mask', 'Voir la zone en rouge (M)', () => { overlayOn = !overlayOn; renderPaintBar(); kick(); }, overlayOn ? '.on' : '');
+    const opts = tool === 'quick' ? [zoneSeg(), size, ui.scrub({ label: 'Sensibilité', value: pick.tolerance, min: 4, max: 100, step: 1, width: 32, onInput: v => { pick.tolerance = v; } }), inten]
+      : tool === 'wand' ? [zoneSeg(), ui.scrub({ label: 'Tolérance', value: pick.wand, min: 0, max: 255, step: 1, width: 32, onInput: v => { pick.wand = v; } }), ui.check('Contigus', pick.contiguous, v => { pick.contiguous = v; }), inten]
+      : tool === 'object' ? [zoneSeg(), h('span.an-pb-tip', { text: 'Encadrez l’objet' }), inten]
+      : [size, inten, hard];
+    paintBar.replaceChildren(...[h('b.an-pb-t', { text: (e?.name || '') + ' · ' + (slot?.label || 'Masque') }), seg, ...opts, see,
+      flow && !selTool ? h('span.an-pb-tip', { text: 'Glissez dans le sens du mouvement' }) : null, ui.btn('Terminé', () => stopPaint(), '.small.primary', 'check')].filter(Boolean));
   }
   async function renderEmpty() {
     if (!emptyBox) return;
@@ -822,7 +1006,7 @@
     const recent = h('div.an-recent');
     const intro = h('div.an-intro',
       h('div.an-icon', { html: KS.icon('sparkles') }), h('h2', { text: 'Animer une image' }),
-      h('p', { text: 'Les effets de Wallpaper Engine (Oscillation Feuillage, Secousse, Vagues d’eau, À impulsion, Rayons divins…) et ses ambiances, avec un aperçu fidèle en direct. Masques au pinceau, dans Retouche (sélection rapide, Sujet) ou par IA.' }),
+      h('p', { text: 'Les effets de Wallpaper Engine (Oscillation Feuillage, Secousse, Vagues d’eau, À impulsion, Rayons divins…) et ses ambiances, avec un aperçu fidèle en direct. Masques au pinceau, par sélection rapide ou baguette, dans Retouche ou par IA, et zones qui s’additionnent.' }),
       h('div.an-start', ui.btn('Ouvrir une image…', () => KS.suite.run('Ouverture de l’image dans Animer', () => A.openFile()).catch(() => {}), '.primary', 'folder-open'),
         ui.btn('Utiliser le document de Retouche', () => KS.suite.run('Animer le document', () => A.openDocument()).catch(() => {}), '', 'image')),
       status && !status.engine ? h('p.an-warn', { text: 'Wallpaper Engine est introuvable : effets, ambiances et envoi demandent Wallpaper Engine (Steam).' }) : null,
@@ -871,8 +1055,9 @@
     brushRing = h('div.an-ring', { hidden: true });
     handle = h('div.an-handle', { hidden: true, title: 'Faire glisser pour placer l’ambiance' });
     paintBar = h('div.an-paintbar', { hidden: true });
+    marqueeEl = h('div.an-marquee', { hidden: true });
     emptyBox = h('div.an-empty');
-    stage = h('div.an-stage', canvas, brushRing, handle, paintBar, emptyBox);
+    stage = h('div.an-stage', canvas, brushRing, handle, marqueeEl, paintBar, emptyBox);
     left = h('aside.an-left'); right = h('aside.an-right');
     root = h('div.an-root', bar, h('div.an-body', left, stage, right));
     container.replaceChildren(root);
@@ -900,6 +1085,7 @@
   A.debug = {
     masks, defs, variants, brush, get engine() { return engine; }, get time() { return time; }, set time(v) { time = v; }, set playing(v) { playing = v; },
     get sel() { return sel; }, select: s => { sel = s; render(); }, addEffect, addAmbiance, send, view: () => view, startPaint, stopPaint, ensureMask, maskKey, replaceMask, flowFromGray, returnFromRetouche, pickEffect, pickAmbiance,
+    setTool, mergeZone, applyZone, pick, get tool() { return tool; }, get combine() { return combine; }, set combine(v) { combine = v; }, get paintKey() { return paint?.key; }, get paintDir() { return paint?.dir; }, set paintDir(v) { if (paint) paint.dir = v; },
     paint: (key, pts, t = 'paint') => { tool = t; const fresh = !masks.has(key); pushUndo(key); ensureMask(key); if (fresh) syncEngine(); stroke = { key, last: pts[0], dir: null, flow: isFlow(key) }; if (!stroke.flow) paintTo(pts[0]); for (const p of pts.slice(1)) paintTo(p); endStroke(); },
   };
 })();

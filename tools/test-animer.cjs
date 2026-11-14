@@ -92,6 +92,42 @@ async function scenario(hasEngine) {
   await D.returnFromRetouche(d);
   const back = D.masks.get(kFol), bd = back.getContext('2d').getImageData(Math.round(60 * back.width / W), Math.round(50 * back.height / H), 1, 1).data;
   check(KS.ws.cur === 'animer' && bd[0] > 200 && !KS.state.docs.includes(d), 'Retour de Retouche : la sélection devient le masque (' + bd[0] + ')');
+  // outils de sélection de Retouche dans Animer, et zones cumulées (ajouter, retirer, croiser)
+  const mk = (key, ix, iy) => { const m = D.masks.get(key); return m.getContext('2d').getImageData(Math.round(ix * m.width / W), Math.round(iy * m.height / H), 1, 1).data; };
+  D.select({ kind: 'effect', id: fol.id });
+  check(!!document.querySelector('.an-right .an-zone-seg') && [...document.querySelectorAll('.an-right .an-tex-a .btn')].some(b => /Sélectionner/.test(b.textContent)), 'Masque commencé : bouton Sélectionner et choix Remplacer / Ajouter / Retirer / Croiser');
+  D.combine = 'add';
+  await D.startPaint(kFol, 'wand');
+  const v2 = D.view(), r2 = st.getBoundingClientRect();
+  const pev = (ix, iy, mods = {}) => ({ clientX: r2.left + v2.x + ix * v2.z, clientY: r2.top + v2.y + iy * v2.z, pointerId: 8, button: 0, bubbles: true, ...mods });
+  const click = (ix, iy, mods) => { st.dispatchEvent(new PointerEvent('pointerdown', pev(ix, iy, mods))); st.dispatchEvent(new PointerEvent('pointerup', pev(ix, iy, mods))); };
+  check(D.tool === 'wand' && st.classList.contains('cross') && !!document.querySelector('.an-paintbar .an-zone-seg'), 'Outils de sélection dans la barre du masque (baguette : curseur en croix)');
+  click(520, 80);
+  check(mk(kFol, 520, 80)[0] > 200 && mk(kFol, 60, 50)[0] > 200 && mk(kFol, 470, 80)[0] < 10 && mk(kFol, 300, 300)[0] < 10, 'Baguette magique : le disque s’ajoute au masque sans déborder (' + mk(kFol, 520, 80)[0] + ', ' + mk(kFol, 470, 80)[0] + ')');
+  click(520, 80, { altKey: true });
+  check(mk(kFol, 520, 80)[0] < 10 && mk(kFol, 60, 50)[0] > 200, 'Alt + clic : la zone se retire du masque');
+  await D.setTool('quick'); D.brush.size = 16;
+  st.dispatchEvent(new PointerEvent('pointerdown', pev(512, 74))); st.dispatchEvent(new PointerEvent('pointermove', pev(522, 84))); st.dispatchEvent(new PointerEvent('pointerup', pev(522, 84)));
+  check(mk(kFol, 520, 80)[0] > 200 && mk(kFol, 538, 96)[0] > 200 && mk(kFol, 560, 80)[0] < 10 && mk(kFol, 60, 50)[0] > 200, 'Sélection rapide : le geste s’étend à tout le disque, sans déborder (' + mk(kFol, 538, 96)[0] + ', ' + mk(kFol, 560, 80)[0] + ')');
+  const half = KS.util.canvas(W, H); half.getContext('2d').fillStyle = '#fff'; half.getContext('2d').fillRect(0, 0, 300, H);
+  D.mergeZone(kFol, half, 'int');
+  check(mk(kFol, 520, 80)[0] < 10 && mk(kFol, 60, 50)[0] > 200, 'Croiser : seule la partie commune reste');
+  // sélection d'objet : cadre → détourage (IA remplacée ici par un détourage plein)
+  const aiSaved = { ...KS.ai }; Object.assign(KS.ai, { available: true, ensureModel: async () => 'essai', segment: async src => { const c = KS.util.canvas(src.width, src.height); c.getContext('2d').fillRect(0, 0, src.width, src.height); return c; } });
+  await D.setTool('object');
+  st.dispatchEvent(new PointerEvent('pointerdown', pev(200, 200))); st.dispatchEvent(new PointerEvent('pointermove', pev(260, 260)));
+  check(!document.querySelector('.an-marquee').hidden, 'Sélection d’objet : le cadre suit la souris');
+  st.dispatchEvent(new PointerEvent('pointerup', pev(260, 260)));
+  await wait(() => mk(kFol, 230, 230)[0] > 200);
+  Object.assign(KS.ai, aiSaved);
+  check(mk(kFol, 230, 230)[0] > 200 && mk(kFol, 280, 230)[0] < 10 && mk(kFol, 60, 50)[0] > 200, 'Sélection d’objet : l’objet détouré dans le cadre s’ajoute au masque');
+  D.stopPaint();
+  // carte de direction : la zone sélectionnée prend le sens choisi, le reste garde ce qui était peint
+  D.startPaint(kShake); D.paintDir = { angle: Math.PI / 2, force: 1 }; await D.setTool('wand');
+  click(520, 80);
+  check(mk(kShake, 520, 80)[0] < 80 && Math.abs(mk(kShake, 520, 80)[1] - 128) < 4 && mk(kShake, 160, 180)[1] > 200, 'Direction : la baguette donne le sens choisi à la zone (' + [...mk(kShake, 520, 80)].slice(0, 2) + ')');
+  check(A.undo() && Math.abs(mk(kShake, 520, 80)[0] - 127) < 2 && mk(kShake, 160, 180)[1] > 200, 'Ctrl+Z annule la zone');
+  D.stopPaint();
   // ambiance et halo
   await D.addAmbiance('ember', 1);
   const amb = A.project.layers.at(-1);
@@ -178,7 +214,7 @@ app.whenReady().then(async () => {
       console.log('OK Projet d’Animer 1.38.0 repris : Secousse, Secousse (clignement), À impulsion, Feuilles 1, masques');
     } else console.log('-- Wallpaper Engine absent : effets, ambiances et envoi non testés');
     if (process.env.KANEVAS_TEST_SCREENSHOT && r.id) {
-      await win.webContents.executeJavaScript(`(async () => { KS.ws.go("animer"); await KS.animer.load(${JSON.stringify(r.id)}); const D = KS.animer.debug; D.playing = true; const e = KS.animer.project.layers[0].effects[1]; D.select({ kind: "effect", id: e.id }); document.querySelector("#toasts").replaceChildren(); })()`);
+      await win.webContents.executeJavaScript(`(async () => { KS.ws.go("animer"); await KS.animer.load(${JSON.stringify(r.id)}); const D = KS.animer.debug; D.playing = true; const e = KS.animer.project.layers[0].effects[1]; D.select({ kind: "effect", id: e.id }); const tool = ${JSON.stringify(process.env.KANEVAS_TEST_SCREENSHOT_TOOL || '')}; if (tool) await D.startPaint(D.maskKey(e.id, 0, 1), tool); document.querySelector("#toasts").replaceChildren(); })()`);
       await new Promise(res => setTimeout(res, 800));
       fs.writeFileSync(process.env.KANEVAS_TEST_SCREENSHOT, (await win.webContents.capturePage()).toPNG());
     }

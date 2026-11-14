@@ -1,3 +1,10 @@
+# 1.40.0 — Animer : sélection rapide et zones qui s'additionnent
+
+- Nouveau bouton **Sélectionner** sous chaque masque : la **sélection rapide**, la **baguette magique** et la **sélection d'objet** de Retouche, directement dans Animer. Glissez sur les cheveux, la zone s'étend toute seule ; encadrez un objet, l'IA le détoure.
+- Les zones **s'additionnent** : la zone suivante (Auto ou sélection) peut **remplacer** le masque, s'y **ajouter**, s'en **retirer** ou le **croiser**. Maj = ajouter, Alt = retirer, comme dans Retouche. Par exemple : Sujet, puis Alt + clic sur les yeux.
+- Pour un mouvement à direction (Secousse…), la zone sélectionnée prend le sens que vous choisissez.
+- La barre du masque ne déborde plus quand la fenêtre est étroite.
+
 # 1.39.0 — Animer 2 : tout l'éditeur de Wallpaper Engine, en plus simple
 
 - **Tous les effets de Wallpaper Engine** dans Animer : Oscillation Feuillage, Secousse, Vagues d'eau, Débit d'eau, Mouvement Iris, À impulsion, Tournoyer, Rayons divins, Brillance, Flous, Teinte, Profondeur de parallax… (45), avec leurs vrais réglages et leurs noms français. Ils s'ajoutent comme dans Wallpaper Engine (« Ajouter un effet », par groupes, avec recherche).
