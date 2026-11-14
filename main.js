@@ -423,12 +423,23 @@ ipcMain.handle('forge-img2img', forgeHandler(async (base, payload, init, mask) =
 // Kane Detailer sur une image existante : chaque partie choisie est repeinte de près, couleurs d'origine gardées
 ipcMain.handle('forge-kane-detail', forgeHandler(async (base, payload, png) => {
   const r = await forgeCall(base, '/kane-detailer/v1/detail', { ...payload, image: b64(png) }, 30 * 60000);
-  return { image: unb64(r.image), info: r.info, seed: r.seed, zones: r.zones ? unb64(r.zones) : null };
+  return { image: unb64(r.image), info: r.info, seed: r.seed, zones: r.zones ? unb64(r.zones) : null, report: r.report || [] };
+}));
+// refaire UNE zone (cadre du compte rendu) ou une zone peinte à la main (masque PNG), avec une nouvelle graine
+ipcMain.handle('forge-kane-redo', forgeHandler(async (base, payload, png, mask) => {
+  const r = await forgeCall(base, '/kane-detailer/v1/redo', { ...payload, image: b64(png), mask: mask ? b64(mask) : undefined }, 15 * 60000);
+  return { image: unb64(r.image), info: r.info, seed: r.seed, zones: r.zones ? unb64(r.zones) : null, report: r.report || [] };
+}));
+// juge des mains appris : marquer une main ratée ou réussie, apprendre, état
+ipcMain.handle('forge-kane-hands', forgeHandler(async (base, action, payload, png) => {
+  if (action === 'sample') return { hands: await forgeCall(base, '/kane-detailer/v1/hands/sample', { ...payload, image: b64(png) }, 60000) };
+  if (action === 'train') return { result: await forgeCall(base, '/kane-detailer/v1/hands/train', {}, 10 * 60000) };
+  return { hands: await forgeCall(base, '/kane-detailer/v1/hands', null, 8000) };
 }));
 // zones vraiment repeintes lors d'une génération (gardées par l'extension, par graine)
 ipcMain.handle('forge-kane-zones', forgeHandler(async (base, seed) => {
   const r = await forgeCall(base, '/kane-detailer/v1/zones/' + encodeURIComponent(String(seed)), null, 20000);
-  return { zones: unb64(r.zones) };
+  return { zones: unb64(r.zones), report: r.report || [] };
 }));
 ipcMain.handle('forge-kane-detect', forgeHandler(async (base, payload, png) => {
   const r = await forgeCall(base, '/kane-detailer/v1/detect', { ...payload, image: b64(png) }, 120000);

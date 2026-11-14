@@ -38,11 +38,17 @@ window.ksNative = {
     loras: [{ name: 'test', alias: 'Illustration', weight: 0.7, trigger: 'painted', negative: 'bad lines', rel: 'Art', mtime: 1 }],
     modules: [], current: { model: 'Studio-model', modules: [] },
     dtype: 'Automatic', samplers: ['Euler'], schedulers: ['Automatic'], scripts: [], styles: [], presets: {}, upscalers: ['Lanczos'],
-    kdInfo: { version: 5, parts: [{ key: 'cheveux', label: 'Cheveux', denoise: 0.3, model: 'anzhc_headhair_seg_y8n.pt' }, { key: 'pieds', label: 'Pieds', denoise: 0.38, model: null },
+    kdInfo: { version: 5, build: '5.4', redo: true, parts: [{ key: 'mains', label: 'Mains', denoise: 0.34, model: 'hand_yolov9c.pt' }, { key: 'cheveux', label: 'Cheveux', denoise: 0.3, model: 'anzhc_headhair_seg_y8n.pt' }, { key: 'pieds', label: 'Pieds', denoise: 0.38, model: null },
       { key: 'visage', label: 'Visage', denoise: 0.35, model: 'anzhc_face_seg_640_v4_y11n.pt' }, { key: 'yeux', label: 'Yeux', denoise: 0.3, model: 'anzhc_eyes_seg_hd.pt' }],
       presets: { Portrait: ['cheveux', 'visage', 'yeux'], 'Corps entier': ['cheveux', 'visage', 'yeux'] }, force_help: '0,15–0,25 : retouche légère' } }),
   forgeKaneDetect: async (url, payload, png) => { window.kdDetect = payload; return { ok: true, regions: [{ part: 'visage', box: [1, 1, 20, 20], conf: 0.9 }], preview: png }; },
-  forgeKaneDetail: async (url, payload, png) => { (window.kdCalls = window.kdCalls || []).push(payload); return { ok: true, image: png, info: 'Kane Detailer : Visage x1 (0.35)', zones: png }; },
+  forgeKaneDetail: async (url, payload, png) => { (window.kdCalls = window.kdCalls || []).push(payload); return { ok: true, image: png, info: 'Kane Detailer : Visage x1 (0.35)', zones: png,
+    report: [{ part: 'visage', label: 'Visage', box: [4, 4, 30, 30], force: 0.35, tries: 2, chosen: 2, result: 'repeinte', tags: ['red eyes'], seconds: 12.5 },
+             { part: 'mains', label: 'Mains', box: [30, 30, 60, 60], force: 0.34, tries: 2, chosen: 0, result: 'gardée', tags: ['hand fan'], seconds: 15 }] }; },
+  forgeKaneRedo: async (url, payload, png, mask) => { (window.kdRedo = window.kdRedo || []).push({ payload, mask }); return { ok: true, image: png, info: 'Kane Detailer : ' + payload.part + ' x1', zones: png, report: [] }; },
+  forgeKaneHands: async (url, action, payload) => { (window.kdHands = window.kdHands || []).push({ action, payload });
+    const ratee = window.kdHands.filter(x => x.action === 'sample' && x.payload.label === 'ratee').length;
+    return { ok: true, hands: { counts: { ratee, reussie: 0 }, trained: false, accuracy: null, min_per_class: 12 } }; },
   forgeImg2img: async (url, payload, init, mask) => {
     window.calls.push({ url, payload, init, mask });
     if (window.holdGeneration) await new Promise(resolve => { window.releaseGeneration = resolve; });
@@ -182,7 +188,7 @@ async function scenario() {
     det.click();
     await wait(() => (window.kdCalls || []).length === 1);
     const kd = window.kdCalls[0];
-    assert(kd.parts.join() === 'vetements,poitrine,cheveux,mains,visage,yeux' && kd.forces && !('strength' in kd) && kd.detail === 0 && kd.upscale === 1 && kd.keep === 0.8 && kd.resolution === 1024 && kd.tries === 2 && kd.repair === true && kd.grain === 0.5 && kd.glow === true && kd.age === true && kd.autotag === true && kd.soft === true && kd.wd === true && kd.prompt && !/Steps:/.test(kd.prompt), 'Détailler envoie les parties du volet et l’invite de l’image : ' + JSON.stringify(kd).slice(0, 200));
+    assert(kd.parts.join() === 'vetements,poitrine,cheveux,mains,visage,yeux' && kd.forces && !('strength' in kd) && kd.detail === 0 && kd.upscale === 1 && kd.keep === 0.8 && kd.resolution === 1024 && kd.tries === 2 && kd.repair === true && kd.grain === 0.5 && kd.glow === true && kd.age === true && kd.autotag === true && kd.soft === true && kd.wd === true && kd.small === true && kd.prompt && !/Steps:/.test(kd.prompt), 'Détailler envoie les parties du volet et l’invite de l’image : ' + JSON.stringify(kd).slice(0, 200));
     await wait(() => /Kane Detailer/.test(document.querySelector('.fx-outinfo')?.textContent || ''));
     assert(shown >= 1, 'Le résultat détaillé s’affiche');
     assert([...document.querySelectorAll('.fx-output-actions button')].some(b => b.textContent === 'Zones repeintes'), 'Le résultat détaillé propose « Zones repeintes »');
@@ -203,6 +209,42 @@ async function scenario() {
     assert(cmp.classList.contains('side') && !cmp.querySelector('.iv-cmp-b').style.clipPath, 'Côte à côte montre les deux images entières');
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     await wait(() => !KS.modalOpen());
+
+    // Compte rendu des zones : une ligne par zone, Refaire une zone, marquer une main
+    await click('Zones repeintes', document.querySelector('.fx-output-actions'));
+    await wait(() => document.querySelectorAll('.kd-zrow').length === 2);
+    const zrows = [...document.querySelectorAll('.kd-zrow')];
+    assert(/Visage/.test(zrows[0].textContent) && /essai 2 sur 2/.test(zrows[0].textContent) && /red eyes/.test(zrows[0].textContent), 'Le compte rendu montre chaque zone, l’essai choisi et ce qui y a été vu : ' + zrows[0].textContent);
+    assert(/original gardé/.test(zrows[1].textContent) && zrows[1].classList.contains('kept'), 'Une zone gardée telle quelle est signalée');
+    await wait(() => /Juge des mains/.test(document.querySelector('.kd-hands')?.textContent || ''));
+    [...zrows[1].querySelectorAll('button')].find(b => b.textContent === 'Ratée').click();
+    await wait(() => (window.kdHands || []).some(x => x.action === 'sample'));
+    const sample = window.kdHands.find(x => x.action === 'sample');
+    assert(sample.payload.label === 'ratee' && sample.payload.box.join() === '30,30,60,60', 'Marquer une main ratée envoie son cadre : ' + JSON.stringify(sample.payload));
+    await wait(() => /1 ratée/.test(document.querySelector('.kd-hands')?.textContent || ''));
+    [...zrows[0].querySelectorAll('button')].find(b => b.textContent === 'Refaire').click();
+    await wait(() => (window.kdRedo || []).length === 1);
+    const redo = window.kdRedo[0];
+    assert(redo.payload.part === 'visage' && redo.payload.box.join() === '4,4,30,30' && !redo.mask && redo.payload.seed === -1 && redo.payload.prompt, 'Refaire envoie la zone seule, une nouvelle graine et l’invite : ' + JSON.stringify(redo.payload).slice(0, 160));
+    await wait(() => !KS.modalOpen() && /visage x1/.test(document.querySelector('.fx-outinfo')?.textContent || ''));
+    // Peindre une zone : pinceau, recette, puis Repeindre envoie un masque
+    const vp3 = document.querySelector('.fx-view .iv-viewport'), r3 = vp3.getBoundingClientRect();
+    vp3.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r3.left + 20, clientY: r3.top + 20 }));
+    const pz = [...document.querySelectorAll('.menu *')].find(x => x.children.length < 3 && /^Peindre une zone \(Kane Detailer\)/.test(x.textContent.trim()));
+    assert(pz, 'Le clic droit propose Peindre une zone (Kane Detailer)');
+    pz.click();
+    await wait(() => !!document.querySelector('.kd-pmask'));
+    await click('Repeindre', document.querySelector('.modal'));
+    assert(KS.modalOpen() && !(window.kdRedo.length > 1), 'Repeindre sans rien peindre ne part pas');
+    const pm = document.querySelector('.kd-pmask'), pr = pm.getBoundingClientRect();
+    const pev = (type, x, y) => pm.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 1, buttons: type === 'pointerup' ? 0 : 1, clientX: pr.left + x * pr.width, clientY: pr.top + y * pr.height }));
+    try { pm.setPointerCapture = () => {}; } catch { /* sans importance */ }
+    pev('pointerdown', 0.3, 0.3); pev('pointermove', 0.5, 0.5); pev('pointerup', 0.5, 0.5);
+    await click('Repeindre', document.querySelector('.modal'));
+    await wait(() => (window.kdRedo || []).length === 2);
+    const painted = window.kdRedo[1];
+    assert(painted.mask && painted.mask.length > 100 && painted.payload.part === 'mains' && Math.abs(painted.payload.force - 0.34) < 1e-6 && !painted.payload.box, 'Repeindre envoie le masque peint, la recette et sa force : ' + JSON.stringify({ part: painted.payload.part, force: painted.payload.force, mask: painted.mask && painted.mask.length }));
+    await wait(() => !KS.modalOpen());
   }
   {
     const titles = [...document.querySelectorAll('.fx-acc-t')].map(x => x.textContent);
@@ -211,12 +253,12 @@ async function scenario() {
     const head = [...document.querySelectorAll('.fx-acc-h')].find(x => x.textContent.includes('Kane Detailer'));
     head.click(); await new Promise(r => setTimeout(r, 50));
     const rows = [...document.querySelectorAll('.kd-row')];
-    assert(rows.length === 4 && rows[2].querySelector('.fx-num').value === '0.35', 'Une ligne et une force par partie (visage 0,35) : ' + rows.map(r => r.textContent).join(' | '));
-    const num = rows[2].querySelector('.fx-num'); num.value = '0.22'; num.dispatchEvent(new Event('change'));
+    assert(rows.length === 5 && rows[3].querySelector('.fx-num').value === '0.35', 'Une ligne et une force par partie (visage 0,35) : ' + rows.map(r => r.textContent).join(' | '));
+    const num = rows[3].querySelector('.fx-num'); num.value = '0.22'; num.dispatchEvent(new Event('change'));
     const kdOf = () => KS.prefs.fx[KS.prefs.fx.tab === 'img2img' ? 'i2i' : 't2i'].kd;
     await wait(() => kdOf().forces.visage === 0.22);
-    assert(kdOf().forces.visage === 0.22 && !rows[2].querySelector('.kd-reset').hidden, 'Changer la force du visage la retient et montre le retour à la recette');
-    { const txt = [...document.querySelectorAll('.fx-acc')].find(x => x.querySelector('.kd-row'))?.textContent || ''; assert(['Invite de zone d’après ce qu’on y voit', 'Raccords invisibles', 'Juge WD14'].every(x => txt.includes(x)), 'Le volet montre les réglages de Kane Detailer 5'); }
+    assert(kdOf().forces.visage === 0.22 && !rows[3].querySelector('.kd-reset').hidden, 'Changer la force du visage la retient et montre le retour à la recette');
+    { const txt = [...document.querySelectorAll('.fx-acc')].find(x => x.querySelector('.kd-row'))?.textContent || ''; assert(['Invite de zone d’après ce qu’on y voit', 'Raccords invisibles', 'Juge WD14', 'Petits visages en deux temps'].every(x => txt.includes(x)), 'Le volet montre les réglages de Kane Detailer 5'); }
     head.click();
     // « Voir les zones » ouvre l'aperçu des zones
     const vp3 = document.querySelector('.fx-view .iv-viewport'), r3 = vp3.getBoundingClientRect();

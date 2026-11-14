@@ -101,6 +101,8 @@ contextBridge.exposeInMainWorld('ksNative', {
   forgeKaneDetail: (base, payload, png) => ipcRenderer.invoke('forge-kane-detail', base, payload, png),
   forgeKaneDetect: (base, payload, png) => ipcRenderer.invoke('forge-kane-detect', base, payload, png),
   forgeKaneZones: (base, seed) => ipcRenderer.invoke('forge-kane-zones', base, seed),
+  forgeKaneRedo: (base, payload, png, mask) => ipcRenderer.invoke('forge-kane-redo', base, payload, png, mask),
+  forgeKaneHands: (base, action, payload, png) => ipcRenderer.invoke('forge-kane-hands', base, action, payload, png),
   forgeKmdInfo: base => ipcRenderer.invoke('forge-kmd-info', base),
   forgeKmdPlan: (base, payload) => ipcRenderer.invoke('forge-kmd-plan', base, payload),
   forgeKmdMemory: base => ipcRenderer.invoke('forge-kmd-memory', base),

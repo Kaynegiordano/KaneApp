@@ -1,3 +1,12 @@
+# 1.43.1 — Kane Detailer : refaire une zone, peindre une zone, juge des mains
+
+- **Zones repeintes** montre maintenant le compte rendu de chaque zone : repeinte ou gardée telle quelle, force, essai retenu, temps et ce qui y a été vu.
+- **Refaire** : une zone ratée est repeinte seule, avec une nouvelle graine. Le reste de l'image ne bouge pas.
+- **Peindre une zone** (clic droit sur l'image, ou depuis les zones repeintes) : peignez ce que les détecteurs ont manqué, choisissez sa recette (main, visage…) et sa force, puis Repeindre.
+- **Petits visages en deux temps** : un petit visage est d'abord agrandi par l'upscaler, puis repeint. Il gagne du vrai détail au lieu d'une tache.
+- **Juge des mains appris sur vos images** : marquez des mains « Ratée » ou « Réussie » dans les zones repeintes, puis « Apprendre » (12 de chaque sorte au moins). Le juge n'est gardé que s'il est fiable ; il écarte alors les essais aux mains ratées.
+- Il faut le moteur du Studio à jour (Kane Detailer 5.4), puis le redémarrer.
+
 # 1.43.0 — Super résolution générative : aperçu des tuiles, créativité par tuile, hires fix par tuiles
 
 - **Voir les tuiles…** dans la fenêtre de super résolution : la source avec le contour de chaque tuile, et l'invite et le négatif que chacune recevra. Bleu : visage ou mains, la forme est tenue. Orange : zone floue, plus de liberté.

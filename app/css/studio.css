@@ -253,3 +253,20 @@
   .fx-dock .fx-composer { grid-template-columns: minmax(0, 1fr) 110px; }
   .fx-film { width: 72px; padding: 10px 7px; }
 }
+
+/* Kane Detailer : compte rendu des zones, peindre une zone */
+.kd-zones { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 16px; align-items: start; max-height: 70vh; }
+.kd-zimg { width: 100%; max-height: 66vh; object-fit: contain; border-radius: 8px; cursor: zoom-in; background: var(--bg-2, #111); }
+.kd-zlist { display: flex; flex-direction: column; gap: 8px; overflow: auto; max-height: 66vh; padding-right: 4px; }
+.kd-zrow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.kd-zrow.kept { opacity: 0.8; border-style: dashed; }
+.kd-zt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.kd-zt span { color: var(--text-2); font-size: 12px; }
+.kd-zt small { color: var(--text-3, var(--text-2)); font-size: 11px; overflow-wrap: anywhere; }
+.kd-zbtns { display: flex; gap: 6px; flex-shrink: 0; }
+.kd-hands { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 4px; font-size: 12px; color: var(--text-2); }
+.kd-paint { display: flex; gap: 16px; align-items: flex-start; }
+.kd-pstage { position: relative; flex-shrink: 0; line-height: 0; }
+.kd-pimg { border-radius: 6px; display: block; }
+.kd-pmask { position: absolute; inset: 0; cursor: crosshair; touch-action: none; }
+.kd-ptools { display: flex; flex-direction: column; gap: 12px; width: 260px; }

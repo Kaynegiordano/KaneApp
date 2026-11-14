@@ -21,7 +21,7 @@
   const COMMON = () => ({
     prompt: '', negative_prompt: '', styles: [], sampler_name: 'SEEDS 3', scheduler: 'Beta57', steps: 22, width: 1024, height: 1024, n_iter: 1, batch_size: 1,
     cfg_scale: 4, distilled_cfg_scale: 3, seed: -1, seedExtra: false, subseed: -1, subseed_strength: 0, seed_resize_from_w: 0, seed_resize_from_h: 0,
-    kd: { enabled: false, skip: false, parts: ['vetements', 'poitrine', 'cheveux', 'mains', 'visage', 'yeux'], forces: {}, keep: 0.8, resolution: 1024, detail: 0, upscale: 1, showZones: true, tries: 2, repair: true, grain: 0.5, glow: true, age: true, autotag: true, soft: true, wd: true },
+    kd: { enabled: false, skip: false, parts: ['vetements', 'poitrine', 'cheveux', 'mains', 'visage', 'yeux'], forces: {}, keep: 0.8, resolution: 1024, detail: 0, upscale: 1, showZones: true, tries: 2, repair: true, grain: 0.5, glow: true, age: true, autotag: true, soft: true, wd: true, small: true },
     noom: { unet: false, vae: false }, script: 'None', scriptArgs: {}, open: {},
   });
   const DEF = {
@@ -1056,6 +1056,7 @@
           ...(info.version >= 5 ? [
             check('Invite de zone d’après ce qu’on y voit', st.kd, 'autotag', 'WD14 reconnaît ce que contient chaque zone (objet tenu, couleur des yeux, ongles…) et l’ajoute à son invite : le repeint ne change plus la couleur des yeux et ne fait plus disparaître l’objet tenu', rp),
             check('Raccords invisibles', st.kd, 'soft', 'Inpainting doux dans chaque zone : le bord du masque est repeint progressivement, sans couture', rp),
+            ...(info.build && +info.build >= 5.4 ? [check('Petits visages en deux temps', st.kd, 'small', 'Un petit visage est d’abord agrandi par l’upscaler (net), puis repeint : il gagne du vrai détail au lieu d’une tache', rp)] : []),
             check('Juge WD14', st.kd, 'wd', 'Le juge tient aussi compte de la netteté, des erreurs d’anatomie et de l’identité vues par WD14', rp)] : [])] : []),
         check('Montrer les zones repeintes après la génération', st.kd, 'showZones', 'Ajoute à côté du résultat l’image des zones vraiment repeintes (masque et zone de travail)'),
         h('div.note', { text: 'Passe du plus large au plus fin. Clic droit sur un résultat : « Voir les zones » (ce qui sera repeint) ou « Détailler » sur une image déjà faite.' }));
@@ -1458,7 +1459,7 @@
       for (let i = grids; i < items.length; i++) {
         const seed = seeds[i - grids] ?? seeds[0];
         if (seed == null) continue;
-        try { const z = await N.forgeKaneZones(url(), seed); if (z.ok) items[i].kdZones = z.zones; } catch { /* pas de zones */ }
+        try { const z = await N.forgeKaneZones(url(), seed); if (z.ok) { items[i].kdZones = z.zones; items[i].kdReport = z.report || []; } } catch { /* pas de zones */ }
       }
     }
     return items;
@@ -1618,26 +1619,37 @@
   }
   // « Détailler » : Kane Detailer sur un résultat déjà fait (invite et réglages repris de l'image quand ils y sont)
   let detailing = false;
+  async function kdRequest(key, it) {
+    const st = FX[key === 'i2i' ? 'i2i' : 't2i'];
+    const info = it.info || '', neg = info.indexOf('\nNegative prompt:'), steps = info.indexOf('\nSteps:');
+    const prompt = info ? info.slice(0, neg >= 0 ? neg : steps >= 0 ? steps : info.length).trim() : await english(st.prompt);
+    const negative = info && neg >= 0 ? info.slice(neg + 17, steps > neg ? steps : info.length).trim() : await english(st.negative_prompt);
+    return { st, info, payload: { forces: { ...st.kd.forces }, keep: +st.kd.keep, resolution: +st.kd.resolution, detail: +st.kd.detail || 0, upscale: +st.kd.upscale || 1, tries: +st.kd.tries || 1,
+      repair: !!st.kd.repair, grain: +st.kd.grain || 0, glow: !!st.kd.glow, age: !!st.kd.age, autotag: st.kd.autotag !== false, soft: st.kd.soft !== false, wd: st.kd.wd !== false, small: st.kd.small !== false,
+      prompt, negative_prompt: negative, seed: -1, sampler_name: st.sampler_name, scheduler: st.scheduler, steps: +st.steps, cfg_scale: +st.cfg_scale, distilled_cfg_scale: +st.distilled_cfg_scale } };
+  }
+  // résultat d'un passage Kane Detailer : nouvelle image en tête du lot, avant / après possible
+  function kdResult(key, it, r, info) {
+    return fromPng(r.image).then(canvas => {
+      const item = { canvas, bytes: r.image, url: URL.createObjectURL(new Blob([r.image], { type: 'image/png' })), info: (info ? info + '\n' : '') + r.info, kind: it.kind || 'txt2img', from: 'Kane Detailer',
+        kdZones: r.zones || null, kdReport: r.report || [], seed: it.seed, params: it.params, before: { canvas: it.canvas, info: it.info, seed: it.seed, from: it.from } };
+      const o = OUT[key] || OUT.t2i; o.items.unshift(item); o.sel = 0; pushGallery([item]); renderOut(key in OUT ? key : 't2i');
+      return item;
+    });
+  }
   async function detailItem(key, it) {
     if (!it) return;
     if (!N || !N.forgeKaneDetail || !(cat && cat.kdInfo)) return KS.toast('Kane Detailer n’est pas dans ce moteur : mettez Kane OS à jour puis redémarrez le moteur du Studio.', 'err', 5000);
     if (BUSY || PREPARING || detailing) return KS.toast('Attendez la fin de la génération en cours.', 'info', 2500);
-    const st = FX[key === 'i2i' ? 'i2i' : 't2i'];
+    const { st, info, payload: base } = await kdRequest(key, it);
     const parts = st.kd.parts.length ? st.kd.parts : (cat.kdInfo.presets['Corps entier'] || []);
-    const info = it.info || '', neg = info.indexOf('\nNegative prompt:'), steps = info.indexOf('\nSteps:');
-    const prompt = info ? info.slice(0, neg >= 0 ? neg : steps >= 0 ? steps : info.length).trim() : await english(st.prompt);
-    const negative = info && neg >= 0 ? info.slice(neg + 17, steps > neg ? steps : info.length).trim() : await english(st.negative_prompt);
-    const payload = { parts, forces: { ...st.kd.forces }, keep: +st.kd.keep, resolution: +st.kd.resolution, detail: +st.kd.detail || 0, upscale: +st.kd.upscale || 1, tries: +st.kd.tries || 1, repair: !!st.kd.repair, grain: +st.kd.grain || 0, glow: !!st.kd.glow, age: !!st.kd.age, autotag: st.kd.autotag !== false, soft: st.kd.soft !== false, wd: st.kd.wd !== false, prompt, negative_prompt: negative, seed: -1,
-      sampler_name: st.sampler_name, scheduler: st.scheduler, steps: +st.steps, cfg_scale: +st.cfg_scale, distilled_cfg_scale: +st.distilled_cfg_scale };
+    const payload = { ...base, parts };
     detailing = true;
     KS.toast('Kane Detailer : ' + parts.length + ' partie(s) en cours…', 'info', 4000);
     try {
       const r = await N.forgeKaneDetail(url(), payload, it.bytes || await pngBytes(it.canvas));
       if (!r.ok) throw new Error(r.error);
-      const canvas = await fromPng(r.image);
-      const item = { canvas, bytes: r.image, url: URL.createObjectURL(new Blob([r.image], { type: 'image/png' })), info: (info ? info + '\n' : '') + r.info, kind: it.kind || 'txt2img', from: 'Kane Detailer', kdZones: r.zones || null,
-        seed: it.seed, params: it.params, before: { canvas: it.canvas, info: it.info, seed: it.seed, from: it.from } };
-      const o = OUT[key] || OUT.t2i; o.items.unshift(item); o.sel = 0; pushGallery([item]); renderOut(key in OUT ? key : 't2i');
+      await kdResult(key, it, r, info);
       KS.toast(r.info, 'ok', 4000);
     } catch (e) { KS.toast('Kane Detailer : ' + e.message, 'err', 6000); }
     finally { detailing = false; }
@@ -1705,10 +1717,120 @@
     } catch (e) { KS.toast('Comparaison impossible : ' + e.message, 'err', 7000); }
     finally { if (PREPARING === prep) PREPARING = null; renderGenButtons(); }
   }
-  async function showZones(it) {
+  async function showZones(it, key = 't2i') {
     if (!it || !it.kdZones) return;
     const canvas = await fromPng(it.kdZones);
-    KS.preview.open(canvas, canvas.width, canvas.height, { title: 'Zones repeintes par Kane Detailer (couleur : masque, pointillés : zone de travail)' });
+    if (!(it.kdReport && it.kdReport.length) || !(N && N.forgeKaneRedo)) {
+      return KS.preview.open(canvas, canvas.width, canvas.height, { title: 'Zones repeintes par Kane Detailer (couleur : masque, pointillés : zone de travail)' });
+    }
+    kdZonesModal(key, it, canvas);
+  }
+  const KD_RESULT = { repeinte: 'repeinte', 'gardée': 'gardée telle quelle (aucun essai meilleur)', 'réparée': 'réparée (essai repeint fort)' };
+  // Compte rendu : l'image des zones, puis une ligne par zone (résultat, force, essai choisi, temps, étiquettes vues)
+  function kdZonesModal(key, it, canvas) {
+    const img = h('img.kd-zimg', { alt: '' }); img.src = canvas.toDataURL('image/jpeg', 0.9);
+    img.addEventListener('click', () => KS.preview.open(canvas, canvas.width, canvas.height, { title: 'Zones repeintes par Kane Detailer' }));
+    const handsLine = h('div.kd-hands');
+    const rows = it.kdReport.map(z => {
+      const chosen = z.chosen ? 'essai ' + z.chosen + ' sur ' + z.tries : 'original gardé (' + z.tries + ' essais)';
+      const facts = [KD_RESULT[z.result] || z.result, 'force ' + String(z.force).replace('.', ','), chosen, z.seconds != null ? String(z.seconds).replace('.', ',') + ' s' : '', z.small ? 'petit visage en deux temps' : ''].filter(Boolean).join(' · ');
+      const btns = h('div.kd-zbtns', tbtn('Refaire', () => { modal.close(); redoZone(key, it, { part: z.part, box: z.box }); }, '', 'Repeint cette zone seule avec une nouvelle graine (les autres zones ne bougent pas)'));
+      if (z.part === 'mains') btns.append(
+        tbtn('Ratée', () => markHand(it, z, 'ratee', handsLine), '', 'Cette main est ratée : exemple pour le juge des mains appris'),
+        tbtn('Réussie', () => markHand(it, z, 'reussie', handsLine), '', 'Cette main est réussie : exemple pour le juge des mains appris'));
+      return h('div.kd-zrow' + (z.result === 'gardée' ? '.kept' : ''), h('div.kd-zt', h('b', { text: z.label }), h('span', { text: facts }),
+        z.tags && z.tags.length ? h('small', { text: 'Vu dans la zone : ' + z.tags.join(', ') }) : null), btns);
+    });
+    const modal = KS.modal({ title: 'Zones repeintes par Kane Detailer', width: 980, body: h('div.kd-zones', img, h('div.kd-zlist', ...rows, handsLine)),
+      left: [tbtn('Peindre une zone…', () => { modal.close(); kdPaintZone(key, it); }, '', 'Peindre vous-même une zone que les détecteurs ont manquée, puis la faire repeindre')],
+      buttons: [{ label: 'Fermer', value: null }] });
+    refreshHands(handsLine);
+  }
+  async function refreshHands(line, extra = '') {
+    if (!line || !(N && N.forgeKaneHands)) return;
+    try {
+      const r = await N.forgeKaneHands(url(), 'info'); if (!r.ok) return;
+      const c = r.hands.counts || {}, need = r.hands.min_per_class || 12;
+      const state = r.hands.trained ? 'appris (' + Math.round(r.hands.accuracy * 100) + ' % de bonnes réponses)' : 'pas encore appris';
+      const learn = tbtn('Apprendre', () => trainHands(line), '', 'Apprend à reconnaître une main ratée sur les mains marquées (il en faut au moins ' + need + ' de chaque sorte)');
+      learn.disabled = (c.ratee || 0) < need || (c.reussie || 0) < need;
+      line.replaceChildren(h('span', { text: 'Juge des mains : ' + state + ' · ' + (c.ratee || 0) + ' ratée(s), ' + (c.reussie || 0) + ' réussie(s) marquée(s)' + (extra ? ' · ' + extra : '') }), learn);
+    } catch { /* moteur sans juge des mains */ }
+  }
+  async function markHand(it, z, label, line) {
+    try {
+      const r = await N.forgeKaneHands(url(), 'sample', { box: z.box, label }, it.bytes || await pngBytes(it.canvas));
+      if (!r.ok) throw new Error(r.error);
+      refreshHands(line, 'main marquée ' + (label === 'ratee' ? 'ratée' : 'réussie'));
+    } catch (e) { KS.toast('Juge des mains : ' + e.message, 'err', 5000); }
+  }
+  async function trainHands(line) {
+    KS.toast('Juge des mains : apprentissage…', 'info', 3000);
+    try {
+      const r = await N.forgeKaneHands(url(), 'train');
+      if (!r.ok) throw new Error(r.error);
+      KS.toast(r.result.message, r.result.ok ? 'ok' : 'info', 7000); refreshHands(line);
+    } catch (e) { KS.toast('Juge des mains : ' + e.message, 'err', 6000); }
+  }
+  // Refaire une zone (cadre du compte rendu) ou une zone peinte (masque) : une nouvelle image, les autres zones intactes
+  async function redoZone(key, it, zone, mask = null) {
+    if (!(N && N.forgeKaneRedo && cat && cat.kdInfo && cat.kdInfo.redo)) return KS.toast('Ce moteur ne sait pas refaire une zone : mettez à jour le moteur du Studio et redémarrez-le.', 'err', 5000);
+    if (BUSY || PREPARING || detailing) return KS.toast('Attendez la fin de la génération en cours.', 'info', 2500);
+    const { info, payload } = await kdRequest(key, it);
+    detailing = true;
+    const label = (cat.kdInfo.parts.find(p => p.key === zone.part) || {}).label || zone.part;
+    KS.toast('Kane Detailer : « ' + label + ' » repeinte de nouveau…', 'info', 4000);
+    try {
+      const r = await N.forgeKaneRedo(url(), { ...payload, part: zone.part, box: zone.box, force: zone.force }, it.bytes || await pngBytes(it.canvas), mask);
+      if (!r.ok) throw new Error(r.error);
+      await kdResult(key, it, r, info);
+      KS.toast(r.info, 'ok', 4000);
+    } catch (e) { KS.toast('Kane Detailer : ' + e.message, 'err', 6000); }
+    finally { detailing = false; }
+  }
+  // Peindre une zone : pinceau sur l'image, recette (partie) et force, puis Repeindre
+  async function kdPaintZone(key, it) {
+    if (!it) return;
+    if (!(cat && cat.kdInfo && cat.kdInfo.redo)) return KS.toast('Ce moteur ne sait pas repeindre une zone peinte : mettez à jour le moteur du Studio et redémarrez-le.', 'err', 5000);
+    const W = it.canvas.width, H = it.canvas.height, scale = Math.min(1, 900 / W, 560 / H);
+    const view = h('canvas.kd-pimg', { width: Math.round(W * scale), height: Math.round(H * scale) });
+    const over = h('canvas.kd-pmask', { width: view.width, height: view.height });
+    view.getContext('2d').drawImage(it.canvas, 0, 0, view.width, view.height);
+    const full = document.createElement('canvas'); full.width = W; full.height = H;
+    const fctx = full.getContext('2d'), octx = over.getContext('2d');
+    const opt = { part: 'mains', size: Math.max(8, Math.round(Math.min(W, H) * 0.04)), erase: false, force: null };
+    const recipe = () => cat.kdInfo.parts.find(p => p.key === opt.part) || { denoise: 0.3 };
+    let painted = false, last = null;
+    const dot = (x, y) => {
+      for (const [ctx, k] of [[octx, scale], [fctx, 1]]) {
+        ctx.globalCompositeOperation = opt.erase ? 'destination-out' : 'source-over';
+        ctx.fillStyle = k === 1 ? '#fff' : 'rgba(255, 70, 160, 0.45)'; ctx.strokeStyle = ctx.fillStyle;
+        ctx.lineCap = 'round'; ctx.lineWidth = opt.size * k;
+        ctx.beginPath(); if (last) { ctx.moveTo(last[0] * k, last[1] * k); ctx.lineTo(x * k, y * k); ctx.stroke(); }
+        ctx.beginPath(); ctx.arc(x * k, y * k, opt.size * k / 2, 0, Math.PI * 2); ctx.fill();
+      }
+      painted = painted || !opt.erase; last = [x, y];
+    };
+    const at = e => { const r = over.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H]; };
+    over.addEventListener('pointerdown', e => { over.setPointerCapture(e.pointerId); last = null; dot(...at(e)); });
+    over.addEventListener('pointermove', e => { if (e.buttons & 1) dot(...at(e)); });
+    over.addEventListener('pointerup', () => { last = null; });
+    const forceBox = h('div');
+    const drawForce = () => { opt.force = recipe().denoise; forceBox.replaceChildren(slider('Force', opt, 'force', 0.05, 0.75, 0.01, 'Part de la zone redessinée : 0,15–0,25 retouche légère · 0,3–0,4 redessine les détails · 0,5 et plus : la forme peut changer')); };
+    drawForce();
+    const tools = h('div.kd-ptools',
+      select('Recette', cat.kdInfo.parts.map(p => [p.key, p.label]), opt, 'part', 'La zone peinte est repeinte comme cette partie (invite, contexte, juge)', drawForce),
+      slider('Pinceau', opt, 'size', 4, Math.max(40, Math.round(Math.min(W, H) * 0.2)), 1, 'Taille du pinceau, en pixels de l’image'),
+      check('Gomme', opt, 'erase', 'Efface ce qui a été peint'), forceBox,
+      h('div.fx-note', { text: 'Peignez la zone à repeindre (en rose), choisissez sa recette et sa force, puis Repeindre. Le reste de l’image ne change pas.' }));
+    const modal = KS.modal({ title: 'Peindre une zone (Kane Detailer)', width: Math.max(560, view.width + 300), body: h('div.kd-paint', h('div.kd-pstage', view, over), tools),
+      buttons: [{ label: 'Annuler', value: null }, { label: 'Repeindre', primary: true, value: 'go', action: () => {
+        if (!painted) { KS.toast('Peignez d’abord la zone à repeindre.', 'info', 2500); return false; }
+      } }] });
+    if (await modal.done !== 'go') return;
+    const mask = await new Promise(res => full.toBlob(b => b ? b.arrayBuffer().then(a => res(new Uint8Array(a))) : res(null), 'image/png'));
+    if (!mask) return KS.toast('Masque illisible.', 'err', 3000);
+    redoZone(key, it, { part: opt.part, force: +opt.force }, mask);
   }
   function outButtons(key, it) {
     const sub = key === 'i2i' ? 'img2img-images' : key === 'ex' ? 'extras-images' : 'txt2img-images';
@@ -1741,7 +1863,7 @@
         action('Vers Img2Img', () => sendTo('img2img', it), { icon: 'image', tip: 'Envoyer vers Img2Img : transformer cette image' }),
         action('Vers Inpaint', () => sendTo('inpaint', it), { icon: 'mask', tip: 'Envoyer vers Inpaint : retoucher une zone' }),
         action('Détailler', () => detailItem(key, it), { icon: 'sparkles', tip: 'Kane Detailer : repeint de près chaque partie choisie dans le tiroir, couleurs d’origine gardées' }),
-        it && it.kdZones ? action('Zones repeintes', () => showZones(it), { icon: 'eye', tip: 'Ce que Kane Detailer a vraiment repeint sur cette image' }) : null),
+        it && it.kdZones ? action('Zones repeintes', () => showZones(it, key), { icon: 'eye', tip: 'Ce que Kane Detailer a vraiment repeint sur cette image' }) : null),
       it && it.before ? group('compare', 'Comparer', action(it.from === 'Kane Detailer' ? 'Avant / après' : 'Comparer à l’original', () => compareBefore(it), { icon: 'compare', tip: 'Rideau ou côte à côte, avec l’image de départ' })) : null,
       group('files', 'Fichiers', action('Enregistrer', () => saveItem(it), { icon: 'save', tip: 'Enregistrer cette image…' }), more));
   }
@@ -1809,7 +1931,8 @@
         { label: 'Envoyer vers Inpaint', icon: 'brush', action: () => sendTo('inpaint', it) },
         { label: 'Détailler (Kane Detailer)', icon: 'sparkles', action: () => detailItem(key, it) },
         { label: 'Voir les zones (Kane Detailer)', icon: 'grid', action: () => detectItem(key, it) },
-        it.kdZones ? { label: 'Zones repeintes (Kane Detailer)', icon: 'eye', action: () => showZones(it) } : null,
+        it.kdZones ? { label: 'Zones repeintes (Kane Detailer)', icon: 'eye', action: () => showZones(it, key) } : null,
+        { label: 'Peindre une zone (Kane Detailer)…', icon: 'brush', action: () => kdPaintZone(key, it) },
         it.before ? { label: it.from === 'Kane Detailer' ? 'Avant / après' : 'Comparer à l’original', icon: 'compare', action: () => compareBefore(it) } : null,
         key === 't2i' && it.info ? { label: 'Refaire avec un autre modèle…', icon: 'compare', action: () => remakeWithModel(it) } : null].filter(Boolean) });
       const area = main.querySelector('.iv-viewport');
@@ -1967,7 +2090,7 @@
       hr_scheduler: st.hr_scheduler && st.hr_scheduler !== 'Use same scheduler' ? st.hr_scheduler : undefined,
       hr_prompt: await english(st.hr_prompt), hr_negative_prompt: await english(st.hr_negative_prompt),
     });
-    if (st.kd.enabled && st.kd.parts.length && cat && cat.kdInfo) p.alwayson_scripts['Kane Detailer'] = { args: [{ enabled: true, parts: st.kd.parts, forces: { ...st.kd.forces }, skip: k === 'i2i' && !!st.kd.skip, keep: +st.kd.keep, resolution: +st.kd.resolution, detail: +st.kd.detail || 0, upscale: +st.kd.upscale || 1, tries: +st.kd.tries || 1, repair: !!st.kd.repair, grain: +st.kd.grain || 0, glow: !!st.kd.glow, age: !!st.kd.age, autotag: st.kd.autotag !== false, soft: st.kd.soft !== false, wd: st.kd.wd !== false }] };
+    if (st.kd.enabled && st.kd.parts.length && cat && cat.kdInfo) p.alwayson_scripts['Kane Detailer'] = { args: [{ enabled: true, parts: st.kd.parts, forces: { ...st.kd.forces }, skip: k === 'i2i' && !!st.kd.skip, keep: +st.kd.keep, resolution: +st.kd.resolution, detail: +st.kd.detail || 0, upscale: +st.kd.upscale || 1, tries: +st.kd.tries || 1, repair: !!st.kd.repair, grain: +st.kd.grain || 0, glow: !!st.kd.glow, age: !!st.kd.age, autotag: st.kd.autotag !== false, soft: st.kd.soft !== false, wd: st.kd.wd !== false, small: st.kd.small !== false }] };
     if (st.noom.unet || st.noom.vae) p.alwayson_scripts['Never OOM Integrated'] = { args: [!!st.noom.unet, !!st.noom.vae] };
     if (k === 't2i' && st.enable_hr) Object.assign(p.alwayson_scripts, hrTilesScripts(st));
     if (k === 'i2i') {
