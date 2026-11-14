@@ -37,7 +37,8 @@ window.ksNative = {
   forgeCatalog: async () => ({ ok: true, models: [{ title: 'Studio-model', name: 'Studio-model' }, { title: 'Anima-2.9B.safetensors [abcdef1234]', name: 'Anima-2.9B' }],
     loras: [{ name: 'test', alias: 'Illustration', weight: 0.7, trigger: 'painted', negative: 'bad lines', rel: 'Art', mtime: 1 }],
     modules: [], current: { model: 'Studio-model', modules: [] },
-    dtype: 'Automatic', samplers: ['Euler'], schedulers: ['Automatic'], scripts: [], styles: [], presets: {}, upscalers: ['Lanczos'],
+    dtype: 'Automatic', samplers: ['Euler', 'KaneDraw'], schedulers: ['Automatic'], scripts: [], styles: [], presets: {}, upscalers: ['Lanczos'],
+    kdrawInfo: { version: '2.0', defaults: { spots: 0.8, masses: 0.85, guidance: 1, faces: true, seed2: -1, fusion: 0.5, sketch_strength: 1 } },
     kdInfo: { version: 5, build: '5.4', redo: true, parts: [{ key: 'mains', label: 'Mains', denoise: 0.34, model: 'hand_yolov9c.pt' }, { key: 'cheveux', label: 'Cheveux', denoise: 0.3, model: 'anzhc_headhair_seg_y8n.pt' }, { key: 'pieds', label: 'Pieds', denoise: 0.38, model: null },
       { key: 'visage', label: 'Visage', denoise: 0.35, model: 'anzhc_face_seg_640_v4_y11n.pt' }, { key: 'yeux', label: 'Yeux', denoise: 0.3, model: 'anzhc_eyes_seg_hd.pt' }],
       presets: { Portrait: ['cheveux', 'visage', 'yeux'], 'Corps entier': ['cheveux', 'visage', 'yeux'] }, force_help: '0,15–0,25 : retouche légère' } }),
@@ -692,6 +693,22 @@ async function scenario() {
   lensArea.dispatchEvent(new PointerEvent('pointermove', { clientX: mr.left + mr.width / 2, clientY: mr.top + mr.height / 2, bubbles: true }));
   assert(!!document.querySelector('.fx-view .fx-loupe') && document.querySelector('.fx-view .fx-loupe').hidden, 'La loupe existe et reste cachée quand l’image est déjà affichée à 100 %');
   assert(!document.querySelector('#studio').textContent.includes('ADetailer') && !Object.keys(KS.prefs.fx.t2i).includes('ad'), 'ADetailer a disparu du Studio');
+  {
+    // KaneDraw : son panneau n'apparaît qu'avec ce sampler, ses réglages partent dans alwayson_scripts
+    const t = KS.prefs.fx.t2i, sampler = t.sampler_name, drawer = KS.prefs.fx.drawer;
+    await KS.cmd.openStudioTab('txt2img');
+    assert(!document.querySelector('#studio').textContent.includes('Simplification des masses'), 'Le panneau KaneDraw est caché avec un autre sampler');
+    t.sampler_name = 'KaneDraw'; t.open.kdraw = true; t.open._sub = 'generation'; t.kdraw.spots = 0.5; t.kdraw.seed2 = 77; KS.prefs.fx.drawer = true;
+    await KS.cmd.openStudioTab('txt2img');
+    await wait(() => document.querySelector('#studio').textContent.includes('Simplification des masses'));
+    assert(document.querySelector('#studio').textContent.includes('Part de la seconde graine'), 'Le panneau KaneDraw s’ouvre avec ce sampler, seconde graine comprise');
+    const n = window.txtCalls.length;
+    await KS.cmd.studioGenerate();
+    await wait(() => window.txtCalls.length === n + 1);
+    const a = window.txtCalls.at(-1).alwayson_scripts.KaneDraw.args[0];
+    assert(a.spots === 0.5 && a.seed2 === 77 && a.masses === 0.85 && a.faces === true && a.sketch === null, 'Les réglages KaneDraw partent avec la génération : ' + JSON.stringify(a));
+    t.sampler_name = sampler; KS.prefs.fx.drawer = drawer;
+  }
   return results;
 }
 

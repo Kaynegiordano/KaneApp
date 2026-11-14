@@ -518,6 +518,8 @@ const catalogHandler = forgeHandler(async base => {
   try { if (flags && flags.data_dir) presets = JSON.parse(fs.readFileSync(path.join(flags.data_dir, 'style_presets.json'), 'utf8')); } catch { /* aucun */ }
   let kdInfo = null;   // Kane Detailer (extension du Forge du Studio) : parties et détecteurs présents
   try { kdInfo = await forgeCall(base, '/kane-detailer/v1/info', null, 8000); } catch { /* extension absente */ }
+  let kdrawInfo = null;   // KaneDraw : réglages du sampler expérimental (extension kane_draw)
+  try { kdrawInfo = await forgeCall(base, '/kane-draw/v1/info', null, 8000); } catch { /* extension absente */ }
   let kmdInfo = null;  // Kane MultiDiffusion : image vers image par tuiles (agrandir avec du détail)
   try { kmdInfo = await forgeCall(base, '/kane-multidiffusion/v1/info', null, 8000); } catch { /* extension absente */ }
   let upscalers = [];
@@ -554,7 +556,7 @@ const catalogHandler = forgeHandler(async base => {
     : { data: flags.data_dir || '', models: flags.model_ref || '', lora: flags.lora_dir || '' };
   if (dirs.data) { forgeDirs = dirs; try { fs.writeFileSync(path.join(app.getPath('userData'), 'forge-dirs.json'), JSON.stringify(dirs)); } catch { /* rien */ } }
   return {
-    kdInfo, kmdInfo, upscalers, dirs,
+    kdInfo, kdrawInfo, kmdInfo, upscalers, dirs,
     models: (models || []).map(m => ({ title: m.title, name: m.model_name, file: m.filename, preview: thumb(m.filename) })),
     styles: (styles || []).map(x => ({ name: x.name, prompt: x.prompt || '', negative: x.negative_prompt || '' })),
     scripts, latent: (latent || []).map(x => x.name).filter(Boolean), defaults,

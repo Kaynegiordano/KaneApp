@@ -34,7 +34,9 @@
       hr_distilled_cfg: 3, hr_cfg: 4, hr_checkpoint_name: 'Use same checkpoint', hr_additional_modules: ['Use same choices'], hr_sampler_name: 'Use same sampler', hr_scheduler: 'Use same scheduler',
       hr_prompt: '', hr_negative_prompt: '',
       // seconde passe du hires fix par tuiles (Kane MultiDiffusion) : au-delà de la résolution du modèle, sans doublons
-      hrTiles: { enabled: false, prompts: true, structure: 0.3, detail: 0.2, colors: 0.6 } },
+      hrTiles: { enabled: false, prompts: true, structure: 0.3, detail: 0.2, colors: 0.6 },
+      // sampler KaneDraw (extension kane_draw du moteur) : ébauche, masses, guidage, visages, seconde graine, poids du croquis
+      kdraw: { spots: 0.8, masses: 0.85, guidance: 1, faces: true, seed2: -1, fusion: 0.5, sketch_strength: 1 } },
     i2i: { ...COMMON(), steps: 32, resize_mode: 1, sizeTab: 'to', scale_by: 1, autoSize: true, denoising_strength: 0.6, mask_blur: 4, inpainting_mask_invert: 0, inpainting_fill: 1,
       inpaint_full_res: 1, inpaint_full_res_padding: 32,
       soft: { enabled: false, bias: 1, preserve: 0.5, contrast: 4, influence: 0, diffThr: 0.5, diffContrast: 2 },
@@ -1011,6 +1013,39 @@
     }
     return out;
   }
+  // KaneDraw : réglages du sampler expérimental, montrés quand il est choisi (txt2img seulement : en img2img il fait SEEDS 3)
+  let kdrawSketch = null;   // { name, b64 } : le croquis n'est pas gardé dans les préférences (trop lourd), seulement pendant la séance
+  const toB64 = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); };
+  function kdrawAcc(st) {
+    if (st.sampler_name !== 'KaneDraw' || !(cat && cat.kdrawInfo)) return null;
+    const s = st.kdraw;
+    return acc('KaneDraw', st, 'kdraw', () => {
+      const seed = h('input.fx-in', { type: 'number', min: -1, step: 1, value: s.seed2, title: 'Graine de la matière (-1 = une seule graine)' });
+      seed.addEventListener('change', () => { s.seed2 = Math.max(-1, Math.round(+seed.value) || -1); save(); renderParams(); });
+      const setSketch = (name, bytes) => { kdrawSketch = { name, b64: toB64(bytes) }; renderParams(); };
+      const pickSketch = async () => {
+        const files = await N.openDialog({ title: 'Croquis (grandes masses de clair et d’obscur)', multi: false, filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp'] }] });
+        if (files && files[0] && files[0].data) setSketch(files[0].name, files[0].data);
+      };
+      const fromDoc = async () => { const d = D(); if (!d) return KS.toast('Aucun document ouvert', 'info'); setSketch(d.name, await pngBytes(d.composite())); };
+      return [
+        slider('Ébauche', s, 'spots', 0, 2, 0.05, 'Les grandes masses de la graine sont renforcées et gardées pendant la composition : masses et lumière plus franches. 0 = composition de SEEDS 3'),
+        slider('Simplification des masses', s, 'masses', 0, 1, 0.05, 'À mi-parcours l’image est simplifiée en grandes masses puis repeinte : formes gardées, détail réinventé. 0 = non'),
+        slider('Guidage qui se relâche', s, 'guidance', 0, 1, 0.05, 'CFG plus fort au début (composition franche), plus faible à la fin (touche plus libre), jamais sous 1. 0 = CFG constant'),
+        check('Épargner les visages', s, 'faces', 'Les visages ne sont pas simplifiés par les masses (détecteurs de Kane Detailer)'),
+        field('Seconde graine (matière)', h('div.fx-seedrow', seed,
+          ebtn('🎲', 'Graine au hasard', () => { s.seed2 = Math.floor(Math.random() * 4294967295); save(); renderParams(); }),
+          lastSeed.t2i != null ? ebtn('↺', 'Graine de la dernière image', () => { s.seed2 = lastSeed.t2i; save(); renderParams(); }) : null,
+          s.seed2 >= 0 ? ebtn('✕', 'Une seule graine', () => { s.seed2 = -1; save(); renderParams(); }) : null),
+          'La composition vient de la graine de l’image, la matière (touche, textures, détails) de celle-ci'),
+        s.seed2 >= 0 ? slider('Part de la seconde graine', s, 'fusion', 0, 1, 0.05, 'Part de la matière qui vient de la seconde graine') : null,
+        field('Croquis', h('div.fx-outbtns', h('span.fx-info', { text: kdrawSketch ? kdrawSketch.name : 'Aucun : l’ébauche vient de la graine' }),
+          tbtn('Choisir…', pickSketch), tbtn('Document ouvert', fromDoc), kdrawSketch ? tbtn('Retirer', () => { kdrawSketch = null; renderParams(); }) : null),
+          'Les grandes masses du croquis remplacent celles de la graine (le croquis n’est pas gardé après la fermeture de KaneApp)'),
+        kdrawSketch ? slider('Poids du croquis', s, 'sketch_strength', 0, 3, 0.05, 'À 1, le croquis guide nettement la composition ; au-delà, il s’impose') : null,
+      ].filter(Boolean);
+    }, { tip: 'Sampler expérimental de peintre ; ses réglages sont écrits dans les paramètres de l’image', active: true });
+  }
   const kdForce = (st, part) => st.kd.forces[part.key] != null ? +st.kd.forces[part.key] : part.denoise;
   function kdAcc(st, k) {
     return acc('Kane Detailer', st, 'kd', () => {
@@ -1132,7 +1167,7 @@
       sect('Échantillonnage', samplingRow(st),
         row2(slider('CFG', st, 'cfg_scale', 1, 24, 0.5, 'CFG Scale'), slider('Shift', st, 'distilled_cfg_scale', 1, 24, 0.5, 'Shift des modèles à flux (anima) : Distilled CFG Scale de l\'API')), presetRow(st)),
       sect('Graine', seedRows(st, 't2i')),
-      kdAcc(st, 't2i'), hires, advAcc(st, 't2i'));
+      kdrawAcc(st), kdAcc(st, 't2i'), hires, advAcc(st, 't2i'));
   }
   const INPAINT_MODES = ['inpaint', 'inpaint_sketch', 'inpaint_upload'];
   // Taille de génération la plus fidèle aux proportions de la source (multiples de 8, côté long <= 2048) :
@@ -1550,6 +1585,14 @@
     if (P['Variation seed']) { st.seedExtra = true; st.subseed_strength = +(P['Variation seed strength'] || 0); }
     if (size && P.Size) { const [w, hh] = P.Size.split('x').map(Number); if (w && hh) { st.width = w; st.height = hh; if ('autoSize' in st) st.autoSize = false; } }
     if (k === 't2i') {
+      // KaneDraw : « spots=0.8 masses=0.85 guidance=1 faces=1 seed2=… fusion=… sketch=… » (le croquis lui-même n'y est pas)
+      if (P.KaneDraw && st.kdraw) {
+        const kv = Object.fromEntries(String(P.KaneDraw).split(/\s+/).map(x => x.split('=')).filter(x => x.length === 2));
+        for (const key of ['spots', 'masses', 'guidance', 'fusion', 'seed2']) if (kv[key] != null && isFinite(+kv[key])) st.kdraw[key] = +kv[key];
+        if (kv.sketch != null && isFinite(+kv.sketch)) st.kdraw.sketch_strength = +kv.sketch;
+        if (kv.faces != null) st.kdraw.faces = kv.faces === '1';
+        if (kv.seed2 == null) st.kdraw.seed2 = -1;
+      }
       if (P['Hires upscale']) { st.enable_hr = true; st.hr_scale = +P['Hires upscale']; if (P['Denoising strength']) st.denoising_strength = +P['Denoising strength']; }
       if (P['Hires upscaler']) st.hr_upscaler = P['Hires upscaler'];
       if (P['Hires steps']) st.hr_second_pass_steps = +P['Hires steps'];
@@ -2091,6 +2134,11 @@
       hr_prompt: await english(st.hr_prompt), hr_negative_prompt: await english(st.hr_negative_prompt),
     });
     if (st.kd.enabled && st.kd.parts.length && cat && cat.kdInfo) p.alwayson_scripts['Kane Detailer'] = { args: [{ enabled: true, parts: st.kd.parts, forces: { ...st.kd.forces }, skip: k === 'i2i' && !!st.kd.skip, keep: +st.kd.keep, resolution: +st.kd.resolution, detail: +st.kd.detail || 0, upscale: +st.kd.upscale || 1, tries: +st.kd.tries || 1, repair: !!st.kd.repair, grain: +st.kd.grain || 0, glow: !!st.kd.glow, age: !!st.kd.age, autotag: st.kd.autotag !== false, soft: st.kd.soft !== false, wd: st.kd.wd !== false, small: st.kd.small !== false }] };
+    if (k === 't2i' && st.sampler_name === 'KaneDraw' && cat && cat.kdrawInfo) {
+      const s = st.kdraw;
+      p.alwayson_scripts.KaneDraw = { args: [{ spots: +s.spots, masses: +s.masses, guidance: +s.guidance, faces: !!s.faces, seed2: +s.seed2, fusion: +s.fusion,
+        sketch: kdrawSketch ? kdrawSketch.b64 : null, sketch_strength: +s.sketch_strength }] };
+    }
     if (st.noom.unet || st.noom.vae) p.alwayson_scripts['Never OOM Integrated'] = { args: [!!st.noom.unet, !!st.noom.vae] };
     if (k === 't2i' && st.enable_hr) Object.assign(p.alwayson_scripts, hrTilesScripts(st));
     if (k === 'i2i') {

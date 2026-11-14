@@ -1,3 +1,18 @@
+# 1.44.0 — KaneDraw 2 : ses réglages dans le Studio
+
+Choisissez l'échantillonneur **KaneDraw** : un panneau KaneDraw apparaît dans les réglages de txt2img.
+
+- **Ébauche** : renforce les grandes masses de la graine et les garde pendant la composition (masses et lumière plus franches). À 0, la composition est celle de SEEDS 3.
+- **Simplification des masses** : à mi-parcours, l'image est simplifiée puis repeinte. Les formes restent, le détail est réinventé.
+- **Guidage qui se relâche** : CFG plus fort au début, plus faible à la fin, jamais sous 1.
+- **Épargner les visages** : la simplification ne touche pas les visages (détecteurs de Kane Detailer).
+- **Seconde graine** : la composition vient de la graine de l'image, la matière (touche, textures) d'une seconde graine. Boutons : au hasard, ou graine de la dernière image.
+- **Croquis** : une image ou le document ouvert dans Retouche donne ses grandes masses de clair et d'obscur à la composition.
+
+Les réglages sont écrits dans les paramètres de l'image et repris par PNG Info (le croquis lui-même n'y est pas). En img2img, KaneDraw reste exactement SEEDS 3.
+
+Nécessite le moteur du Studio à jour (KaneDraw 2, fork perso-anima) : redémarrez le moteur après sa mise à jour.
+
 # 1.43.1 — Kane Detailer : refaire une zone, peindre une zone, juge des mains
 
 - **Zones repeintes** montre maintenant le compte rendu de chaque zone : repeinte ou gardée telle quelle, force, essai retenu, temps et ce qui y a été vu.
