@@ -197,6 +197,10 @@
     }
     drawer.hidden = true; KS.toast('Image placée dans l’entrée du workflow.', 'ok');
   };
+  S.toAnimer = async it => {
+    const f = await N.readFile(it.path); if (f.error) throw new Error(f.error);
+    KS.ws.go('animer'); drawer.hidden = true; await KS.animer.openBytes(f.data, it.name);
+  };
   S.loadWorkflow = async () => {
     const files = await N.openDialog({ filters: [{ name: 'Workflow ComfyUI', extensions: ['json'] }], multi: false }); if (!files.length) return;
     const workflow = JSON.parse(new TextDecoder().decode(files[0].data));
@@ -273,6 +277,7 @@
       h('div.suite-detail-sep'),
       action('Transformer dans le Studio', () => S.toStudio(it, 'img2img'), '.small', !image),
       action('Retoucher une zone', () => S.toStudio(it, 'inpaint'), '.small', !image),
+      action('Animer pour Wallpaper Engine', () => S.toAnimer(it), '.small', !image),
       action('Faire une vidéo IA', () => S.toComfy(it), '.small', !image),
       action('Afficher le fichier', () => N.showInFolder(it.path), '.small'));
     if (it.parent) { const parent = S.project.items.find(x => x.id === it.parent); if (parent) el.append(action('Voir la version précédente', () => { S.selected = parent.id; render(); }, '.small')); }
@@ -288,8 +293,9 @@
       h('div.suite-pipeline',
         pipeline('01', 'Créer', 'Imaginez dans le Studio IA.', 'sparkles', () => C.openStudioTab('txt2img')),
         pipeline('02', 'Retoucher', 'Composez et retouchez vos images.', 'image', () => C.toggleStudio(false)),
-        pipeline('03', 'Vidéo IA', 'Donnez vie à une image avec un workflow ComfyUI.', 'camera', () => KS.ws.go('comfyui')),
-        pipeline('04', 'Monter', 'Assemblez les séquences et le son.', 'layers', () => S.openVideo())),
+        pipeline('03', 'Animer', 'Faites bouger une image dans Wallpaper Engine.', 'sparkles', () => KS.ws.go('animer')),
+        pipeline('04', 'Vidéo IA', 'Donnez vie à une image avec un workflow ComfyUI.', 'camera', () => KS.ws.go('comfyui')),
+        pipeline('05', 'Monter', 'Assemblez les séquences et le son.', 'layers', () => S.openVideo())),
       list = h('section.suite-library'),
       h('footer.suite-home-footer', h('span', { text: 'Les médias importés et leurs versions sont copiés dans ce projet. Les générations du Studio y sont archivées.' }))));
     if (KS.prefs.showLibrary === true) renderLibrary(list); // masquée par défaut : rien à préparer

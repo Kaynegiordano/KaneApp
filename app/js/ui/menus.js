@@ -249,6 +249,7 @@
         ] },
         { sep: true, hidden: !KS.ws },
         { head: 'Autres espaces', hidden: !KS.ws },
+        { label: 'Animer l’illustration pour Wallpaper Engine', icon: 'sparkles', action: () => KS.suite.run('Animer l’illustration', () => C.toAnimer()).catch(() => {}), disabled: noDoc, hidden: !KS.ws || !C.toAnimer },
         { label: 'Faire une vidéo IA avec l’illustration…', icon: 'camera', action: () => KS.suite.run('Préparation du workflow', () => C.toComfy()).catch(() => {}), disabled: noDoc, hidden: !KS.ws },
         { label: 'Ajouter l’illustration au montage', icon: 'play', action: () => KS.suite.run('Ajout au montage', () => C.toVideo()).catch(() => {}), disabled: noDoc, hidden: !KS.ws },
         { label: () => KS.engine && KS.engine.ready() ? 'Arrêter le moteur IA' : 'Démarrer le moteur IA', icon: 'settings', action: () => KS.engine && (KS.engine.ready() ? KS.engine.stop() : KS.engine.ensure()), hidden: !KS.engine },

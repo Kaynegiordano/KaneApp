@@ -19,7 +19,7 @@ body.suite-home #suite-home { display:flex; flex:1; min-width:0; min-height:0; }
 .suite-hero h1 { font-size:32px; font-weight:600; letter-spacing:-.03em; margin:8px 0; line-height:1.2; overflow-wrap:anywhere; }
 .suite-hero p { color:var(--text-2); font-size:14px; margin:0; }
 .suite-project-actions { display:flex; gap:8px; flex-shrink:0; }
-.suite-pipeline { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; max-width:1500px; margin:0 auto 28px; }
+.suite-pipeline { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; max-width:1500px; margin:0 auto 28px; }
 .suite-step { display:flex; flex-direction:column; gap:7px; min-width:0; text-align:left; padding:18px 20px; background:var(--panel); border:1px solid var(--border); border-radius:12px; color:var(--text); transition:background .15s,border-color .15s; }
 .suite-step:hover { background:var(--panel-2); border-color:var(--accent); }
 .suite-step-top { display:flex; align-items:center; justify-content:space-between; color:var(--muted); font:11px var(--mono); margin-bottom:4px; }

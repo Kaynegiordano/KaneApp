@@ -72,6 +72,7 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     kcHost.setup(() => win, { output: () => outputPaths.directory('montage') });
     require('./suite-host.cjs')(() => win);
+    require('./animer-host.cjs')({ getWin: () => win, directory: id => outputPaths.directory(id) });
     services = require('./services.cjs')({
       getWin: () => win,
       root: () => engineDirs().root,

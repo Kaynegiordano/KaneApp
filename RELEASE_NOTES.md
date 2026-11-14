@@ -1,3 +1,13 @@
+# 1.38.0 — Animer : vos images bougent dans Wallpaper Engine
+
+- Nouvel espace **Animer**. Ouvrez une image (fichier, document de Retouche, média du projet, ou glissez-la), ajoutez un mouvement et **peignez où il agit** : l'aperçu bouge tout de suite, sans bouton « Animer » ni attente.
+- Cinq mouvements, ceux de Wallpaper Engine : **Respiration** (glissez le pinceau dans le sens du mouvement), **Cheveux et tissus** (vagues dans le sens des mèches), **Lueur** (yeux, bijoux, magie, à la couleur choisie), **Regard** (les yeux regardent ailleurs puis reviennent), **Clignement**.
+- **Ambiances** à placer sur l'image : braises, feuilles au vent, pétales de sakura, brume, poussière dans la lumière, rayons, neige, éclats magiques. Et un **halo lumineux** autour des zones claires.
+- L'aperçu utilise les mêmes formules que Wallpaper Engine : ce que vous voyez est ce que le fond d'écran jouera.
+- **Tester dans Wallpaper Engine** ouvre la vraie scène dans une fenêtre, sans toucher au fond d'écran. **Envoyer** l'ajoute à vos fonds ; **Envoyer et appliquer** la pose sur le bureau. Dans l'éditeur de Wallpaper Engine, tout reste modifiable, et chaque mouvement ou ambiance a sa case dans les réglages du fond.
+- Vos animations sont enregistrées toutes seules dans `output\animer` et se rouvrent depuis « Mes animations ».
+- Il faut Wallpaper Engine (Steam) pour les ambiances et l'envoi.
+
 # 1.37.0 — Animation retirée, place à Vidéo IA
 
 - L'atelier **Animation** (fonds animés pour Wallpaper Engine) est retiré de KaneApp : onglet, menus, découpe en calques et moteur.

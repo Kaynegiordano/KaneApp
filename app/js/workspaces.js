@@ -1,9 +1,12 @@
-// Espaces intégrés de la suite (Vidéo IA, Montage). Le projet, les médias et les tâches sont portés par KaneApp.
+// Espaces intégrés de la suite (Animer, Vidéo IA, Montage). Le projet, les médias et les tâches sont portés par KaneApp.
 'use strict';
 (() => {
   const h = KS.h, ui = KS.ui, C = KS.cmd, N = KS.native;
   if (!N?.svcStatus) return;
   const WS = {
+    // Animer vit dans la page (animer.js) : pas de serveur ni de cadre
+    animer: { label: 'Animer', engine: 'Wallpaper Engine', icon: 'sparkles', svc: false, internal: true,
+      help: 'Peignez ce qui bouge sur une image, ajoutez une ambiance et envoyez la scène dans Wallpaper Engine.' },
     comfyui: { label: 'Vidéo IA', engine: 'ComfyUI', icon: 'camera', svc: true,
       help: 'Faites une vidéo par IA à partir d’une image du projet : chargez un workflow, puis lancez-le dans ComfyUI.' },
     video: { label: 'Montage', engine: 'KaneClip', icon: 'play', svc: false,
@@ -34,7 +37,7 @@
   function renderBar(id) {
     const E = WX.el[id]; if (!E) return;
     const W = WS[id], s = WX.st[id];
-    if (id === 'video') { E.bar.style.display = 'none'; return; }
+    if (id === 'video' || W.internal) { E.bar.style.display = 'none'; return; }
     const btn = (label, fn, disabled = false) => { const b = ui.btn(label, () => KS.suite?.run(label, fn).catch(() => {}), '.small'); b.disabled = disabled; return b; };
     const subtitle = id === 'video' ? KS.suite?.project?.name || W.engine : E.title || W.engine;
     const controls = [h('div.wx-identity', h('b', { text: W.label }), h('span', { text: subtitle, title: subtitle }))];
@@ -58,6 +61,7 @@
   }
   async function renderFrame(id) {
     const E = WX.el[id], W = WS[id], s = WX.st[id]; if (!E) return;
+    if (W.internal) { if (!E.mounted) { E.mounted = true; KS.animer?.mount(E.frameBox); } return; }
     if (W.svc && !up(s)) {
       if (E.frame) { E.frame.remove(); E.frame = null; E.ready = false; }
       E.frameBox.replaceChildren(h('div.wx-empty', h('div.wx-icon', { html: KS.icon(W.icon) }), h('b', { text: W.label }),
@@ -106,7 +110,7 @@
     });
   };
   WX.theme = id => {
-    const E = WX.el[id]; if (!E?.ready || !KS.suite) return;
+    const E = WX.el[id]; if (!E?.ready || !KS.suite || WS[id]?.internal) return;      // Animer suit déjà le thème de la page
     WX.request(id, 'theme', KS.suite.theme(id)).catch(() => {});
   };
   function go(id) {
@@ -115,9 +119,11 @@
       WX.request('video', 'pause').catch(() => {});
     }
     if (id && KS.studio.on) C.toggleStudio(false);
+    if (WX.cur === 'animer' && id !== 'animer') KS.animer?.show(false);
     KS.suite?.hideHome(); WX.cur = id;
     document.body.classList.toggle('ws-ext', !!id);
     if (id) { build(id); renderFrame(id); for (const [key, E] of Object.entries(WX.el)) E.sec.hidden = key !== id; refresh(id).catch(e => KS.toast(e.message, 'err')); }
+    if (id === 'animer') KS.animer?.show(true);
     KS.prefs.workspace = id || ''; KS.prefs.save(); sync();
     window.dispatchEvent(new Event('resize'));
   }
@@ -137,6 +143,11 @@
       await KS.suite.home(); return;
     }
     const E = WX.el[id];
+    if (id === 'animer') {
+      await KS.animer?.close();
+      if (WX.cur === id) await KS.suite.home();
+      sync(); return;
+    }
     if (id === 'video') {
       if (E?.ready) await WX.request(id, 'stop');
       await N.kcStop();
@@ -161,18 +172,20 @@
     document.querySelectorAll('.ws-btn[data-v]').forEach(b => {
       const id = b.dataset.v;
       b.classList.toggle('on', id === cur); b.setAttribute('aria-current', id === cur ? 'page' : 'false');
-      b.dataset.running = String(id === 'studio' ? KS.engine?.ready() : id === 'video' ? !!WX.el.video?.frame : !!WX.st[id] && up(WX.st[id]));
+      b.dataset.running = String(id === 'studio' ? KS.engine?.ready() : id === 'video' ? !!WX.el.video?.frame : id === 'animer' ? !!KS.animer?.project : !!WX.st[id] && up(WX.st[id]));
     });
     for (const id in WX.el) renderBar(id);
   }
   WX.sync = sync;
   const toggle0 = C.toggleStudio;
   C.toggleStudio = async on => {
+    if (WX.cur === 'animer') KS.animer?.show(false);
     KS.suite?.hideHome(); WX.cur = null; document.body.classList.remove('ws-ext'); KS.prefs.workspace = '';
     const r = await toggle0(on); sync(); return r;
   };
   C.toComfy = async () => { const it = await KS.suite.capture(); if (it) await KS.suite.toComfy(it); };
   C.toVideo = async () => { const it = await KS.suite.capture(); if (it) await KS.suite.toVideo(it); };
+  C.toAnimer = async () => { if (!KS.state.doc) throw new Error('Ouvrez une illustration dans Retouche'); go('animer'); await KS.animer.openDocument(); };
   KS.on('studio', sync); KS.on('doc', sync); KS.on('suite-project', sync); KS.on('engine', sync);
   KS.on('ui-ready', () => setTimeout(() => {
     host = h('section#ws-ext'); KS.$('#main').append(host);
@@ -206,6 +219,11 @@
   KS.beforeClose = async () => {
     try { if ((await N.runtimeMigrationState?.())?.running) { KS.toast('La migration continue. Attendez sa fin avant de quitter KaneApp.', 'info', 5000); return false; } } catch { /* version sans migration */ }
     if (WX.el.video?.ready) { try { await WX.request('video', 'save'); } catch (e) { KS.toast(e.message, 'err'); return false; } }
+    if (KS.animer?.project) {
+      try { await KS.animer.flush(); } catch (e) {
+        if (!(await KS.confirm(e.message + '. Quitter quand même ? Les derniers coups de pinceau d’Animer seront perdus.', { title: 'Animer', ok: 'Quitter sans enregistrer', danger: true }))) return false;
+      }
+    }
     // Le dialogue natif de KaneClip reste disponible pour un montage non rattaché au projet.
     const V = WX.el.video;
     if (!V?.frame) return true;

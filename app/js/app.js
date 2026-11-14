@@ -223,6 +223,11 @@
     document.addEventListener('visibilitychange', resetDrop);
     window.addEventListener('drop', async e => {
       e.preventDefault(); resetDrop();
+      if (KS.ws?.cur === 'animer') {
+        const file = [...e.dataTransfer.files].find(f => f.type.startsWith('image/') || /\.(png|jpe?g|webp|bmp)$/i.test(f.name));
+        if (file) await KS.suite.run('Ouverture de l’image dans Animer', async () => KS.animer.openBytes(new Uint8Array(await file.arrayBuffer()), file.name)).catch(() => {});
+        return;
+      }
       if (KS.studio?.on) return;
       const files = [...e.dataTransfer.files];
       const d = KS.state.doc;

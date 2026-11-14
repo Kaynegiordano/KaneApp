@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 module.exports = root => {
   const directory = id => {
-    if (!['studio', 'comfyui', 'montage', 'lora', 'edition', 'merge'].includes(id)) throw new Error('Sortie inconnue');
+    if (!['studio', 'comfyui', 'montage', 'lora', 'edition', 'merge', 'animer'].includes(id)) throw new Error('Sortie inconnue');
     const dir = path.join(root(), 'output', id); fs.mkdirSync(dir, { recursive: true }); return dir;
   };
   const studioOptions = () => Object.fromEntries(Object.entries({

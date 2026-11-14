@@ -20,6 +20,45 @@ et les trois copies ICO utilisées par la fenêtre, les raccourcis et l'installa
 dix tailles de 16 à 256 pixels ; le symbole reste transparent et indépendant du thème de l'interface.
 
 ## Outils récents
+### Animer : fonds animés pour Wallpaper Engine (1.38.0)
+
+Nouvel espace **Animer** (Projet · Retouche · Studio IA · **Animer** · Vidéo IA · Montage), repensé après le retrait
+d'Animation : on peint ce qui bouge, comme dans l'éditeur de Wallpaper Engine, et l'aperçu bouge tout de suite. Pas de
+serveur Python, de modèle d'IA, de squelette ni de découpe : tout tourne dans la page (`app/js/animer.js`,
+`app/js/animer-gl.js`, `app/css/animer.css`) ; le processus principal n'écrit que les fichiers (`animer-host.cjs`,
+`wallpaper-engine.cjs`).
+
+- **Mouvements** = effets fournis avec Wallpaper Engine, peints au pinceau : *Respiration* (`shake` : on glisse dans le
+  sens du mouvement, la direction est écrite dans la carte de direction), *Cheveux et tissus* (`waterwaves`), *Lueur*
+  (`pulse`, mode addition, couleur au choix), *Regard* (`iris`), *Clignement* (`shake` en direction gauche, bornes
+  0,993–0,998 : la paupière descend brièvement sur l'œil peint ; le masque gris devient une carte vers le haut à l'envoi).
+  Réglages en unités parlantes (secondes, pixels, degrés) convertis vers les constantes des shaders.
+- **Aperçu fidèle** : les shaders de l'aperçu sont ceux de Wallpaper Engine recopiés (`shake.frag`, `waterwaves.frag`,
+  `pulse.frag`, `iris.vert`), coordonnées de texture en haut à gauche comme dans Wallpaper Engine. Vérifié en figeant
+  les vitesses à 0 : aperçu et fenêtre de rendu de Wallpaper Engine diffèrent de 0,3 sur 255 en moyenne (les mouvements
+  déplacent 12 à 19 niveaux dans leurs zones).
+- **Ambiances** : préréglages de Wallpaper Engine (braises, feuilles, sakura, brume, poussière, rayons, neige, éclats
+  magiques), placés par une poignée, réglés par `instanceoverride` (quantité, nombre, vitesse, taille, opacité, durée,
+  couleur) et une échelle d'objet (hauteur de l'image / 1080 par défaut). L'aperçu simule leurs fichiers (émetteurs,
+  initialiseurs, opérateurs, planches d'images lues dans les `.tex`). Calé sur des captures de Wallpaper Engine : un
+  sprite y fait la moitié de sa taille nominale ; le drapeau 4 met le système en perspective (champ de 50°) ; les
+  angles sont inversés (HLSL) ; la simulation se fait dans le repère de l'objet, l'échelle s'applique au dessin (vitesses
+  comprises). L'aperçu des ambiances reste une imitation ; *Tester* montre le rendu exact.
+- **Halo lumineux** : passe de bloom de Wallpaper Engine (seuil au quart, flou à 13 points, addition), réglages force et seuil.
+- **Envoyer vers Wallpaper Engine** : `projects/myprojects/<titre>` avec `scene.json`, `project.json`, aperçu, image et
+  masques compilés en `.tex` par `resourcecompiler64` (toujours dans un dossier `materials`), effets et préréglages
+  copiés comme le fait l'éditeur. Chaque mouvement, ambiance et le halo ont une case dans les réglages du fond. Un
+  dossier retouché dans l'éditeur depuis le dernier envoi n'est jamais écrasé (`kaneapp-animer.json`, la nouvelle
+  version va dans `<titre>_2`) ; l'identifiant Workshop est gardé. *Tester* ouvre une fenêtre de rendu
+  (`-playInWindow`) sans changer le fond ; *Envoyer et appliquer* le pose sur le bureau.
+- **Projets** : `output/animer/<titre>-<id>/` (`animer.json`, `image.png`, `masks/*.png`, `thumb.jpg`), enregistrés
+  1,2 s après chaque changement et à la fermeture. Ouverture depuis un fichier, le document de Retouche, la bibliothèque
+  (« Animer pour Wallpaper Engine »), le menu IA ou un glisser-déposer.
+- Raccourcis : molette zoom, Espace ou clic droit + glisser pour déplacer, Maj + molette ou [ ] taille du pinceau,
+  B pinceau, E gomme, M voir la zone, P lecture, 0 ajuster, Ctrl+Z annuler.
+- Test : `node_modules/electron/dist/electron.exe tools/test-animer.cjs` (vraie fenêtre WebGL, 23 vérifications ; avec
+  Wallpaper Engine, l'envoi et la compilation des textures sont vérifiés dans un dossier temporaire).
+
 ### Animation retirée, Vidéo IA (1.37.0)
 
 - L'atelier **Animation** (fonds animés Wallpaper Engine) est retiré entièrement : espace, pont, réservation du GPU,
@@ -649,5 +688,6 @@ Maintenir Alt + bouton droit dans la zone de travail : glisser horizontalement p
 - **1.34.0** : l’atelier d’entraînement Lora et le Merge partent dans **Lora Studio** (`C:\KaneOS\LoraStudio`, avec `lora_bridge.py` et `merge_bridge.py`). KaneApp garde `lora-training-running` (lit les `run.json` : pid vivant, pas fini) pour faire attendre ses générations, `open-lora-studio` (menu Studio) et `--kane-prompt=` (« Essayer » de Lora Studio → invite de Créer).
 - **1.34.1** : `suite-bridges.cjs` `flushAnimation` : si `enregistre()` échoue et que le projet n’est plus dans `/api/projets`, il est refermé (`P = null`) au lieu de bloquer ; `KS.beforeClose` propose « Quitter sans enregistrer » sur un vrai échec. Test : `tools/test-animation-flush.cjs`.
 - **1.36.0** : Animation 4.0, découpe dans Retouche sans SAM. `app/js/animcut.js` : IA › *Découper en calques pour l’animation* (silhouette `KS.ai.segment` BiRefNet → IPC `animation-cut` → `POST /api/decoupe-calques` d’Animation : pose, GrabCut, LaMa) ; groupes Décor / Personnage, un masque de fusion par pièce. `C.toWallpaper` envoie un document à groupe « Personnage » en PSD (`S.animate(it, psd)`, toujours une nouvelle animation). Bouton ✂ de l’atelier : `window.kaneDecoupeRetouche` → `C.cutAnimationProject` (`animation-scene`, `animation-write-document` : `calques.psd` du projet, l’ancien en « calques (précédent).psd », ouvert dans Retouche). `WX.ensure(id, { quiet })` démarre un moteur sans changer d’espace. Test : `tools/test-animation-decoupe.cjs` (vraie fenêtre, vrai BiRefNet, vrai moteur Animation ; `KANEVAS_TEST_IMAGE`).
+- **1.38.0** : espace **Animer** (`animer.js`, `animer-gl.js`, `animer-host.cjs`, `wallpaper-engine.cjs`) : effets natifs de Wallpaper Engine peints au pinceau, aperçu WebGL aux formules de Wallpaper Engine, ambiances (préréglages) et halo, envoi d'une scène compilée dans `projects/myprojects`, fenêtre de test. Sorties `output/animer`. Test : `tools/test-animer.cjs`.
 - **1.37.0** : Animation retirée (fichiers `animation-*`, `animcut.js`, tests `test-animation-*` ; `services.cjs` sans service `wallpaper` ni relais 8601 ; `managed-runtimes` et `runtime-migrate` à trois moteurs). ComfyUI devient l'espace **Vidéo IA**.
 - **1.31.1** : Animation 2.5.2 — `animation-web/moteur.html` reconstruit depuis le moteur d'Animation (interactions souris reportées) : personnage-marionnette `ANIM.personnage` (os, couches, ressorts, peau de 4 os, yeux portés par l'os de la tête) à la place des calques marqués `dans_personnage` ; vagues et herbe, qui manquaient à cette copie. Test WebGL réel : `tools/test-animation-personnage.cjs`.

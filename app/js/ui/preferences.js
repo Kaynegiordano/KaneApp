@@ -2,7 +2,7 @@
 'use strict';
 (() => {
   const h = KS.h, ui = KS.ui, P = KS.prefs, C = KS.cmd, V = KS.view, N = KS.native;
-  const SPACES = [['studio', 'Studio IA'], ['comfyui', 'Vidéo IA'], ['video', 'Montage']];
+  const SPACES = [['studio', 'Studio IA'], ['animer', 'Animer'], ['comfyui', 'Vidéo IA'], ['video', 'Montage']];
 
   /* ---------------------------------------------------------------- mise en page */
   // Un réglage « show… » à false ajoute la classe pf-hide-… sur <body> ; le CSS fait le reste.

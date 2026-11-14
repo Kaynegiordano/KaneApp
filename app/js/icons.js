@@ -145,6 +145,7 @@
     rasterize: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18" opacity=".5"/>',
     brushes: '<circle cx="7" cy="7" r="3"/><circle cx="17" cy="7" r="3" fill="currentColor" opacity=".5"/><circle cx="7" cy="17" r="3" fill="currentColor"/><circle cx="17" cy="17" r="3" stroke-dasharray="1.5 1.5"/>',
     play: '<path d="M7 4l13 8-13 8z"/>',
+    pause: '<rect x="6" y="4.5" width="4" height="15" rx="1"/><rect x="14" y="4.5" width="4" height="15" rx="1"/>',
     dot: '<circle cx="12" cy="12" r="3" fill="currentColor"/>',
     shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
     star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',

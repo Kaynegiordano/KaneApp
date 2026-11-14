@@ -1,8 +1,8 @@
 {
   "name": "kaneapp",
   "productName": "KaneApp",
-  "version": "1.37.0",
-  "description": "KaneApp — éditeur d'images, Studio IA, Vidéo IA et Montage",
+  "version": "1.38.0",
+  "description": "KaneApp — éditeur d'images, Studio IA, Animer, Vidéo IA et Montage",
   "main": "main.js",
   "private": true,
   "scripts": {
@@ -51,6 +51,8 @@
       "runtime-migration-host.cjs",
       "runtime-migrate.py",
       "suite-store.cjs",
+      "animer-host.cjs",
+      "wallpaper-engine.cjs",
       "suite-host.cjs",
       "suite-bridges.cjs",
       "kaneclip-host.cjs",

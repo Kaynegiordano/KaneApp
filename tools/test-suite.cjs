@@ -51,7 +51,7 @@ async function scenario() {
   const gpuVisible = () => { const r = document.querySelector('#gpu-status').getBoundingClientRect(); return r.height >= 20 && r.bottom <= innerHeight && r.width <= innerWidth; };
   check(gpuVisible() && document.querySelector('#gpu-status').dataset.state === 'ready', 'VRAM du pilote visible dès le Projet');
   const navLabels = [...document.querySelectorAll('#kane-nav .ws-btn')].map(b => b.textContent).join('|');
-  check(navLabels === 'Projet|Retouche|Studio IA|Vidéo IA|Montage', 'Navigation demandée, Montage en dernier : ' + navLabels);
+  check(navLabels === 'Projet|Retouche|Studio IA|Animer|Vidéo IA|Montage', 'Navigation demandée, Montage en dernier : ' + navLabels);
   document.querySelector('.ws-btn[data-v="video"]').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 600, clientY: 80 }));
   check([...document.querySelectorAll('.menu .mi .lb')].some(b => b.textContent === 'Arrêter'), 'Le clic droit sur une app propose Arrêter');
   KS.ui.closeMenus();

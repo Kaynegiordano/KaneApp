@@ -153,6 +153,8 @@ contextBridge.exposeInMainWorld('ksNative', {
   kcUrl: () => ipcRenderer.invoke('kc-url'),
   kcStop: () => ipcRenderer.invoke('kc-stop'),
   suiteCall: (op, args) => ipcRenderer.invoke('suite-call', op, args),
+  // atelier Animer : projets et passage vers Wallpaper Engine (animer-host.cjs)
+  animerCall: (op, args) => ipcRenderer.invoke('animer-call', op, args),
   suitePick: () => ipcRenderer.invoke('suite-pick'),
   runtimeMigrationState: () => ipcRenderer.invoke('runtime-migration-state'),
   runtimeMigrationRun: action => ipcRenderer.invoke('runtime-migration-run', action),
