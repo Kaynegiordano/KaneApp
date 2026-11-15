@@ -1,3 +1,13 @@
+# 1.44.1 — KaneDraw 2.1 : corrections
+
+- **Visages épargnés** : ils ne l'étaient jamais avec ANIMA (son format d'image n'était pas reconnu). C'est corrigé, et le bord du visage est maintenant protégé aussi.
+- **Ébauche** : le bruit de départ était environ 7 % trop fort avec les réglages par défaut. Il est au niveau exact. Les images changent un peu par rapport à la 1.44.0, à graine égale.
+- **Croquis** : il ne reste plus comme image de référence du mode Edit d'ANIMA pour la génération suivante.
+- Si le croquis, la seconde graine ou les détecteurs de visages échouent, ce réglage est abandonné et l'image est quand même générée. Les paramètres de l'image ne gardent que ce qui a servi.
+- Reprendre une image faite sur un croquis prévient que le croquis n'est pas dans ses paramètres.
+
+Nécessite le moteur du Studio à jour (KaneDraw 2.1) : redémarrez le moteur après sa mise à jour.
+
 # 1.44.0 — KaneDraw 2 : ses réglages dans le Studio
 
 Choisissez l'échantillonneur **KaneDraw** : un panneau KaneDraw apparaît dans les réglages de txt2img.

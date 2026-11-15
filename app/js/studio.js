@@ -1592,6 +1592,7 @@
         if (kv.sketch != null && isFinite(+kv.sketch)) st.kdraw.sketch_strength = +kv.sketch;
         if (kv.faces != null) st.kdraw.faces = kv.faces === '1';
         if (kv.seed2 == null) st.kdraw.seed2 = -1;
+        if (kv.sketch != null && !kdrawSketch) KS.toast('Cette image a été peinte sur un croquis : il n’est pas dans ses paramètres, rechoisis-le dans le panneau KaneDraw', 'info');
       }
       if (P['Hires upscale']) { st.enable_hr = true; st.hr_scale = +P['Hires upscale']; if (P['Denoising strength']) st.denoising_strength = +P['Denoising strength']; }
       if (P['Hires upscaler']) st.hr_upscaler = P['Hires upscaler'];
