@@ -9,6 +9,9 @@
   const SD = KS.studio = { on: false, gallery: [] };
   const url = () => G.url();
   const pngBytes = async c => new Uint8Array(await (await U.blobFromCanvas(c)).arrayBuffer());
+  // PNG d'une image avec ses paramètres de génération (bloc « parameters », comme Forge) : un canevas réencodé les perd
+  const withInfo = (u8, info) => info && !KS.png.hasText(u8, 'parameters') ? KS.png.writeText(u8, 'parameters', info) : u8;
+  const itemPng = async it => withInfo(it.bytes || await pngBytes(it.canvas), it.info);
   const fromPng = u8 => U.canvasFromBlob(new Blob([u8], { type: 'image/png' }));
   const clone = o => JSON.parse(JSON.stringify(o));
   const norm = t => String(t || '').replace(/\s*\[[0-9a-f]{6,}\]$/i, '');
@@ -1341,12 +1344,18 @@
     const f = { description: l.description || '', sdVersion: l.sdVersion || 'Unknown', trigger: l.trigger || '', weight: +(l.weight || 1), negative: l.negative || '', notes: l.notes || '' };
     let preview = null;
     const pv = h('div.fx-lpv', l.url ? h('img', { src: l.url, alt: '' }) : h('div.fx-nopv', { text: 'NO PREVIEW' }));
-    const setPv = async c => { preview = await pngBytes(c); pv.replaceChildren(h('img', { src: c.toDataURL('image/png'), alt: '' })); };
+    // l'aperçu garde l'invite et les réglages de l'image (bloc « parameters »), comme « Replace preview » de Forge
+    const setPv = async (c, bytes) => { preview = bytes || await pngBytes(c); pv.replaceChildren(h('img', { src: c.toDataURL('image/png'), alt: '' })); };
     const it = selItem('t2i');
     const pvBtns = h('div.fx-outbtns',
-      tbtn('Image sélectionnée dans Créer', () => it ? setPv(it.canvas) : KS.toast('Aucune image générée', 'info'), '', 'Comme « Replace preview » de Forge'),
-      tbtn('Image du document', () => D() ? setPv(D().composite()) : KS.toast('Aucun document ouvert', 'info')),
-      tbtn('Choisir…', async () => { const files = await N.openDialog({ title: 'Aperçu du LoRA', multi: false, filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }] }); if (files && files[0]) setPv(await KS.io.canvasFromEntry(files[0])); }));
+      tbtn('Image sélectionnée dans Créer', async () => it ? setPv(it.canvas, await itemPng(it)) : KS.toast('Aucune image générée', 'info'), '', 'Comme « Replace preview » de Forge'),
+      tbtn('Image du document', async () => { const d = D(); if (!d) return KS.toast('Aucun document ouvert', 'info'); const c = d.composite(); setPv(c, withInfo(await pngBytes(c), d.genInfo)); }),
+      tbtn('Choisir…', async () => {
+        const files = await N.openDialog({ title: 'Aperçu du LoRA', multi: false, filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }] });
+        if (!files || !files[0]) return;
+        const c = await KS.io.canvasFromEntry(files[0]), data = new Uint8Array(files[0].data);
+        setPv(c, /\.png$/i.test(files[0].name) && KS.png.hasText(data, 'parameters') ? data : null);   // PNG d'origine tel quel : ses paramètres restent
+      }));
     const body = h('div.fx.fx-meta',
       h('div.fx-meta-top', pv, h('div.fx-col', h('div.fx-h', { text: l.alias || l.name }), h('div.fx-info', { text: (l.rel ? l.rel + '\\' : '') + l.name + (l.base ? ' · ' + l.base : '') }), pvBtns)),
       text('Description', f, 'description', { rows: 2 }),
@@ -1567,12 +1576,12 @@
   async function saveItem(it) {
     if (!it) return;
     const p = await N.saveDialog({ title: 'Enregistrer l\'image', defaultPath: docName(it).replace(/[^\w\- ]+/g, '').slice(0, 40) + '.png', filters: [{ name: 'PNG', extensions: ['png'] }] });
-    if (p) { await N.writeFile(p, it.bytes || await pngBytes(it.canvas)); KS.toast('Enregistrée', 'ok', 1200); }
+    if (p) { await N.writeFile(p, await itemPng(it)); KS.toast('Enregistrée', 'ok', 1200); }
   }
   async function saveAll(items) {
     if (!items.length) return;
     const t = Date.now();
-    const r = await N.saveFiles('Dossier où enregistrer les images', await Promise.all(items.map(async (it, i) => ({ name: `kanevas-${t}-${i}.png`, data: it.bytes || await pngBytes(it.canvas) }))));
+    const r = await N.saveFiles('Dossier où enregistrer les images', await Promise.all(items.map(async (it, i) => ({ name: `kanevas-${t}-${i}.png`, data: await itemPng(it) }))));
     if (r && r.ok) KS.toast(r.written.length + ' image(s) enregistrée(s)', 'ok');
   }
   // « Send to » de Forge : l'image et ses paramètres passent à un autre onglet

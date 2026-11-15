@@ -65,6 +65,7 @@ window.ksNative = {
   forgeInterrupt: async () => { window.interrupts++; window.releaseGeneration?.(); window.releaseGeneration = null; return { ok: true }; },
   forgeProgress: async () => ({ ok: true, progress: 0.5 }),
   openDialog: async () => window.pickFiles || [],
+  loraMetaWrite: async (name, meta, preview) => { (window.loraMetas ||= []).push({ name, meta, preview }); return { ok: true }; },
   saveFiles: async (title, files) => { window.cutFiles = files; return { ok: true, written: files.map(f => f.name) }; }
 };
 `);
@@ -663,6 +664,14 @@ async function scenario() {
   assert(!!document.querySelector('.fx-pop .fx-lchip'), 'La pastille LoRA montre les LoRA actifs avec leur poids');
   [...document.querySelectorAll('.fx-pop button')].find(b => b.textContent === 'Parcourir tous les LoRA').click();
   assert(!document.querySelector('.fx-pop') && !document.querySelector('.fx-drawer').hidden && document.querySelector('.fx-seg button.on').textContent.startsWith('LoRA') && !!document.querySelector('.fx-drawer .fx-card[data-lora]'), '« Parcourir tous les LoRA » ouvre le tiroir sur les LoRA');
+  document.querySelector('.fx-drawer .fx-card[data-lora="test"] .fx-card-edit').click(); await new Promise(r => setTimeout(r, 30));
+  const pvItem = !!document.querySelector('.modal');
+  await click('Image sélectionnée dans Créer', document.querySelector('.modal'));
+  await wait(() => !!document.querySelector('.modal .fx-lpv img'));
+  await click('Save', document.querySelector('.modal'));
+  await wait(() => !!(window.loraMetas && window.loraMetas.length));
+  const lm = window.loraMetas.at(-1), pvInfo = (await KS.png.readText(new Uint8Array(lm.preview))).parameters || '';
+  assert(pvItem && lm.name === 'test' && lm.meta.trigger === 'painted' && /Seed: \d+/.test(pvInfo), 'L’aperçu d’un LoRA pris dans Créer garde l’invite et les réglages de l’image (comme Forge)');
   document.querySelector('.fx-seg button').click();
   pillOf('drawer').click();
   assert(document.querySelector('.fx-drawer').hidden && KS.prefs.fx.drawer === false, 'La pastille Réglages ferme le tiroir');

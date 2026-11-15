@@ -1,3 +1,13 @@
+# 1.45.1 — Aperçus de LoRA avec leurs paramètres
+
+Corrigé : une image posée comme aperçu d'un LoRA (fiche 🛠️) perdait son invite et ses réglages de génération. L'aperçu les garde maintenant, comme « Replace preview » de Forge : on les retrouve dans PNG Info ou en glissant l'aperçu dans le Studio.
+
+- **Image sélectionnée dans Créer** et **Image du document** : l'invite, le négatif et les réglages de l'image sont écrits dans l'aperçu.
+- **Choisir…** : un PNG qui contient déjà ses paramètres est copié tel quel.
+- **Enregistrer** / **Tout enregistrer** dans Créer : les images gardent aussi leurs paramètres quand elles n'en avaient pas encore.
+
+Les aperçus posés avant cette version restent sans paramètres : reposez-les depuis l'image d'origine pour les récupérer.
+
 # 1.45.0 — KaneDraw : l'image guide
 
 Dans le panneau KaneDraw (sampler **KaneDraw**, txt2img), le **Croquis** devient l'**Image guide**. Choisissez une photo, une de vos images, un rendu 3D ou un croquis : la pose, l'angle, le cadrage et la lumière la suivent, puis le modèle peint votre invite librement.
