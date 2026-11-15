@@ -532,7 +532,7 @@
         ...(others > OTHERS_MB ? row('', memWarn) : []),
         h('span'), info,
         h('span'), h('div.note', { text: 'Calcul local par le moteur du Studio. Générative : environ une minute pour ×2 d’une image de 2 mégapixels sur une RTX 5080.' })),
-      left: kmd.ok && N.forgeKmdPrompts ? [ui.btn('Voir les tuiles…', () => { if (gen()) showTiles(d, o, size()); else KS.toast('Les tuiles ne concernent que la méthode générative', 'info'); })] : [],
+      left: kmd.ok && N.forgeKmdPrompts ? [ui.btn('Voir les tuiles…', () => { if (gen()) showTiles(d, o, size(), f); else KS.toast('Les tuiles ne concernent que la méthode générative', 'info'); })] : [],
       buttons: [{ label: 'Annuler', value: null }, { label: 'Agrandir', primary: true, value: 'ok' }],
       onClose: v => res(v === 'ok'),
     }));
@@ -575,13 +575,22 @@
 
   // Aperçu des tuiles de la (première) passe : la source avec le contour de chaque tuile, coloré selon sa créativité, et
   // l'invite et le négatif que chacune recevra. Calculé par le moteur (WD14), sans rien générer.
-  async function showTiles(d, o, { W, H }) {
+  async function showTiles(d, o, { W, H }, forge) {
     const [pw, ph] = o.factor > 2 ? [d.width * 2, d.height * 2] : [W, H];
     const comp = d.composite();
-    let r;
+    let r, base = '';
     try {
-      r = await G.task('Analyse des tuiles…', async () => N.forgeKmdPrompts(G.url(), { width: pw - pw % 8, height: ph - ph % 8, prompt: o.prompt || '', negative_prompt: '', preview: 960 }, await pngBytes(comp)));
+      r = await G.task('Analyse des tuiles…', async () => {
+        // l'invite et le négatif du vrai calcul (préfixe du modèle, traduction), sans les balises LoRA, que Forge retire
+        // avant que Kane MultiDiffusion ne voie l'invite
+        const { pp, negative } = await superPrompts({ ...o, info: d.genInfo }, forge);
+        const strip = t => String(t || '').replace(/<[a-z_]+:[^<>]+>/gi, '').replace(/\s*,\s*(,\s*)+/g, ', ').replace(/\s{2,}/g, ' ').replace(/^[\s,]+|[\s,]+$/g, '');
+        base = strip(negative);
+        return N.forgeKmdPrompts(G.url(), { width: pw - pw % 8, height: ph - ph % 8, prompt: strip(pp.prompt), negative_prompt: base, preview: 960 }, await pngBytes(comp));
+      });
     } catch (e) { r = { ok: false, error: e.message }; }
+    // négatif : seulement ce que la tuile ajoute à celui de l'image (visage, personnage absents)
+    const extra = n => { const t = String(n || ''); return base && t.startsWith(base) ? t.slice(base.length).replace(/^[\s,]+/, '') : t === base ? '' : t; };
     if (!r || !r.ok) { KS.toast('Aperçu des tuiles impossible : ' + ((r && r.error) || 'moteur injoignable'), 'err', 5000); return; }
     const img = r.preview ? await U.canvasFromBlob(new Blob([r.preview], { type: 'image/jpeg' })) : scaled(comp, 960, Math.round(960 * comp.height / comp.width));
     const cv = U.canvas(img.width, img.height), x = cv.getContext('2d');
@@ -600,7 +609,7 @@
       ...r.tiles.map((t, i) => h('div', { style: { padding: '6px 0', borderTop: '1px solid var(--line, #8883)' } },
         h('b', { text: `Tuile ${i + 1}` }), h('span.note', { text: ` · créativité ${String(t.creativity).replace('.', ',')}` + (t.creativity < 0.8 ? ' (visage ou mains : tenue)' : t.creativity > 1.15 ? ' (zone floue : plus libre)' : '') }),
         h('div', { text: t.prompt || '(invite vide)' }),
-        t.negative_prompt ? h('div.note', { text: 'Négatif : ' + t.negative_prompt }) : null)));
+        extra(t.negative_prompt) ? h('div.note', { text: 'Négatif en plus : ' + extra(t.negative_prompt) }) : null)));
     KS.modal({
       title: `Tuiles${o.factor > 2 ? ' de la première passe' : ''} · ${r.describe}`, width: Math.min(1040, img.width + 48),
       body: h('div', cv, r.wd14 ? null : h('div.note', { text: 'WD14 absent : toutes les tuiles reçoivent l’invite de l’image.' }), list),
@@ -610,7 +619,8 @@
 
   // Super résolution générative : une ou deux passes d'image vers image par tuiles (Kane MultiDiffusion). L'agrandisseur
   // choisi prépare l'image à la taille de la passe (réglage upscaler_for_img2img, le temps de la requête).
-  G.superGen = async (comp, W, H, o, forge) => {
+  // Invite et négatif de la super résolution générative : les mêmes pour l'aperçu des tuiles et pour le calcul.
+  async function superPrompts(o, forge) {
     const st = G.studio();
     const own = (o.prompt || '').trim();
     const fromInfo = own && own === genPrompt(o.info);
@@ -619,6 +629,11 @@
       fromInfo || /<lora:/i.test(own) ? { ...st, usePrefix: false, loras: [] } : st);
     // pas de « personne » en négatif ici : l'image en a peut-être une ; les tuiles sans visage ont leur propre négatif
     const negative = (fromInfo && genNegative(o.info)) || [st.negative, 'nsfw, nude'].filter(Boolean).join(', ');
+    return { st, pp, negative };
+  }
+
+  G.superGen = async (comp, W, H, o, forge) => {
+    const { st, pp, negative } = await superPrompts(o, forge);
     const r8 = v => Math.max(64, Math.floor(v / 8) * 8);
     // au-delà de ×2 : la seconde passe part d'une image déjà détaillée, agrandie de ×1,5 ou ×2 seulement. Le modèle ESRGAN
     // (×4 puis réduit) y coûtait 20 s pour presque rien : Lanczos, la passe de diffusion redonne le détail.
