@@ -1510,6 +1510,9 @@
         if (seed == null) continue;
         try { const z = await N.forgeKaneZones(url(), seed); if (z.ok) { items[i].kdZones = z.zones; items[i].kdReport = z.report || []; } } catch { /* pas de zones */ }
       }
+      // zone que le moteur n'a pas pu repeindre (mémoire vidéo…) : elle était laissée telle quelle sans rien dire
+      const failed = items.flatMap(it => (it.kdReport || []).filter(z => z.result === 'échec'));
+      if (failed.length) KS.toast('Kane Detailer n’a pas pu repeindre : ' + [...new Set(failed.map(z => z.label))].join(', ') + '. Voir « Zones repeintes » pour la refaire.', 'err', 9000);
     }
     return items;
   }
@@ -1785,20 +1788,20 @@
     }
     kdZonesModal(key, it, canvas);
   }
-  const KD_RESULT = { repeinte: 'repeinte', 'gardée': 'gardée telle quelle (aucun essai meilleur)', 'réparée': 'réparée (essai repeint fort)' };
+  const KD_RESULT = { repeinte: 'repeinte', 'gardée': 'gardée telle quelle (aucun essai meilleur)', 'réparée': 'réparée (essai repeint fort)', 'échec': 'non repeinte (échec du moteur)' };
   // Compte rendu : l'image des zones, puis une ligne par zone (résultat, force, essai choisi, temps, étiquettes vues)
   function kdZonesModal(key, it, canvas) {
     const img = h('img.kd-zimg', { alt: '' }); img.src = canvas.toDataURL('image/jpeg', 0.9);
     img.addEventListener('click', () => KS.preview.open(canvas, canvas.width, canvas.height, { title: 'Zones repeintes par Kane Detailer' }));
     const handsLine = h('div.kd-hands');
     const rows = it.kdReport.map(z => {
-      const chosen = z.chosen ? 'essai ' + z.chosen + ' sur ' + z.tries : 'original gardé (' + z.tries + ' essais)';
+      const chosen = z.result === 'échec' ? z.error || '' : z.chosen ? 'essai ' + z.chosen + ' sur ' + z.tries : 'original gardé (' + z.tries + ' essais)';
       const facts = [KD_RESULT[z.result] || z.result, 'force ' + String(z.force).replace('.', ','), chosen, z.seconds != null ? String(z.seconds).replace('.', ',') + ' s' : '', z.small ? 'petit visage en deux temps' : ''].filter(Boolean).join(' · ');
       const btns = h('div.kd-zbtns', tbtn('Refaire', () => { modal.close(); redoZone(key, it, { part: z.part, box: z.box }); }, '', 'Repeint cette zone seule avec une nouvelle graine (les autres zones ne bougent pas)'));
       if (z.part === 'mains') btns.append(
         tbtn('Ratée', () => markHand(it, z, 'ratee', handsLine), '', 'Cette main est ratée : exemple pour le juge des mains appris'),
         tbtn('Réussie', () => markHand(it, z, 'reussie', handsLine), '', 'Cette main est réussie : exemple pour le juge des mains appris'));
-      return h('div.kd-zrow' + (z.result === 'gardée' ? '.kept' : ''), h('div.kd-zt', h('b', { text: z.label }), h('span', { text: facts }),
+      return h('div.kd-zrow' + (z.result === 'gardée' || z.result === 'échec' ? '.kept' : ''), h('div.kd-zt', h('b', { text: z.label }), h('span', { text: facts }),
         z.tags && z.tags.length ? h('small', { text: 'Vu dans la zone : ' + z.tags.join(', ') }) : null), btns);
     });
     const modal = KS.modal({ title: 'Zones repeintes par Kane Detailer', width: 980, body: h('div.kd-zones', img, h('div.kd-zlist', ...rows, handsLine)),

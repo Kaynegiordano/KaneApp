@@ -1,3 +1,10 @@
+# 1.45.2 — Visages : KaneDraw et Kane Detailer corrigés
+
+- **KaneDraw** : les visages sont vraiment épargnés par la simplification en masses. Sur ANIMA, ils ne l'étaient pas, alors que les paramètres de l'image indiquaient `faces=1`.
+- **Kane Detailer** : un visage dont le repeint échouait (mémoire vidéo pleine…) restait tel quel, sans rien dire. Il est maintenant réessayé. S'il échoue encore, un avertissement s'affiche, et la zone apparaît « non repeinte » dans « Zones repeintes », où **Refaire** la reprend.
+
+Nécessite le moteur du Studio à jour (KaneDraw 2.2.1, Kane Detailer 5.5.1) : redémarrez le moteur.
+
 # 1.45.1 — Aperçus de LoRA avec leurs paramètres
 
 Corrigé : une image posée comme aperçu d'un LoRA (fiche 🛠️) perdait son invite et ses réglages de génération. L'aperçu les garde maintenant, comme « Replace preview » de Forge : on les retrouve dans PNG Info ou en glissant l'aperçu dans le Studio.
