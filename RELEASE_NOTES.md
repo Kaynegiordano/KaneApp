@@ -1,3 +1,19 @@
+# 1.45.0 — KaneDraw : l'image guide
+
+Dans le panneau KaneDraw (sampler **KaneDraw**, txt2img), le **Croquis** devient l'**Image guide**. Choisissez une photo, une de vos images, un rendu 3D ou un croquis : la pose, l'angle, le cadrage et la lumière la suivent, puis le modèle peint votre invite librement.
+
+- **Force** : à 1, la forme est tenue ; vers 0,5, la graine reprend presque toute la composition.
+- **Précision** : de la composition seule (0) à la pose et au contour (1).
+- **Durée** : de la composition seulement (0) à presque tout le trajet (1), plus proche de l'image guide.
+- **Garder les couleurs** : décoché, les couleurs d'ensemble sont laissées au modèle.
+- Un aperçu de l'image guide s'affiche dans le panneau.
+
+Corrigé : un croquis seul brûlait l'image en noir et blanc purs ; le guide tient maintenant toujours au moins la composition.
+
+Le guide suit la forme visible, pas un squelette : une main ou un doigt précis n'est pas reproduit à l'identique.
+
+Nécessite le moteur du Studio à jour (KaneDraw 2.2) : redémarrez le moteur après sa mise à jour.
+
 # 1.44.1 — KaneDraw 2.1 : corrections
 
 - **Visages épargnés** : ils ne l'étaient jamais avec ANIMA (son format d'image n'était pas reconnu). C'est corrigé, et le bord du visage est maintenant protégé aussi.

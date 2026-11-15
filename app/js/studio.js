@@ -35,8 +35,9 @@
       hr_prompt: '', hr_negative_prompt: '',
       // seconde passe du hires fix par tuiles (Kane MultiDiffusion) : au-delà de la résolution du modèle, sans doublons
       hrTiles: { enabled: false, prompts: true, structure: 0.3, detail: 0.2, colors: 0.6 },
-      // sampler KaneDraw (extension kane_draw du moteur) : ébauche, masses, guidage, visages, seconde graine, poids du croquis
-      kdraw: { spots: 0.8, masses: 0.85, guidance: 1, faces: true, seed2: -1, fusion: 0.5, sketch_strength: 1 } },
+      // sampler KaneDraw (extension kane_draw du moteur) : ébauche, masses, guidage, visages, seconde graine, image guide
+      // (force, précision, durée, couleurs)
+      kdraw: { spots: 0.8, masses: 0.85, guidance: 1, faces: true, seed2: -1, fusion: 0.5, sketch_strength: 1, guide_detail: 0.5, guide_end: 0.5, guide_colors: false } },
     i2i: { ...COMMON(), steps: 32, resize_mode: 1, sizeTab: 'to', scale_by: 1, autoSize: true, denoising_strength: 0.6, mask_blur: 4, inpainting_mask_invert: 0, inpainting_fill: 1,
       inpaint_full_res: 1, inpaint_full_res_padding: 32,
       soft: { enabled: false, bias: 1, preserve: 0.5, contrast: 4, influence: 0, diffThr: 0.5, diffContrast: 2 },
@@ -1014,7 +1015,7 @@
     return out;
   }
   // KaneDraw : réglages du sampler expérimental, montrés quand il est choisi (txt2img seulement : en img2img il fait SEEDS 3)
-  let kdrawSketch = null;   // { name, b64 } : le croquis n'est pas gardé dans les préférences (trop lourd), seulement pendant la séance
+  let kdrawSketch = null;   // { name, b64 } : l'image guide n'est pas gardée dans les préférences (trop lourde), seulement pendant la séance
   const toB64 = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); };
   function kdrawAcc(st) {
     if (st.sampler_name !== 'KaneDraw' || !(cat && cat.kdrawInfo)) return null;
@@ -1024,7 +1025,7 @@
       seed.addEventListener('change', () => { s.seed2 = Math.max(-1, Math.round(+seed.value) || -1); save(); renderParams(); });
       const setSketch = (name, bytes) => { kdrawSketch = { name, b64: toB64(bytes) }; renderParams(); };
       const pickSketch = async () => {
-        const files = await N.openDialog({ title: 'Croquis (grandes masses de clair et d’obscur)', multi: false, filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp'] }] });
+        const files = await N.openDialog({ title: 'Image guide (pose, angle, cadrage, lumière)', multi: false, filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp'] }] });
         if (files && files[0] && files[0].data) setSketch(files[0].name, files[0].data);
       };
       const fromDoc = async () => { const d = D(); if (!d) return KS.toast('Aucun document ouvert', 'info'); setSketch(d.name, await pngBytes(d.composite())); };
@@ -1039,10 +1040,14 @@
           s.seed2 >= 0 ? ebtn('✕', 'Une seule graine', () => { s.seed2 = -1; save(); renderParams(); }) : null),
           'La composition vient de la graine de l’image, la matière (touche, textures, détails) de celle-ci'),
         s.seed2 >= 0 ? slider('Part de la seconde graine', s, 'fusion', 0, 1, 0.05, 'Part de la matière qui vient de la seconde graine') : null,
-        field('Croquis', h('div.fx-outbtns', h('span.fx-info', { text: kdrawSketch ? kdrawSketch.name : 'Aucun : l’ébauche vient de la graine' }),
+        field('Image guide', h('div.fx-outbtns', h('span.fx-info', { text: kdrawSketch ? kdrawSketch.name : 'Aucune : la composition vient de la graine' }),
           tbtn('Choisir…', pickSketch), tbtn('Document ouvert', fromDoc), kdrawSketch ? tbtn('Retirer', () => { kdrawSketch = null; renderParams(); }) : null),
-          'Les grandes masses du croquis remplacent celles de la graine (le croquis n’est pas gardé après la fermeture de KaneApp)'),
-        kdrawSketch ? slider('Poids du croquis', s, 'sketch_strength', 0, 3, 0.05, 'À 1, le croquis guide nettement la composition ; au-delà, il s’impose') : null,
+          'Une photo, une de vos images, un rendu 3D ou un croquis : la pose, l’angle, le cadrage et la lumière la suivent, puis le modèle peint votre invite librement. Elle n’est pas gardée après la fermeture de KaneApp'),
+        kdrawSketch ? h('img.fx-kdguide', { src: 'data:image/' + (/\.jpe?g$/i.test(kdrawSketch.name) ? 'jpeg' : 'png') + ';base64,' + kdrawSketch.b64, alt: '' }) : null,
+        kdrawSketch ? slider('Force du guide', s, 'sketch_strength', 0, 1, 0.05, 'À 1, la forme de l’image guide est tenue pendant toute sa durée ; vers 0,5, la graine reprend presque toute la composition') : null,
+        kdrawSketch ? slider('Précision', s, 'guide_detail', 0, 1, 0.05, '0 = seulement la composition (grandes masses) ; 1 = la pose et le contour') : null,
+        kdrawSketch ? slider('Durée', s, 'guide_end', 0, 1, 0.05, 'Combien de temps le guide tient avant de laisser peindre : 0 = la composition seulement, 1 = presque tout le trajet (proche de l’image guide)') : null,
+        kdrawSketch ? check('Garder les couleurs', s, 'guide_colors', 'Garder aussi les couleurs d’ensemble de l’image guide ; décoché, elles sont laissées au modèle') : null,
       ].filter(Boolean);
     }, { tip: 'Sampler expérimental de peintre ; ses réglages sont écrits dans les paramètres de l’image', active: true });
   }
@@ -1590,9 +1595,11 @@
         const kv = Object.fromEntries(String(P.KaneDraw).split(/\s+/).map(x => x.split('=')).filter(x => x.length === 2));
         for (const key of ['spots', 'masses', 'guidance', 'fusion', 'seed2']) if (kv[key] != null && isFinite(+kv[key])) st.kdraw[key] = +kv[key];
         if (kv.sketch != null && isFinite(+kv.sketch)) st.kdraw.sketch_strength = +kv.sketch;
+        for (const key of ['guide_detail', 'guide_end']) if (kv[key] != null && isFinite(+kv[key])) st.kdraw[key] = +kv[key];
+        if (kv.guide_colors != null) st.kdraw.guide_colors = kv.guide_colors === '1';
         if (kv.faces != null) st.kdraw.faces = kv.faces === '1';
         if (kv.seed2 == null) st.kdraw.seed2 = -1;
-        if (kv.sketch != null && !kdrawSketch) KS.toast('Cette image a été peinte sur un croquis : il n’est pas dans ses paramètres, rechoisis-le dans le panneau KaneDraw', 'info');
+        if (kv.sketch != null && !kdrawSketch) KS.toast('Cette image a été faite avec une image guide : elle n’est pas dans ses paramètres, rechoisissez-la dans le panneau KaneDraw', 'info');
       }
       if (P['Hires upscale']) { st.enable_hr = true; st.hr_scale = +P['Hires upscale']; if (P['Denoising strength']) st.denoising_strength = +P['Denoising strength']; }
       if (P['Hires upscaler']) st.hr_upscaler = P['Hires upscaler'];
@@ -2138,7 +2145,7 @@
     if (k === 't2i' && st.sampler_name === 'KaneDraw' && cat && cat.kdrawInfo) {
       const s = st.kdraw;
       p.alwayson_scripts.KaneDraw = { args: [{ spots: +s.spots, masses: +s.masses, guidance: +s.guidance, faces: !!s.faces, seed2: +s.seed2, fusion: +s.fusion,
-        sketch: kdrawSketch ? kdrawSketch.b64 : null, sketch_strength: +s.sketch_strength }] };
+        sketch: kdrawSketch ? kdrawSketch.b64 : null, sketch_strength: +s.sketch_strength, guide_detail: +s.guide_detail, guide_end: +s.guide_end, guide_colors: !!s.guide_colors }] };
     }
     if (st.noom.unet || st.noom.vae) p.alwayson_scripts['Never OOM Integrated'] = { args: [!!st.noom.unet, !!st.noom.vae] };
     if (k === 't2i' && st.enable_hr) Object.assign(p.alwayson_scripts, hrTilesScripts(st));

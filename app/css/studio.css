@@ -270,3 +270,5 @@
 .kd-pimg { border-radius: 6px; display: block; }
 .kd-pmask { position: absolute; inset: 0; cursor: crosshair; touch-action: none; }
 .kd-ptools { display: flex; flex-direction: column; gap: 12px; width: 260px; }
+/* KaneDraw : aperçu de l’image guide */
+.fx-kdguide { display: block; max-width: 100%; max-height: 140px; margin: 2px 0 6px; border-radius: 6px; object-fit: contain; }

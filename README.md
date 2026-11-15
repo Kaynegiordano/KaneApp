@@ -680,3 +680,4 @@ Maintenir Alt + bouton droit dans la zone de travail : glisser horizontalement p
 - **1.43.1** : Kane Detailer 5.4 : compte rendu des zones (Refaire une zone, marquer une main ratée ou réussie, Apprendre), Peindre une zone, petits visages en deux temps.
 - **1.44.0** : KaneDraw 2 dans le Studio : panneau du sampler (ébauche, masses, guidage, visages épargnés, seconde graine, croquis), réglages écrits dans l'image et repris depuis PNG Info.
 - **1.44.1** : KaneDraw 2.1 : visages vraiment épargnés sur ANIMA, bruit de départ au bon niveau, croquis et seconde graine qui ne font plus échouer une génération ; avertissement quand une image reprise utilisait un croquis.
+- **1.45.0** : KaneDraw 2.2 : le croquis devient une image guide (pose, angle, cadrage et lumière d’une image, puis peinture libre) avec aperçu, force, précision, durée et couleurs.

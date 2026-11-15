@@ -707,6 +707,24 @@ async function scenario() {
     await wait(() => window.txtCalls.length === n + 1);
     const a = window.txtCalls.at(-1).alwayson_scripts.KaneDraw.args[0];
     assert(a.spots === 0.5 && a.seed2 === 77 && a.masses === 0.85 && a.faces === true && a.sketch === null, 'Les réglages KaneDraw partent avec la génération : ' + JSON.stringify(a));
+    assert(a.guide_detail === 0.5 && a.guide_end === 0.5 && a.guide_colors === false, 'Les réglages du guide partent aussi : ' + JSON.stringify(a));
+    assert(!document.querySelector('#studio').textContent.includes('Force du guide'), 'Sans image guide, ses curseurs sont cachés');
+    // une image guide choisie : aperçu, curseurs, et l'image part en base64 avec ses réglages
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    window.pickFiles = [{ name: 'pose.png', data: Uint8Array.from(atob(png), c => c.charCodeAt(0)) }];
+    const none = [...document.querySelectorAll('#studio .fx-info')].find(e => e.textContent.startsWith('Aucune : la composition'));
+    assert(!!none, 'Le champ Image guide est affiché');
+    [...none.parentElement.querySelectorAll('button')].find(b => b.textContent === 'Choisir…').click();
+    await wait(() => document.querySelector('#studio').textContent.includes('Force du guide'));
+    assert(!!document.querySelector('#studio img.fx-kdguide') && document.querySelector('#studio').textContent.includes('pose.png'), 'L’image guide choisie est montrée');
+    t.kdraw.guide_end = 0.8; t.kdraw.guide_colors = true;
+    await KS.cmd.studioGenerate();
+    await wait(() => window.txtCalls.length === n + 2);
+    const g = window.txtCalls.at(-1).alwayson_scripts.KaneDraw.args[0];
+    assert(g.sketch === png && g.guide_end === 0.8 && g.guide_colors === true, 'L’image guide part avec la génération : ' + JSON.stringify({ ...g, sketch: String(g.sketch).slice(0, 12) }));
+    [...document.querySelectorAll('#studio button')].find(b => b.textContent === 'Retirer' && b.parentElement.textContent.includes('pose.png')).click();
+    await wait(() => !document.querySelector('#studio').textContent.includes('Force du guide'));
+    window.pickFiles = null; t.kdraw.guide_end = 0.5; t.kdraw.guide_colors = false;
     t.sampler_name = sampler; KS.prefs.fx.drawer = drawer;
   }
   return results;
