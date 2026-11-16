@@ -1,3 +1,12 @@
+# 1.46.0 — Signer des images
+
+L'outil « Signer des images » de Kane OS est maintenant dans KaneApp, avec le même rendu : une copie 720p en JPEG, sans métadonnées, filigranée KG et signée « KG · Kane Giordano » en bas à droite (noire, blanche ou ombrée selon le fond).
+
+- **Fichier › Signer des images…** : choisissez une ou plusieurs images. Un aperçu montre la première image, avec la protection au choix : filigrane sur toute l'image, grand KG au centre ou signature seule. Les copies vont dans « Images signées », à côté des originaux, sans rien écraser ; le dossier s'ouvre à la fin.
+- **Fichier › Exporter › Signée pour les réseaux (720p, KG)…** : le document ouvert, tel qu'il s'affiche.
+
+Les originaux ne sont jamais modifiés. La dernière protection choisie est retenue.
+
 # 1.45.3 — Animation Wallpaper Engine : avec le squelette, les zones peintes agissent de nouveau
 
 - Avec le squelette du personnage, les zones peintes (respiration, soulèvement) bougent de nouveau le personnage dans l'aperçu, et les yeux suivent.

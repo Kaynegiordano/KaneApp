@@ -179,6 +179,12 @@ ipcMain.handle('open-dialog', async (_e, opts = {}) => {
   return r.filePaths.map(readEntry);
 });
 
+// Signer des images (app/js/signature.js) : le dossier « Images signées » et les noms déjà pris.
+ipcMain.handle('make-dir', (_e, p) => {
+  try { fs.mkdirSync(p, { recursive: true }); return { ok: true }; } catch (err) { return { ok: false, error: String(err.message || err) }; }
+});
+ipcMain.handle('path-exists', (_e, p) => { try { return fs.existsSync(p); } catch { return false; } });
+
 ipcMain.handle('read-file', (_e, p) => {
   try { return readEntry(p); } catch (err) { return { error: String(err.message || err) }; }
 });

@@ -65,6 +65,8 @@ contextBridge.exposeInMainWorld('ksNative', {
   readFile: p => ipcRenderer.invoke('read-file', p),
   saveDialog: opts => ipcRenderer.invoke('save-dialog', opts),
   writeFile: (p, data) => ipcRenderer.invoke('write-file', p, data),
+  makeDir: p => ipcRenderer.invoke('make-dir', p),
+  exists: p => ipcRenderer.invoke('path-exists', p),
   getPending: () => ipcRenderer.invoke('get-pending'),
   recoveryWrite: (id, metadata, data) => ipcRenderer.invoke('recovery-write', id, metadata, data),
   recoveryList: () => ipcRenderer.invoke('recovery-list'),

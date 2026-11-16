@@ -20,6 +20,18 @@ et les trois copies ICO utilisées par la fenêtre, les raccourcis et l'installa
 dix tailles de 16 à 256 pixels ; le symbole reste transparent et indépendant du thème de l'interface.
 
 ## Outils récents
+### Signer des images (1.46.0)
+
+- Repris de Kane OS (dont l'écran Signature est retiré) : `app/js/signature.js`, même rendu que
+  `SignatureKG/signature.py` (écart moyen mesuré : 0,1 sur 255). Copie 720p (jamais agrandie), JPEG qualité 85 sans
+  métadonnées, filigrane KG en motif à 30°, grand KG au centre ou rien, puis la signature en bas à droite selon la
+  luminosité du coin (noire > 165, blanche < 90, sinon ombrée).
+- Monogramme dessiné sur canvas avec les polices de Windows Brush Script MT et Segoe UI Light ; si l'une manque, un
+  message le dit au lieu d'une police de secours.
+- Fichier › Signer des images… (plusieurs fichiers → « Images signées » à côté, `_KG.jpg`, `_KG-2.jpg`…) et
+  Fichier › Exporter › Signée pour les réseaux. IPC `make-dir` et `path-exists`.
+- Test : `node_modules/electron/dist/electron.exe tools/test-signature.cjs`.
+
 ### Animation Wallpaper Engine : l'ancien atelier revient (1.42.0)
 
 - L'atelier **Animation** retiré en 1.37.0 est rétabli tel qu'il était (fonds animés de type Web pour Wallpaper Engine :
