@@ -1,3 +1,8 @@
+# 1.45.3 — Animation Wallpaper Engine : avec le squelette, les zones peintes agissent de nouveau
+
+- Avec le squelette du personnage, les zones peintes (respiration, soulèvement) bougent de nouveau le personnage dans l'aperçu, et les yeux suivent.
+- Le fond envoyé à Wallpaper Engine est fidèle à l'aperçu : plus de trou sombre entre le visage et les cheveux ni de bords en dents de scie (moteur Animation 4.1.0, Kane OS).
+
 # 1.45.2 — Visages : KaneDraw et Kane Detailer corrigés
 
 - **KaneDraw** : les visages sont vraiment épargnés par la simplification en masses. Sur ANIMA, ils ne l'étaient pas, alors que les paramètres de l'image indiquaient `faces=1`.
