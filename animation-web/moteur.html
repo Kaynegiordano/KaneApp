@@ -614,7 +614,8 @@ function render() {
     else if (L.type === 'personnage') { /* deja pose */ }
     else if (L.porte_tete && PERSO && PERSO.tete != null) suitTete(L, PERSO);
     else { const M = L.mesh; M.pos.set(M.rest); }
-    const M = L.mesh, corps = L.suit === 'corps' && !(L.porte_tete && PERSO);      // porte par la tete : pas de suivi du corps en plus
+    // porte par la tete : suit le corps seulement si la marionnette le suit aussi (sinon il se decalerait du visage)
+    const M = L.mesh, corps = L.suit === 'corps' && !(L.porte_tete && PERSO && PERSO.suit !== 'corps');
     for (let i = 0; i < M.n; i++) {
       const s = (L.Dv ? L.Dv[i] : (L.D ?? DC)) - DC;
       if (corps) { const h = bodyD(M.rest[i * 2], M.rest[i * 2 + 1], time); M.pos[i * 2] += h[0]; M.pos[i * 2 + 1] += h[1]; }
