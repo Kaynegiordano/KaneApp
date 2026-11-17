@@ -1,3 +1,14 @@
+# 1.47.0 — Montage : couper les passages figés
+
+Les vidéos MiniMax en boucle atteignent souvent leur dernière image en avance, puis ne bougent plus : la boucle marque une pause à chaque tour. Montage repère maintenant ces moments et les retire.
+
+- **Outils › Couper les passages figés…**, au clic droit d'un plan vidéo ou avec Ctrl+K : les plans sélectionnés sont analysés (tous les plans vidéo si rien n'est sélectionné). La liste indique chaque passage figé trouvé (début, milieu, fin) et la durée retirée ; **Couper** les retire, le son lié avec.
+- La détection s'adapte à chaque vidéo : un petit mouvement localisé, comme un clignement, compte comme du mouvement, alors qu'un léger scintillement de compression n'empêche pas de reconnaître une image figée. Un passage simplement lent n'est pas coupé.
+- Boucle (dernière image identique à la première) : toute la fin figée est retirée, et la première image fait la jonction, sans doublon.
+- « Ne couper qu'au début et à la fin » garde les pauses du milieu. Ctrl+Z annule la coupe en une fois.
+
+**Corrigé : rendu exact à l'image près aux raccords.** À 24 images par seconde, environ un raccord sur deux perdait la première image du plan suivant et répétait la dernière du précédent : une petite saccade à chaque coupe. Chaque image rendue est maintenant la bonne.
+
 # 1.46.0 — Signer des images
 
 L'outil « Signer des images » de Kane OS est maintenant dans KaneApp, avec le même rendu : une copie 720p en JPEG, sans métadonnées, filigranée KG et signée « KG · Kane Giordano » en bas à droite (noire, blanche ou ombrée selon le fond).

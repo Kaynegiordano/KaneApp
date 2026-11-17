@@ -97,6 +97,7 @@
       { label: 'Propriétés de l\'événement…', icon: 'props', action: () => { const e = sel1(); if (e) KC.dialogs.eventProps(e); } },
       '-',
       { label: 'Agrandir avec l\'IA (Real-ESRGAN)…', icon: 'wand', action: () => C.aiUpscale() },
+      { label: 'Couper les passages figés…', icon: 'cut', action: () => C.cutFreezes() },
       { label: 'Normaliser l\'audio', icon: 'normalize', action: C.normalize },
       { label: 'Rendre muet / audible', icon: 'mute', action: C.toggleMuteSel },
       { label: 'Créer des proxys pour tous les médias vidéo', icon: 'bolt', action: () => KC.project.media.filter(m => m.kind === 'video').forEach(m => KC.media.makeProxy(m)) },

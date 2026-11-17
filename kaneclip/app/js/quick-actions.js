@@ -15,6 +15,7 @@
       ['Montage','Outil Rasoir','C',()=>C.setTool('razor')],
       ['Montage','Extraire la plage et refermer',"'",()=>C.extractRange()],
       ['Montage','Lever la plage et laisser un vide',';',()=>C.liftRange()],
+      ['Montage','Couper les passages figés (image qui se fige)','',()=>C.cutFreezes()],
       ['Repérage','Ajouter un marqueur','M',()=>C.addMarker()],
       ['Repérage','Rechercher dans les marqueurs','',()=>KC.dock.show('markers')],
       ['Affichage','Afficher tout le montage','Ctrl+Maj+F',()=>KC.timeline.fit()],

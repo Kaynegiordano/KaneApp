@@ -35,6 +35,7 @@ function setup(getWin, { output } = {}) {
   const managed = require('./managed-runtimes.cjs')(app.getPath('userData'));
   const tools = require(path.join(dir, 'media-tools.cjs'))({ app: appProxy, send, binary: () => { const value = managed.read(); return value.active ? value.media.ffmpeg : null; } });
   const ai = require(path.join(dir, 'ai-upscale.cjs'))({ app: appProxy, send, tools });
+  const freeze = require(path.join(dir, 'freeze-detect.cjs'));
   const appUrl = 'file:///' + path.join(dir, 'app').replace(/\\/g, '/');
   const fromKc = e => { const u = e.senderFrame && e.senderFrame.url || ''; return decodeURIComponent(u).replace(/\\/g, '/').toLowerCase().startsWith(decodeURIComponent(appUrl).toLowerCase()); };
   const H = (ch, fn) => ipcMain.handle('kc:' + ch, (e, ...a) => { if (!fromKc(e)) throw new Error('Refusé'); return fn(e, ...a); });
@@ -120,6 +121,14 @@ function setup(getWin, { output } = {}) {
   H('proxy-start', (_e, p, info) => tools.proxyStart(p, info));
   H('keyint', (_e, p) => tools.keyInterval(p));
   H('encoders', () => tools.encoders());
+  H('freeze-analyze', (_e, p, o = {}) => {
+    if (typeof p !== 'string' || !fs.existsSync(p)) return { ok: false, error: 'Fichier introuvable' };
+    const num = v => (Number.isFinite(+v) ? +v : undefined);
+    return freeze.analyzeFile(tools.findFfmpeg(), p, {
+      start: Math.max(0, num(o.start) || 0), end: num(o.end) ?? null, fps: num(o.fps), width: num(o.width), height: num(o.height),
+      edgesOnly: !!o.edgesOnly, pause: num(o.pause) || 0.25,
+    });
+  });
   /* agrandissement IA */
   H('ai-status', () => ({ installed: ai.installed(), size: ai.size }));
   H('ai-install', () => ai.install({ sender: { send: (c, p) => send(c, p) } }));   // progression vers le cadre de KaneClip

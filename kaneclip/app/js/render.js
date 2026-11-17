@@ -139,14 +139,16 @@
           const layer = await buildLayer(ev, tr);
           if (!layer) continue;
           const next = L('v');
-          lines.push(`[${cur}][${layer.label}]overlay=x='${esc(layer.x)}':y='${esc(layer.y)}':eof_action=pass:format=rgb:enable='between(t\\,${f4(layer.T0)}\\,${f4(layer.T0 + layer.Ld)})'[${next}]`);
+          // fenêtre décalée d'une demi-image : 1/24 s arrondi à 0,0417 excluait l'image 1 (t = 0,041666)
+          // et prolongeait d'une image le plan précédent
+          lines.push(`[${cur}][${layer.label}]overlay=x='${esc(layer.x)}':y='${esc(layer.y)}':eof_action=pass:format=rgb:enable='between(t\\,${f4(layer.T0 - fr / 2)}\\,${f4(layer.T0 + layer.Ld - fr / 2)})'[${next}]`);
           cur = next;
           // fondu au blanc : voile blanc au-dessus de la piste
           if (ev.transition === 'flash' && ev.fadeIn > 0) {
             const T0 = ev.start - R0, d = ev.fadeIn;
             if (T0 + d > 0 && T0 < D) {
               const wl = L('w'), n2 = L('v');
-              lines.push(`color=c=white:s=${W}x${H}:r=${FPS}:d=${f4(d)},format=rgba,fade=t=in:st=0:d=${f4(d / 2)}:alpha=1,fade=t=out:st=${f4(d / 2)}:d=${f4(d / 2)}:alpha=1${tr.level < 1 ? ',colorchannelmixer=aa=' + f4(tr.level) : ''},setpts=PTS-STARTPTS+${f4(Math.max(0, T0))}/TB[${wl}]`);
+              lines.push(`color=c=white:s=${W}x${H}:r=${FPS}:d=${f4(d)},format=rgba,fade=t=in:st=0:d=${f4(d / 2)}:alpha=1,fade=t=out:st=${f4(d / 2)}:d=${f4(d / 2)}:alpha=1${tr.level < 1 ? ',colorchannelmixer=aa=' + f4(tr.level) : ''},setpts=PTS-STARTPTS+${f4(Math.max(0, T0) + fr / 2)}/TB[${wl}]`);
               lines.push(`[${cur}][${wl}]overlay=0:0:eof_action=pass:format=rgb[${n2}]`);
               cur = n2;
             }
@@ -176,7 +178,11 @@
       } else if (m && m.hasVideo) {
         const s0 = ev.offset + lt0 * ev.speed, sd = Ld * ev.speed + 2 * fr * ev.speed;
         const loops = ev.loop !== false && m.duration && s0 + sd > m.duration + 0.02;
-        idx = addInput([...(loops ? ['-stream_loop', '-1'] : []), '-ss', f4(m.duration ? s0 % m.duration : s0), '-t', f4(sd), '-i', m.path]);
+        // -ss garde les images dont l'horodatage est ≥ la valeur : arrondie au 1/10 000 près, 13/24 s (0,541666)
+        // devenait 0,5417 et l'image du point de coupe était perdue, remplacée par un doublon. On recule d'une
+        // demi-milliseconde, bien moins qu'une image, pour toujours inclure l'image affichée au point d'entrée.
+        const ss = Math.max(0, (m.duration ? s0 % m.duration : s0) - 0.0005);
+        idx = addInput([...(loops ? ['-stream_loop', '-1'] : []), '-ss', f4(ss), '-t', f4(sd), '-i', m.path]);
         sw = m.width; sh = m.height;
       } else return null;
       if (!sw || !sh) { sw = W; sh = H; }
@@ -301,8 +307,9 @@
         if (inc.transition === 'dip') fadeOut(tIn, inc.fadeIn / 2);
         else if (inc.transition === 'flash') fadeOut(tIn + inc.fadeIn / 2, fr);
       } else if (!inc && ev.fadeOut > 0) fadeOut(ev.length - ev.fadeOut - lt0, ev.fadeOut);
-      // 5. placement dans le temps de sortie
-      push(`setpts=PTS-STARTPTS+${f4(T0)}/TB`);
+      // 5. placement dans le temps de sortie. Base de temps = 1/FPS (filtre fps) et setpts tronque :
+      // 2/24 s arrondi à 0,0833 donnait l'image 1 au lieu de 2. La demi-image ajoutée vise toujours la bonne.
+      push(`setpts=PTS-STARTPTS+${f4(T0 + fr / 2)}/TB`);
       const sg = e => e.replace(/\+-/g, '-').replace(/--/g, '+');
       return { label: cur, x: sg(xExpr), y: sg(yExpr), T0, Ld };
     }

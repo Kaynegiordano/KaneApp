@@ -898,6 +898,7 @@
       m ? { label: 'Remplacer le média…', action: () => M.relink(m) } : null,
       m && m.kind !== 'image' ? { label: 'Créer un proxy vidéo', icon: 'bolt', action: () => M.makeProxy(m) } : null,
       m && m.kind === 'video' ? { label: 'Agrandir avec l\'IA…', icon: 'wand', action: () => KC.ai.dialog(m) } : null,
+      m && m.kind === 'video' ? { label: 'Couper les passages figés…', icon: 'cut', action: () => KC.cmd.cutFreezes(KC.sel.has(ev.id) ? null : [ev]) } : null,
       m && m.origPath ? { label: 'Revenir au fichier original', icon: 'reset', action: () => M.restoreOriginal(m) } : null,
       { label: 'Propriétés…', icon: 'props', action: () => KC.dialogs.eventProps(ev) },
     ];

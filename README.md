@@ -20,6 +20,24 @@ et les trois copies ICO utilisées par la fenêtre, les raccourcis et l'installa
 dix tailles de 16 à 256 pixels ; le symbole reste transparent et indépendant du thème de l'interface.
 
 ## Outils récents
+### Montage : couper les passages figés (1.47.0)
+
+- **Outils › Couper les passages figés…** (aussi au clic droit d'un plan vidéo et dans Ctrl+K) : sur les plans
+  sélectionnés, ou sur tous les plans vidéo, repère les moments où l'image ne bouge plus. Cas visé : la fin des boucles
+  FL2VA de MiniMax, qui atteignent leur dernière image en avance, et leurs premières images immobiles.
+- Analyse dans le processus principal (`kaneclip/freeze-detect.cjs`, IPC `kc:freeze-analyze`) : images réduites à
+  320 px en gris, blocs de 10 px ; une plage est figée si aucun bloc ne s'écarte de plus du seuil de sa première image
+  (de la dernière pour la fin). Seuil de 2,5 niveaux, relevé jusqu'à 6 selon le bruit mesuré, seulement si ce bruit
+  reste minuscule devant le mouvement normal du plan. Boucle FL2VA (dernière image ≈ première) : la fin figée part
+  entière. Mêmes résultats que l'outil `D:\Coupe\couper_fin_figee.py` sur 10 vidéos MiniMax réelles.
+- La coupe (`kaneclip/app/js/freeze.js`) retire les plages avec le son lié, resserre la suite des mêmes pistes et
+  s'annule en une fois. Option « début et fin seulement ».
+- **Rendu exact aux raccords** : à 24 i/s, un raccord sur deux perdait sa première image et doublait la précédente
+  (arrondi au 1/10 000 s de `-ss`, de `setpts`, qui tronque, et de la fenêtre `enable` de l'overlay). Demi-image de
+  marge dans `render.js`.
+- Tests : `node kaneclip/tests/freeze-detect.cjs`, `node kaneclip/tests/freeze-cut.cjs`,
+  `npx electron tools/test-montage-figes.cjs` (vraie fenêtre, profil isolé, rendu H.264/AAC contrôlé image par image).
+
 ### Signer des images (1.46.0)
 
 - Repris de Kane OS (dont l'écran Signature est retiré) : `app/js/signature.js`, même rendu que

@@ -37,7 +37,7 @@ function exposeKaneClip() {
     userData: inv('user-data'), defaultDir: inv('default-dir'), tempDir: inv('temp-dir'), removeDir: inv('remove-dir'),
     ffAvailable: inv('ff-available'), probe: inv('probe'), waveform: inv('waveform'), thumbs: inv('thumbs'),
     jobStart: inv('job-start'), jobCancel: inv('job-cancel'), proxyPath: inv('proxy-path'), proxyStart: inv('proxy-start'),
-    keyInterval: inv('keyint'), encoders: inv('encoders'),
+    keyInterval: inv('keyint'), encoders: inv('encoders'), freezeAnalyze: inv('freeze-analyze'),
     aiStatus: inv('ai-status'), aiInstall: inv('ai-install'), aiStart: inv('ai-start'), aiCancel: inv('ai-cancel'),
     onAiInstallProgress: on('ai-install-progress'), onAiProgress: on('ai-progress'), onAiDone: on('ai-done'),
     cacheSize: inv('cache-size'), cacheClear: inv('cache-clear'),
