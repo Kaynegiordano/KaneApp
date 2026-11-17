@@ -81,3 +81,23 @@ module.exports = function createMonitor(run, stream) {
   return read;
 };
 module.exports.parseMemory = parseMemory;
+
+// Le Studio inactif rend la carte quand un autre programme en a besoin (jeu, ComfyUI de Vidéo IA, Animation…).
+// Le moteur ne le voit pas lui-même : sous Windows, sa mesure (mem_get_info) ne bouge pas, et le pilote déplace sa
+// mémoire vidéo dans la RAM au lieu de la libérer (elle remonte d'un coup au retour). On compare donc la mesure du
+// pilote (driver : { used, total } de nvidia-smi, Mo) à ce que le moteur croit occuper (mem.engine, Mo) :
+// - carte presque pleine et prise par d'autres que le Studio ;
+// - ou le pilote compte moins que le moteur plus son contexte CUDA : une partie du Studio est déjà partie en RAM (le
+//   Studio entier sur la carte, le pilote compte au moins sa mémoire + ~1,3 Go : contexte, Windows).
+const STUDIO_YIELD = { freeMb: 1500, othersMb: 1500, contextMb: 600, idleMs: 60000 };
+function studioShouldYield(mem, driver, idleMs) {
+  if (!mem?.cuda || !driver || !(+driver.total > 0) || !(idleMs >= STUDIO_YIELD.idleMs)) return false;
+  const engine = +mem.engine || 0, used = +driver.used, total = +driver.total;
+  if (!Number.isFinite(used) || engine < 1000) return false;                      // modèle déjà déchargé
+  const evicted = used < engine + STUDIO_YIELD.contextMb;
+  const others = used - engine - STUDIO_YIELD.contextMb;
+  const crowded = total - used < STUDIO_YIELD.freeMb && others >= STUDIO_YIELD.othersMb;
+  return evicted || crowded;
+}
+module.exports.studioShouldYield = studioShouldYield;
+module.exports.STUDIO_YIELD = STUDIO_YIELD;

@@ -731,3 +731,4 @@ Maintenir Alt + bouton droit dans la zone de travail : glisser horizontalement p
 - **1.45.1** : aperçu d'un LoRA posé depuis le Studio avec son invite et ses réglages (bloc `parameters`, comme Forge) ; Enregistrer garde aussi les paramètres.
 - **1.45.3** : `animation-web/moteur.html` : les calques portés par la tête suivent le corps quand la marionnette le suit (`PERSO.suit`, zones peintes avec le squelette ; moteur Animation 4.1.0).
 - **1.45.2** : visages épargnés par KaneDraw sur ANIMA (moteur KaneDraw 2.2.1) ; zone de Kane Detailer en échec réessayée puis signalée (Kane Detailer 5.5.1).
+- **1.48.1** : « Libérer » rend toute la mémoire graphique du Studio (moteur : extensions et cache libérés, ordre gc → vidage) ; Studio inactif déchargé dès qu’un autre programme a besoin de la carte (mesure du pilote comparée au moteur, `gpu-memory.cjs`).

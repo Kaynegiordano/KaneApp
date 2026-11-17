@@ -1,3 +1,11 @@
+# 1.48.1 — Mémoire graphique rendue pour de bon
+
+- **Libérer maintenant** (jauge VRAM) et le déchargement automatique rendent maintenant toute la mémoire graphique du Studio : il restait environ 5,6 Go après le déchargement (cache de la carte, détecteurs de Kane Detailer, agrandisseurs), il n'en reste plus que le minimum (~0,2 Go en plus de Windows).
+- **Changer de programme** : quand un autre programme a besoin de la carte graphique (un jeu, ComfyUI de Vidéo IA, Animation…) et que le Studio n'a rien généré depuis une minute, KaneApp décharge le Studio aussitôt, sans attendre le délai réglé, et le signale. Avant, Windows déplaçait sa mémoire graphique dans la RAM au lieu de la libérer, puis la faisait remonter d'un coup au retour.
+- Le modèle est rechargé à la génération suivante (quelques secondes).
+
+Nécessite le moteur du Studio à jour : redémarrez le moteur.
+
 # 1.48.0 — Montage : agrandissement IA au rendu
 
 Quand une vidéo est plus petite que le rendu (1376×768 rendue en 1080p ou en 4K, par exemple), Montage peut maintenant l'agrandir avec un modèle d'IA au lieu d'une simple interpolation : les contours, les cils, les mèches de cheveux redeviennent nets au lieu d'agrandir le flou de compression.

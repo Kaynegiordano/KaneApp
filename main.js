@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { execFile } = require('child_process');
 const gpuMemory = require('./gpu-memory.cjs')();
+const { studioShouldYield } = require('./gpu-memory.cjs');
 ipcMain.handle('gpu-memory', () => gpuMemory());
 app.on('will-quit', () => gpuMemory.stop());
 
@@ -925,6 +926,16 @@ setInterval(async () => {
   if (!vram.idleMin || vram.unloaded || Date.now() - vram.lastWork < vram.idleMin * 60000) return;
   try { await studioUnload(`après ${vram.idleMin} min sans génération`); } catch { /* moteur occupé ou arrêté : nouvel essai dans une minute */ }
 }, 60000).unref?.();
+// Un autre programme a besoin de la carte (jeu, ComfyUI de Vidéo IA, Animation…) : le Studio inactif depuis une minute
+// rend la sienne sans attendre le délai ci-dessus. Le modèle est rechargé à la génération suivante.
+setInterval(async () => {
+  if (vram.unloaded || !engine.ours || engine.state !== 'ready' || animationBusy) return;
+  try {
+    const mem = await forgeCall(engine.url, '/kane-multidiffusion/v1/memory', null, 4000);
+    const driver = await gpuMemory();
+    if (driver?.ok && studioShouldYield(mem, driver, Date.now() - vram.lastWork)) await studioUnload('car un autre programme utilise la carte graphique');
+  } catch { /* moteur occupé, arrêté ou sans Kane MultiDiffusion */ }
+}, 15000).unref?.();
 ipcMain.handle('vram-idle', (_e, minutes) => { vram.idleMin = Math.max(0, Math.min(1440, Math.round(Number(minutes) || 0))); return vram.idleMin; });
 ipcMain.handle('vram-release', async () => {
   let studio;

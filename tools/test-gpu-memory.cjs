@@ -33,6 +33,18 @@ const monitor = require('../gpu-memory.cjs');
   const both = await live(); assert.equal(both.used, 2100); assert.equal(both.total, 24192); assert.equal(both.devices.length, 2);
   live.stop(); assert.equal(killed, 1); assert.equal(live.streaming(), false);
   await live(); assert.equal(spawned, 2, 'relancé à la lecture suivante'); live.stop();
+  // le Studio inactif rend la carte quand un autre programme en a besoin, et seulement alors
+  // mesures réelles (RTX 5080, 17/11/2026) : moteur chargé 8896 Mo ; un programme qui utilise 7 Go fait tomber le pilote
+  // à 8713 Mo (Studio déplacé en RAM) alors que le moteur croit toujours tenir ses 8896 Mo
+  const yieldTo = monitor.studioShouldYield, min = 60000, card = 16303, studio = { cuda: true, engine: 8896 };
+  assert.equal(yieldTo(studio, { used: 8713, total: card }, 2 * min), true, 'Studio déjà poussé en RAM par un autre programme');
+  assert.equal(yieldTo(studio, { used: 15900, total: card }, 2 * min), true, 'jeu lancé : carte pleine, prise par un autre');
+  assert.equal(yieldTo(studio, { used: 15900, total: card }, 20000), false, 'génération toute récente : on attend');
+  assert.equal(yieldTo(studio, { used: 10500, total: card }, 2 * min), false, 'Studio seul sur la carte : on garde');
+  assert.equal(yieldTo(studio, { used: 12000, total: card }, 2 * min), false, 'un autre programme mais assez de place : on garde');
+  assert.equal(yieldTo({ cuda: true, engine: 90 }, { used: 8713, total: card }, 2 * min), false, 'modèle déjà déchargé');
+  assert.equal(yieldTo({ cuda: false }, { used: 8713, total: card }, 2 * min) || yieldTo(studio, null, 2 * min), false, 'mesure absente');
+  console.log('OK VRAM : le Studio inactif rend la carte à un autre programme qui en a besoin');
   const real = await monitor()();
   if (process.env.KANEVAS_REQUIRE_GPU) assert(real.ok, real.error);
   console.log('OK VRAM : plusieurs cartes, valeurs invalides, requêtes groupées, délai borné et erreur sans ancienne mesure');

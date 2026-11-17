@@ -50,6 +50,12 @@
     KS.toast(`Mémoire graphique libérée${freed > 50 ? ' : ' + freed.toLocaleString('fr-FR') + ' Mo' : ''} (${parts.join(', ')}). Rechargée à la prochaine génération.`, 'ok', 6000);
   }
   KS.gpuMemory.release = release;
+  // déchargé tout seul parce qu'un autre programme avait besoin de la carte : on le dit, une fois
+  N?.onVramReleased?.(v => {
+    if (!/autre programme/.test(v?.reason || '')) return;
+    KS.toast('Modèle du Studio déchargé : un autre programme utilise la carte graphique. Il sera rechargé à la prochaine génération.', 'info', 6000);
+    refresh();
+  });
   KS.gpuMemory.setIdle = minutes => { KS.prefs.vramIdle = minutes; KS.prefs.save(); tell(minutes); };
   function menu() {
     if (!N?.vramRelease) return;
