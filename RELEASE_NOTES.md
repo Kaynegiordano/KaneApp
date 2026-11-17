@@ -1,3 +1,12 @@
+# 1.48.0 — Montage : agrandissement IA au rendu
+
+Quand une vidéo est plus petite que le rendu (1376×768 rendue en 1080p ou en 4K, par exemple), Montage peut maintenant l'agrandir avec un modèle d'IA au lieu d'une simple interpolation : les contours, les cils, les mèches de cheveux redeviennent nets au lieu d'agrandir le flou de compression.
+
+- **Rendre en tant que › Agrandissement › Méthode : IA**. Le modèle est choisi automatiquement (×2 jusqu'au double, sinon ×4) ou à la main parmi ceux du dossier des modèles (`models\ESRGAN`). Rien n'est téléchargé.
+- Les plans agrandis passent d'abord par le modèle, sur la carte graphique, avec une barre de progression ; compter de l'ordre d'une seconde par image. Un plan déjà agrandi est repris tel quel aux rendus suivants.
+- Les couleurs et la lumière de la source sont conservées, image par image et raccord compris.
+- Le modèle traite chaque image séparément : sur les détails très fins (cheveux, herbe), un léger scintillement reste possible.
+
 # 1.47.0 — Montage : couper les passages figés
 
 Les vidéos MiniMax en boucle atteignent souvent leur dernière image en avance, puis ne bougent plus : la boucle marque une pause à chaque tour. Montage repère maintenant ces moments et les retire.

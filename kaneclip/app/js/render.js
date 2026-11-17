@@ -96,8 +96,60 @@
     }
   }
 
+  /* ============================================================ plans rendus (partagé avec l'agrandissement IA) */
+  // Plans des pistes vidéo visibles qui touchent la région, de la piste du bas à celle du haut
+  function layerEvents(o) {
+    const p = KC.project, out = [];
+    const vt = p.tracks.filter(t => t.kind === 'video');
+    const anySolo = vt.some(t => t.solo);
+    for (let ti = vt.length - 1; ti >= 0; ti--) {
+      const tr = vt[ti];
+      if (tr.mute || (anySolo && !tr.solo)) continue;
+      const evs = p.events.filter(e => e.track === tr.id && !e.mute && e.start < o.to - 1e-9 && e.start + e.length > o.from + 1e-9).sort((a, b) => a.start - b.start);
+      for (const ev of evs) out.push({ ev, tr });
+    }
+    return out;
+  }
+  // Plage de la source lue pour un plan vidéo : début s0, durée sd (temps source), point d'entrée ss passé à -ss
+  function sourceSpan(ev, m, o) {
+    const fr = 1 / o.fps;
+    const lt0 = Math.max(0, o.from - ev.start);
+    const Ld = Math.min(ev.start + ev.length, o.to) - Math.max(ev.start, o.from);
+    const s0 = ev.offset + lt0 * ev.speed, sd = Ld * ev.speed + 2 * fr * ev.speed;
+    const loops = !!(ev.loop !== false && m.duration && s0 + sd > m.duration + 0.02);
+    // -ss garde les images dont l'horodatage est ≥ la valeur : arrondie au 1/10 000 près, 13/24 s (0,541666)
+    // devenait 0,5417 et l'image du point de coupe était perdue, remplacée par un doublon. On recule d'une
+    // demi-milliseconde, bien moins qu'une image, pour toujours inclure l'image affichée au point d'entrée.
+    const ss = Math.max(0, (m.duration ? s0 % m.duration : s0) - 0.0005);
+    return { lt0, Ld, s0, sd, loops, ss };
+  }
+  // Agrandissement maximal d'une source dans la sortie (zoom des images-clés et de la piste compris)
+  const upFactor = (ev, tr, sw, sh, W, H) => Math.min(W / sw, H / sh) * Math.max(...((ev.pc && ev.pc.kf) || [{ zoom: 1 }]).map(k => k.zoom || 1)) * FX.tmOf(tr).zoom;
+  // même interprétation des couleurs que l'aperçu : BT.709 pour la HD non étiquetée
+  const colorMatrix = m => (m.colorspace ? 'auto' : (m.height >= 720 ? 'bt709' : 'bt601'));
+
+  // Plans à faire passer par l'agrandissement IA : vidéos agrandies de plus de 5 %, hors lecture en boucle
+  R.aiPlan = (o) => {
+    const items = [];
+    for (const { ev, tr } of layerEvents(o)) {
+      const m = ev.media ? P.media(ev.media) : null;
+      if (ev.gen || !m || m.kind !== 'video' || !m.hasVideo || !m.width || !m.height || !m.path) continue;
+      const sp = sourceSpan(ev, m, o);
+      if (sp.Ld <= 1e-6) continue;
+      // sp.loops est vrai dès que les deux images de marge dépassent la fin du média (dernier plan d'un clip) :
+      // seule une vraie boucle, visible à l'écran, reste à la méthode classique
+      if (ev.loop !== false && m.duration && sp.s0 + sp.Ld * ev.speed > m.duration + 0.02) continue;
+      const factor = upFactor(ev, tr, m.width, m.height, o.width, o.height);
+      if (factor <= 1.05) continue;
+      const sd = m.duration ? Math.min(sp.sd, m.duration - sp.ss) : sp.sd;
+      items.push({ key: ev.id, input: m.path, ss: sp.ss, sd, fps: m.fps || o.fps, inW: Math.round(m.width), inH: Math.round(m.height), factor, cm: colorMatrix(m) });
+    }
+    return items;
+  };
+
   /* ============================================================ construction du graphe */
   // Retourne { args, files: [{name, data}], duration }
+  // o.aiSources : { [id du plan]: { path, width, height } }, plans déjà agrandis par l'IA sur leur plage exacte
   R.build = async (o) => {
     const p = KC.project, st = p.settings;
     const W = o.width, H = o.height, FPS = o.fps, SR = o.sampleRate || 48000;
@@ -113,12 +165,16 @@
     const esc = s => s;  // les expressions sont déjà échappées (\,) et entre apostrophes
     // Redimensionnement : méthode d'agrandissement choisie quand la source est agrandie de plus de 5 %
     const up = o.upscale || { method: 'lanczos', sharp: 0, denoise: false };
+    // IA : le reste de l'agrandissement (plans en boucle, zoom au-delà du facteur du modèle) prend la meilleure
+    // méthode classique disponible, sans renforcement de netteté
+    const method = up.method === 'ai' ? (up.fallback || 'lanczos') : up.method;
+    const sharpness = up.method === 'ai' ? 0 : up.sharp;
     const resize = (w, h, fromW) => {
       const enlarging = w > fromW * 1.05;
       if (!enlarging) return `scale=${w}:${h}:flags=lanczos`;
-      const sharp = up.sharp > 0.01 ? `,cas=strength=${f4(up.sharp)}` : '';
-      if (up.method === 'placebo') return `libplacebo=w=${w}:h=${h}:upscaler=ewa_lanczossharp:downscaler=ewa_lanczos:format=rgba${sharp}`;
-      if (up.method === 'cas') return `scale=${w}:${h}:flags=lanczos${sharp}`;
+      const sharp = sharpness > 0.01 ? `,cas=strength=${f4(sharpness)}` : '';
+      if (method === 'placebo') return `libplacebo=w=${w}:h=${h}:upscaler=ewa_lanczossharp:downscaler=ewa_lanczos:format=rgba${sharp}`;
+      if (method === 'cas') return `scale=${w}:${h}:flags=lanczos${sharp}`;
       return `scale=${w}:${h}:flags=lanczos`;
     };
     R.stats = { maxUp: 1 };
@@ -129,29 +185,22 @@
       const bg = (st.bg || '#000000').replace('#', '0x');
       lines.push(`color=c=${bg}:s=${W}x${H}:r=${FPS}:d=${f4(D + fr)},format=rgba[base]`);
       let cur = 'base';
-      const vt = p.tracks.filter(t => t.kind === 'video');
-      const anySolo = vt.some(t => t.solo);
-      for (let ti = vt.length - 1; ti >= 0; ti--) {
-        const tr = vt[ti];
-        if (tr.mute || (anySolo && !tr.solo)) continue;
-        const evs = p.events.filter(e => e.track === tr.id && !e.mute && overlaps(e)).sort((a, b) => a.start - b.start);
-        for (const ev of evs) {
-          const layer = await buildLayer(ev, tr);
-          if (!layer) continue;
-          const next = L('v');
-          // fenêtre décalée d'une demi-image : 1/24 s arrondi à 0,0417 excluait l'image 1 (t = 0,041666)
-          // et prolongeait d'une image le plan précédent
-          lines.push(`[${cur}][${layer.label}]overlay=x='${esc(layer.x)}':y='${esc(layer.y)}':eof_action=pass:format=rgb:enable='between(t\\,${f4(layer.T0 - fr / 2)}\\,${f4(layer.T0 + layer.Ld - fr / 2)})'[${next}]`);
-          cur = next;
-          // fondu au blanc : voile blanc au-dessus de la piste
-          if (ev.transition === 'flash' && ev.fadeIn > 0) {
-            const T0 = ev.start - R0, d = ev.fadeIn;
-            if (T0 + d > 0 && T0 < D) {
-              const wl = L('w'), n2 = L('v');
-              lines.push(`color=c=white:s=${W}x${H}:r=${FPS}:d=${f4(d)},format=rgba,fade=t=in:st=0:d=${f4(d / 2)}:alpha=1,fade=t=out:st=${f4(d / 2)}:d=${f4(d / 2)}:alpha=1${tr.level < 1 ? ',colorchannelmixer=aa=' + f4(tr.level) : ''},setpts=PTS-STARTPTS+${f4(Math.max(0, T0) + fr / 2)}/TB[${wl}]`);
-              lines.push(`[${cur}][${wl}]overlay=0:0:eof_action=pass:format=rgb[${n2}]`);
-              cur = n2;
-            }
+      for (const { ev, tr } of layerEvents(o)) {
+        const layer = await buildLayer(ev, tr);
+        if (!layer) continue;
+        const next = L('v');
+        // fenêtre décalée d'une demi-image : 1/24 s arrondi à 0,0417 excluait l'image 1 (t = 0,041666)
+        // et prolongeait d'une image le plan précédent
+        lines.push(`[${cur}][${layer.label}]overlay=x='${esc(layer.x)}':y='${esc(layer.y)}':eof_action=pass:format=rgb:enable='between(t\\,${f4(layer.T0 - fr / 2)}\\,${f4(layer.T0 + layer.Ld - fr / 2)})'[${next}]`);
+        cur = next;
+        // fondu au blanc : voile blanc au-dessus de la piste
+        if (ev.transition === 'flash' && ev.fadeIn > 0) {
+          const T0 = ev.start - R0, d = ev.fadeIn;
+          if (T0 + d > 0 && T0 < D) {
+            const wl = L('w'), n2 = L('v');
+            lines.push(`color=c=white:s=${W}x${H}:r=${FPS}:d=${f4(d)},format=rgba,fade=t=in:st=0:d=${f4(d / 2)}:alpha=1,fade=t=out:st=${f4(d / 2)}:d=${f4(d / 2)}:alpha=1${tr.level < 1 ? ',colorchannelmixer=aa=' + f4(tr.level) : ''},setpts=PTS-STARTPTS+${f4(Math.max(0, T0) + fr / 2)}/TB[${wl}]`);
+            lines.push(`[${cur}][${wl}]overlay=0:0:eof_action=pass:format=rgb[${n2}]`);
+            cur = n2;
           }
         }
       }
@@ -176,30 +225,30 @@
         idx = addInput(['-loop', '1', '-framerate', String(FPS), '-t', f4(Ld + 2 * fr), '-i', m.path]);
         sw = m.width; sh = m.height;
       } else if (m && m.hasVideo) {
-        const s0 = ev.offset + lt0 * ev.speed, sd = Ld * ev.speed + 2 * fr * ev.speed;
-        const loops = ev.loop !== false && m.duration && s0 + sd > m.duration + 0.02;
-        // -ss garde les images dont l'horodatage est ≥ la valeur : arrondie au 1/10 000 près, 13/24 s (0,541666)
-        // devenait 0,5417 et l'image du point de coupe était perdue, remplacée par un doublon. On recule d'une
-        // demi-milliseconde, bien moins qu'une image, pour toujours inclure l'image affichée au point d'entrée.
-        const ss = Math.max(0, (m.duration ? s0 % m.duration : s0) - 0.0005);
-        idx = addInput([...(loops ? ['-stream_loop', '-1'] : []), '-ss', f4(ss), '-t', f4(sd), '-i', m.path]);
-        sw = m.width; sh = m.height;
+        const { sd, loops, ss } = sourceSpan(ev, m, o);
+        const ai = o.aiSources && o.aiSources[ev.id];
+        if (ai) {
+          // plan agrandi par l'IA : le fichier commence exactement à l'image du point d'entrée
+          idx = addInput(['-t', f4(sd), '-i', ai.path]);
+          sw = ai.width; sh = ai.height;
+        } else {
+          idx = addInput([...(loops ? ['-stream_loop', '-1'] : []), '-ss', f4(ss), '-t', f4(sd), '-i', m.path]);
+          sw = m.width; sh = m.height;
+        }
       } else return null;
       if (!sw || !sh) { sw = W; sh = H; }
       sw = Math.max(2, Math.round(sw)); sh = Math.max(2, Math.round(sh));
       let cur = `${idx}:v`;
       const push = (filter) => { const n = L(); lines.push(`[${cur}]${filter}[${n}]`); cur = n; };
       // 1. normalisation : cadence, format, taille source exacte
-      // même interprétation des couleurs que l'aperçu : BT.709 pour la HD non étiquetée
-      const cm = m && m.kind === 'video' ? (m.colorspace ? 'auto' : (m.height >= 720 ? 'bt709' : 'bt601')) : 'auto';
+      const cm = m && m.kind === 'video' ? colorMatrix(m) : 'auto';
       if (m && m.kind === 'video') push(`setpts=(PTS-STARTPTS)/${f4(ev.speed)},fps=${FPS},scale=${sw}:${sh}:flags=bicubic:in_color_matrix=${cm},format=rgba`);
       else push(`fps=${FPS},scale=${sw}:${sh}:flags=lanczos,format=rgba`);
       // agrandissement prévu pour cette source (pour le débruitage préalable)
       if (!ev.gen) {
-        const maxZ = Math.max(...((ev.pc && ev.pc.kf) || [{ zoom: 1 }]).map(k => k.zoom || 1));
-        const factor = Math.min(W / sw, H / sh) * maxZ * FX.tmOf(tr).zoom;
+        const factor = upFactor(ev, tr, sw, sh, W, H);
         R.stats.maxUp = Math.max(R.stats.maxUp, factor);
-        if (up.denoise && factor > 1.05) push('hqdn3d=1.5:1.5:6:6');
+        if (up.denoise && up.method !== 'ai' && factor > 1.05) push('hqdn3d=1.5:1.5:6:6');
       }
       // 2. effets (sur l'image source, comme l'aperçu)
       if (ev.fx && ev.fx.length) {
@@ -423,6 +472,7 @@
     if (!KC.project.events.length) { KC.toast('Le projet est vide : ajoutez des médias à la timeline', 'info'); return; }
     if (E.playing) E.stop();
     await KC.busy(loadEncoders);
+    const aiSt = N.aiRenderStatus ? await N.aiRenderStatus().catch(() => null) : null;
     const st = KC.project.settings;
     let fmt = R.FORMATS.find(f => f.id === KC.prefs.renderFormat) || R.FORMATS[0];
     const lp = KC.project.loop;
@@ -472,9 +522,15 @@
           if (!encs.length) opts.append(h('div.note.full', { style: { color: 'var(--danger)' }, text: 'Aucun encodeur disponible pour ce format dans votre ffmpeg.' }));
           // Agrandissement (upscale) des sources plus petites que la sortie
           const F = (enc && enc.filters) || {};
-          const methods = [['lanczos', 'Standard (Lanczos)'], ...(F.cas ? [['cas', 'Lanczos + netteté adaptative (CAS)']] : []), ...(F.libplacebo ? [['placebo', 'GPU haute qualité (libplacebo EWA + CAS)']] : [])];
+          const methods = [['lanczos', 'Standard (Lanczos)'], ...(F.cas ? [['cas', 'Lanczos + netteté adaptative (CAS)']] : []), ...(F.libplacebo ? [['placebo', 'GPU haute qualité (libplacebo EWA + CAS)']] : []),
+            ...(aiSt && aiSt.ok ? [['ai', 'IA — modèle d\'agrandissement (le plus net, plus lent)']] : [])];
           const sv = KC.prefs.renderUpscale || {};
           ctl.up = KC.ui.select(methods, methods.some(m => m[0] === sv.method) ? sv.method : (F.libplacebo ? 'placebo' : F.cas ? 'cas' : 'lanczos'));
+          ctl.fallback = F.libplacebo ? 'placebo' : F.cas ? 'cas' : 'lanczos';
+          const aiModels = aiSt && aiSt.ok ? aiSt.models : [];
+          ctl.aiModel = KC.ui.select([['auto', 'Automatique (le modèle ×2 jusqu\'à ×2, sinon un ×4)'], ...aiModels.map(m => [m.path, `${m.name} (×${m.scale})`])],
+            aiModels.some(m => m.path === sv.model) ? sv.model : 'auto');
+          const aiLab = h('label', { text: 'Modèle IA' });
           const sv2 = h('span', { style: { width: '50px', color: 'var(--text-2)' } });
           ctl.sharp = h('input', { type: 'range', min: 0, max: 1, step: 0.05, value: sv.sharp != null ? sv.sharp : 0.45, style: { flex: 1 } });
           const sl = () => { sv2.textContent = Math.round(ctl.sharp.value * 100) + ' %'; };
@@ -492,13 +548,21 @@
               const fct = Math.min(OW / m.width, OH / m.height) * z * FX.tmOf(P.track(e.track)).zoom;
               if (!best || fct > best.f) best = { f: fct, m };
             }
-            const sharpRow = ctl.up.value !== 'lanczos';
+            const isAi = ctl.up.value === 'ai';
+            const sharpRow = ctl.up.value !== 'lanczos' && !isAi;
             ctl.sharp.parentElement.hidden = sharpLab.hidden = !sharpRow;
+            ctl.denoise.hidden = isAi;
+            ctl.aiModel.hidden = aiLab.hidden = !isAi;
             if (!best || best.f <= 1.05) upNote.textContent = 'Aucune vidéo n\'est agrandie avec ce modèle : la méthode d\'agrandissement n\'a pas d\'effet.';
-            else upNote.textContent = `Vos vidéos seront agrandies jusqu'à ×${U.fmtNum(best.f, 1)} (ex. ${best.m.width}×${best.m.height} → ${Math.round(best.m.width * best.f)}×${Math.round(best.m.height * best.f)}). La méthode GPU donne les contours les plus nets ; aucune méthode n'invente de détails absents de la source.`;
+            else if (isAi) {
+              const items = R.aiPlan({ from: 0, to: P.duration(), fps: t.fps || st.fps, width: OW, height: OH });
+              const frames = items.reduce((s, it) => s + Math.round(it.sd * it.fps), 0);
+              upNote.textContent = `Vos vidéos seront agrandies jusqu'à ×${U.fmtNum(best.f, 1)}. ${items.length} plan${items.length > 1 ? 's' : ''} (${frames} images) passeront d'abord par le modèle, sur la carte graphique : compter de l'ordre d'une seconde par image. `
+                + 'Les plans déjà agrandis sont repris tels quels aux rendus suivants. Le modèle travaille image par image : il reconstruit des contours et des textures nets, mais peut faire légèrement scintiller les détails fins.';
+            } else upNote.textContent = `Vos vidéos seront agrandies jusqu'à ×${U.fmtNum(best.f, 1)} (ex. ${best.m.width}×${best.m.height} → ${Math.round(best.m.width * best.f)}×${Math.round(best.m.height * best.f)}). La méthode GPU donne les contours les plus nets sans IA ; seule la méthode IA reconstruit des détails absents de la source.`;
           };
           const sharpLab = h('label', { text: 'Netteté' });
-          opts.append(h('div.group-title', { text: 'Agrandissement (upscale)' }), h('label', { text: 'Méthode' }), ctl.up, sharpLab, h('div.row', ctl.sharp, sv2), h('label'), ctl.denoise, upNote);
+          opts.append(h('div.group-title', { text: 'Agrandissement (upscale)' }), h('label', { text: 'Méthode' }), ctl.up, aiLab, ctl.aiModel, sharpLab, h('div.row', ctl.sharp, sv2), h('label'), ctl.denoise, upNote);
           ctl.up.addEventListener('change', upInfo); ctl.tpl.addEventListener('change', upInfo);
           upInfo();
         }
@@ -548,7 +612,7 @@
         o.fps = t.fps || st.fps;
         KC.prefs.renderTemplate = t.id;
         if (ctl.up) {
-          o.upscale = { method: ctl.up.value, sharp: parseFloat(ctl.sharp.value), denoise: ctl.denoise.input.checked };
+          o.upscale = { method: ctl.up.value, sharp: parseFloat(ctl.sharp.value), denoise: ctl.denoise.input.checked, model: ctl.aiModel.value, fallback: ctl.fallback };
           KC.prefs.renderUpscale = o.upscale;
         }
         if (fmt.v !== 'gif') {
@@ -567,7 +631,45 @@
     });
   };
 
+  // Agrandissement IA des plans avant le rendu : null si annulé ou en échec (déjà signalé)
+  let aiListener = null;
+  if (N && N.onAiRenderProgress) N.onAiRenderProgress(p => { if (aiListener) aiListener(p); });
+  R.aiPrepare = async (o, items) => {
+    const bar = h('i', { style: { width: '0%' } });
+    const pct = h('div', { style: { fontSize: '26px', fontWeight: 700 }, text: '0 %' });
+    const det = h('div.note', { text: 'Chargement du modèle sur la carte graphique…' });
+    const box = h('div', { style: { width: '520px' } },
+      h('div', { style: { marginBottom: '6px', color: 'var(--text-2)' }, text: `Agrandissement IA de ${items.length} plan${items.length > 1 ? 's' : ''}, avant le rendu` }),
+      h('div', { style: { display: 'flex', alignItems: 'end', gap: '14px', marginBottom: '8px' } }, pct, det),
+      h('div.progress', bar));
+    let jobId = null, finished = false;
+    const cancel = () => { if (!finished) N.aiRenderCancel(jobId); };
+    const dlg = KC.modal({
+      title: 'Agrandissement IA…', body: box, onKey: e => (e.key === 'Escape' ? (cancel(), true) : false),
+      buttons: [{ label: 'Annuler le rendu', action: () => { cancel(); return finished; } }],
+    });
+    aiListener = p => {
+      jobId = p.id;
+      const pc = p.total ? Math.min(100, p.done / p.total * 100) : 0;
+      bar.style.width = pc.toFixed(1) + '%'; pct.textContent = Math.floor(pc) + ' %';
+      const rem = p.done > 0 && !p.cached ? p.elapsed * (p.total - p.done) / p.done : 0;
+      det.textContent = `Plan ${p.index + 1}/${p.count} · ${p.model} → ${p.size}${p.cached ? ' · déjà agrandi' : ''}${p.tile ? ' · par tuiles' : ''}${rem ? ' · reste ≈ ' + U.fmtDur(rem) : ''}`;
+      KC.emit('render-progress', pc);
+    };
+    let r;
+    try { r = await N.aiRenderRun({ model: (o.upscale && o.upscale.model) || 'auto', items }); } catch (e) { r = { ok: false, error: e.message }; }
+    aiListener = null; finished = true; dlg.close();
+    KC.emit('render-progress', null);
+    if (r.canceled) { KC.toast('Rendu annulé', 'info'); return null; }
+    if (!r.ok) { KC.alert('Agrandissement IA impossible', r.error || 'Erreur inconnue'); return null; }
+    return r.results;
+  };
+
   async function progress(o) {
+    if (o.video && o.upscale && o.upscale.method === 'ai') {
+      const items = R.aiPlan(o);
+      if (items.length) { const res = await R.aiPrepare(o, items); if (!res) return; o.aiSources = res; }
+    }
     let job;
     try { job = await R.run(o); } catch (e) { KC.alert('Rendu impossible', e.message); return; }
     const bar = h('i', { style: { width: '0%' } });

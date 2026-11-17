@@ -23,7 +23,7 @@ const MIME = {
   '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp', '.svg': 'image/svg+xml',
 };
 
-function setup(getWin, { output } = {}) {
+function setup(getWin, { output, models, pythons, environment } = {}) {
   const dataDir = path.join(app.getPath('userData'), 'kaneclip');
   fs.mkdirSync(dataDir, { recursive: true });
   // les outils de KaneClip rangent leurs caches et modèles dans « userData » : celui de l'espace Vidéo
@@ -36,6 +36,7 @@ function setup(getWin, { output } = {}) {
   const tools = require(path.join(dir, 'media-tools.cjs'))({ app: appProxy, send, binary: () => { const value = managed.read(); return value.active ? value.media.ffmpeg : null; } });
   const ai = require(path.join(dir, 'ai-upscale.cjs'))({ app: appProxy, send, tools });
   const freeze = require(path.join(dir, 'freeze-detect.cjs'));
+  const aiRender = require(path.join(dir, 'ai-render.cjs'))({ app, send, tools, modelsDir: models, pythons, environment });
   const appUrl = 'file:///' + path.join(dir, 'app').replace(/\\/g, '/');
   const fromKc = e => { const u = e.senderFrame && e.senderFrame.url || ''; return decodeURIComponent(u).replace(/\\/g, '/').toLowerCase().startsWith(decodeURIComponent(appUrl).toLowerCase()); };
   const H = (ch, fn) => ipcMain.handle('kc:' + ch, (e, ...a) => { if (!fromKc(e)) throw new Error('Refusé'); return fn(e, ...a); });
@@ -121,6 +122,9 @@ function setup(getWin, { output } = {}) {
   H('proxy-start', (_e, p, info) => tools.proxyStart(p, info));
   H('keyint', (_e, p) => tools.keyInterval(p));
   H('encoders', () => tools.encoders());
+  H('ai-render-status', () => aiRender.status());
+  H('ai-render-run', (_e, o) => aiRender.run(o || {}));
+  H('ai-render-cancel', (_e, id) => (id ? aiRender.cancel(id) : (aiRender.cancelAll(), true)));
   H('freeze-analyze', (_e, p, o = {}) => {
     if (typeof p !== 'string' || !fs.existsSync(p)) return { ok: false, error: 'Fichier introuvable' };
     const num = v => (Number.isFinite(+v) ? +v : undefined);
@@ -188,7 +192,7 @@ function setup(getWin, { output } = {}) {
   ipcMain.handle('kc-url', () => appUrl + '/index.html');
   ipcMain.handle('kc-stop', event => {
     if (event.senderFrame !== getWin()?.webContents.mainFrame) throw new Error('Réservé à KaneApp');
-    tools.cancelAll(); ai.cancelAll(); return { ok: true };
+    tools.cancelAll(); ai.cancelAll(); aiRender.cancelAll(); return { ok: true };
   });
 }
 

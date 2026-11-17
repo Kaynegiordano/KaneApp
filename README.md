@@ -20,6 +20,23 @@ et les trois copies ICO utilisées par la fenêtre, les raccourcis et l'installa
 dix tailles de 16 à 256 pixels ; le symbole reste transparent et indépendant du thème de l'interface.
 
 ## Outils récents
+### Montage : agrandissement IA au rendu (1.48.0)
+
+- **Rendre en tant que › Agrandissement › Méthode : IA** (proposée si un moteur a torch et spandrel, et si le dossier
+  des modèles contient un modèle dans `ESRGAN`, `upscale_models`, `RealESRGAN` ou `Upscalers`). Modèle au choix, ou
+  automatique : le plus petit facteur suffisant (×2 jusqu'à ×2, sinon ×4), AnimeSharp puis UltraSharp d'abord.
+- Avant le rendu, chaque plan vidéo agrandi de plus de 5 % passe par le modèle sur la plage exacte que lit le rendu
+  (`kaneclip/ai-render.cjs`, IPC `kc:ai-render-*`) : ffmpeg décode en RVB → `kaneclip/ai-render-upscale.py` (Python de
+  ComfyUI, sinon du Studio ; CUDA, fp16/bf16, tuiles si la mémoire manque) → H.264 RVB quasi sans perte. Le rendu lit
+  ces fichiers à la place de la source (`o.aiSources`) ; aucun moteur ni modèle n'est installé ou modifié.
+- Couleurs : les basses fréquences du résultat sont remplacées par celles de la source (les modèles éclaircissent ou
+  réchauffent l'image de 1 à 5 niveaux) ; les détails ajoutés restent.
+- Cache dans `%TEMP%\KaneClip\ia-rendu` (7 jours, 40 Go au plus) : un plan déjà agrandi n'est pas recalculé.
+  Plans en boucle et zoom au-delà du facteur du modèle : méthode classique (libplacebo si présent).
+- Environ 1 s par image 1376×768 sur une RTX 5080. Le modèle travaille image par image : pas de cohérence temporelle.
+- Tests : `node kaneclip/tests/ai-render.cjs`, `npx electron tools/test-montage-ia.cjs` (vraie fenêtre, profil isolé ;
+  rendu 1280×720 contrôlé image par image, couleurs moyennes et reprise du cache).
+
 ### Montage : couper les passages figés (1.47.0)
 
 - **Outils › Couper les passages figés…** (aussi au clic droit d'un plan vidéo et dans Ctrl+K) : sur les plans

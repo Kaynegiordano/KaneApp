@@ -71,7 +71,18 @@ if (!app.requestSingleInstanceLock()) {
   pending.push(...filesFromArgv(process.argv));
   if (pending.length) pendingStudio = studioFromArgv(process.argv);
   app.whenReady().then(() => {
-    kcHost.setup(() => win, { output: () => outputPaths.directory('montage') });
+    kcHost.setup(() => win, {
+      output: () => outputPaths.directory('montage'),
+      // agrandissement IA au rendu : modèles du pool commun, Python d'un moteur qui a torch et spandrel
+      models: () => engineDirs().models,
+      pythons: () => {
+        const value = managedRuntime.read(), list = [];
+        if (value.active) for (const [id, name] of [['comfyui', 'ComfyUI'], ['studio', 'Studio']]) if (value.components[id]) list.push({ id, name, python: value.components[id].python });
+        const studio = engineDirs().python; if (studio) list.push({ id: 'studio', name: 'Studio', python: studio });
+        return list;
+      },
+      environment: id => managedRuntime.environment(id),
+    });
     require('./suite-host.cjs')(() => win);
     services = require('./services.cjs')({
       getWin: () => win,

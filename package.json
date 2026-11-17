@@ -1,7 +1,7 @@
 {
   "name": "kaneapp",
   "productName": "KaneApp",
-  "version": "1.47.0",
+  "version": "1.48.0",
   "description": "KaneApp — éditeur d'images, Studio IA, Animation Wallpaper Engine, Vidéo IA et Montage",
   "main": "main.js",
   "private": true,
@@ -76,7 +76,8 @@
       "animation-runtime.py",
       "animation_web.py",
       "animation-web/**/*",
-      "runtime-migrate.py"
+      "runtime-migrate.py",
+      "kaneclip/ai-render-upscale.py"
     ],
     "win": {
       "target": [

@@ -11,6 +11,7 @@ Quitter Montage interrompt la lecture du Programme et du moniteur Source.
 - **Sous-titres** : importer un SRT UTF-8 ou ajouter du texte au curseur. Corriger le texte, ouvrir Calage pour les temps, choisir Clair ou Cartouche. Les textes sont incrustés à l'export vidéo et peuvent être réexportés en SRT. La transcription automatique n'est pas incluse.
 - **Ctrl+K** : rechercher une action sans tenir compte des accents, choisir avec les flèches et exécuter avec Entrée.
 - **Passages figés** (KaneApp 1.47.0) : Outils › Couper les passages figés…, au clic droit d'un plan vidéo ou avec Ctrl+K. Analyse les plans sélectionnés (sinon tous les plans vidéo), liste les plages où l'image ne bouge plus (début, milieu, fin) et les retire avec le son lié ; la suite des mêmes pistes se resserre, les autres pistes ne bougent pas. Plans exclus : images, lecture inversée, événement qui répète son média. L'analyse refuse les plans de plus de 3 600 images.
+- **Agrandissement IA** (KaneApp 1.48.0) : dans Rendre en tant que, Agrandissement › Méthode : IA. Les plans vidéo agrandis de plus de 5 % passent d'abord par un modèle du dossier des modèles (automatique : ×2 jusqu'au double, sinon ×4), avec le Python de ComfyUI ou du Studio ; les couleurs de la source sont conservées et les plans déjà agrandis sont repris du cache. Plans en boucle : méthode classique.
 - **FX activés / FX ignorés** : désactiver temporairement les effets de l'aperçu. L'export vidéo conserve les effets du projet. Le compteur en millisecondes mesure la composition ; il ne mesure pas la totalité du décodage et de l'affichage.
 
 ## Vérification
@@ -23,12 +24,14 @@ node kaneclip/tests/captions-model.cjs
 node kaneclip/tests/event-index.cjs
 node kaneclip/tests/freeze-detect.cjs
 node kaneclip/tests/freeze-cut.cjs
+node kaneclip/tests/ai-render.cjs
 ```
 
 Avec Electron et FFmpeg, dans une vraie fenêtre KaneApp et un profil isolé :
 `npx electron tools/test-montage-figes.cjs` analyse et coupe une vidéo fabriquée, rend en H.264/AAC
 et contrôle le fichier. Il vérifie aussi, image par image, que 8 raccords à 24 i/s sont rendus
-sans perte ni doublon.
+sans perte ni doublon. `npx electron tools/test-montage-ia.cjs` rend en 1280×720 une vidéo 640×360
+agrandie par l'IA et contrôle chaque image, les couleurs et la reprise du cache (sauté sans moteur ni modèle).
 
 L'index est comparé à une recherche exhaustive sur 20 001 événements :
 chevauchements, longues séquences, recherche par piste et invalidations.
