@@ -124,6 +124,7 @@ function setup(getWin, { output, models, pythons, environment } = {}) {
   H('encoders', () => tools.encoders());
   H('ai-render-status', () => aiRender.status());
   H('ai-render-run', (_e, o) => aiRender.run(o || {}));
+  H('ai-render-preview', (_e, o) => aiRender.preview(o || {}));
   H('ai-render-cancel', (_e, id) => (id ? aiRender.cancel(id) : (aiRender.cancelAll(), true)));
   H('freeze-analyze', (_e, p, o = {}) => {
     if (typeof p !== 'string' || !fs.existsSync(p)) return { ok: false, error: 'Fichier introuvable' };

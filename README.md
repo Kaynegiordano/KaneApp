@@ -20,6 +20,31 @@ et les trois copies ICO utilisées par la fenêtre, les raccourcis et l'installa
 dix tailles de 16 à 256 pixels ; le symbole reste transparent et indépendant du thème de l'interface.
 
 ## Outils récents
+### Montage : fluidité IA, détails stables, aperçu, 10 bits (1.49.0)
+
+- **Fluidité** (Rendre en tant que › Fluidité › Images manquantes : IA) : un plan vidéo qui a moins d'images par seconde
+  que le rendu (16 ou 24 i/s rendus en 30 ou 60, ralentis compris : cadence voulue = i/s du rendu ÷ vitesse) reçoit des
+  images intermédiaires calculées par RIFE (`models\frame_interpolation\rife*`, code
+  `comfy_extras/frame_interpolation_models/ifnet.py` de ComfyUI chargé seul, sans démarrer ComfyUI). Le fichier du cache
+  est à i/s ÷ vitesse : le rendu le lit comme une source, une image par image du rendu. Mesure (24 i/s ramené à 12 puis
+  recréé) : 42,1 dB contre 33,4 dB en répétant les images.
+- **Un seul passage** `kaneclip/ai-render-video.py` (remplace `ai-render-upscale.py`) : le mouvement est estimé par
+  RIFE sur la source, puis appliqué aux images agrandies ; seules les vraies images passent par le modèle.
+- **Stabiliser les détails** (case sous Modèle IA, cochée par défaut) : chaque image agrandie est mêlée à ses deux
+  voisines recalées par le mouvement, là où la source ne change pas (confiance par écart de la source recalée).
+  Mesuré : scintillement des zones fixes −24 %, netteté −8 %.
+- **Plus rapide** : le modèle est compilé (`torch.compile`, Triton) dès 40 images à agrandir. UltraSharp 1376×768 :
+  2,0 → 0,68 s/image ; RCAN ×2 : 1,05 → 0,6 s/image. Première compilation 40 s environ, puis 7 s (cache d'Inductor).
+- **Aperçu avant/après…** (à côté de Modèle IA) : une image du plan sous la tête de lecture, Lanczos contre le modèle
+  choisi, séparation à glisser, taille réelle ; « Garder ce modèle ». IPC `kc:ai-render-preview`.
+- **10 bits** pour HEVC, AV1 et VP9 (case sous Encodeur, cochée par défaut) : `yuv420p10le` ou `p010le` selon l'encodeur.
+- **Corrigé** : une coupe qui ne tombe pas sur une image du rendu (projet à 24 i/s rendu à 60) laissait une image vide
+  au raccord. Les fenêtres d'affichage des plans sont prises sur la grille des images du rendu.
+- Fenêtres empilées : seule celle du dessus répond au clavier (Échap ferme l'aperçu, pas « Rendre en tant que »).
+- Tests : `node kaneclip/tests/ai-render.cjs` ; `npx electron tools/test-montage-ia.cjs` vérifie en plus l'aperçu, un
+  rendu 60 i/s agrandi, stabilisé et intercalé en HEVC 10 bits (90 images à leur place, sans doublon) et le même rendu
+  sans IA (aucune image vide au raccord).
+
 ### Montage : agrandissement IA au rendu (1.48.0)
 
 - **Rendre en tant que › Agrandissement › Méthode : IA** (proposée si un moteur a torch et spandrel, et si le dossier
@@ -27,7 +52,7 @@ dix tailles de 16 à 256 pixels ; le symbole reste transparent et indépendant d
   automatique : le plus petit facteur suffisant (×2 jusqu'à ×2, sinon ×4), AnimeSharp puis UltraSharp d'abord.
 - Avant le rendu, chaque plan vidéo agrandi de plus de 5 % passe par le modèle sur la plage exacte que lit le rendu
   (`kaneclip/ai-render.cjs`, IPC `kc:ai-render-*`) : ffmpeg décode en RVB → `kaneclip/ai-render-upscale.py` (Python de
-  ComfyUI, sinon du Studio ; CUDA, fp16/bf16, tuiles si la mémoire manque) → H.264 RVB quasi sans perte. Le rendu lit
+  ComfyUI, sinon du Studio ; devenu `ai-render-video.py` en 1.49 ; CUDA, fp16/bf16, tuiles si la mémoire manque) → H.264 RVB quasi sans perte. Le rendu lit
   ces fichiers à la place de la source (`o.aiSources`) ; aucun moteur ni modèle n'est installé ou modifié.
 - Couleurs : les basses fréquences du résultat sont remplacées par celles de la source (les modèles éclaircissent ou
   réchauffent l'image de 1 à 5 niveaux) ; les détails ajoutés restent.
@@ -731,4 +756,5 @@ Maintenir Alt + bouton droit dans la zone de travail : glisser horizontalement p
 - **1.45.1** : aperçu d'un LoRA posé depuis le Studio avec son invite et ses réglages (bloc `parameters`, comme Forge) ; Enregistrer garde aussi les paramètres.
 - **1.45.3** : `animation-web/moteur.html` : les calques portés par la tête suivent le corps quand la marionnette le suit (`PERSO.suit`, zones peintes avec le squelette ; moteur Animation 4.1.0).
 - **1.45.2** : visages épargnés par KaneDraw sur ANIMA (moteur KaneDraw 2.2.1) ; zone de Kane Detailer en échec réessayée puis signalée (Kane Detailer 5.5.1).
+- **1.49.0** : Montage : fluidité IA (RIFE), détails stabilisés, modèle compilé, aperçu avant/après, rendu 10 bits ; image vide corrigée aux raccords hors de la grille du rendu.
 - **1.48.1** : « Libérer » rend toute la mémoire graphique du Studio (moteur : extensions et cache libérés, ordre gc → vidage) ; Studio inactif déchargé dès qu’un autre programme a besoin de la carte (mesure du pilote comparée au moteur, `gpu-memory.cjs`).

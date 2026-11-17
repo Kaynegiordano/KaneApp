@@ -39,4 +39,16 @@ try {
   assert.equal(st.ok, true); assert.equal(st.engine, 'ComfyUI');
   assert.deepEqual(st.models.map(m => [m.name, m.scale]), [['4x-UltraSharp', 4]]);
   console.log('OK état : moteur avec torch et spandrel, modèles du dossier ESRGAN (fichiers vides et notes ignorés)');
+  // RIFE : code de ComfyUI au-dessus du Python, modèle le plus récent du dossier frame_interpolation
+  assert.equal(st.rife, null);
+  const fi = path.join(tmp, 'models', 'frame_interpolation');
+  fs.mkdirSync(fi, { recursive: true });
+  for (const n of ['rife47.pth', 'rife_v4.26.safetensors', 'film_net_fp32.pt']) fs.writeFileSync(path.join(fi, n), 'x');
+  st = mod({ app, tools, send: () => {}, modelsDir: () => path.join(tmp, 'models'), pythons }).status();
+  assert.equal(st.rife, null, 'sans le code de ComfyUI, pas de fluidité');
+  const code = path.join(tmp, 'moteur', 'comfy_extras', 'frame_interpolation_models');
+  fs.mkdirSync(code, { recursive: true }); fs.writeFileSync(path.join(code, 'ifnet.py'), '');
+  st = mod({ app, tools, send: () => {}, modelsDir: () => path.join(tmp, 'models'), pythons }).status();
+  assert.deepEqual(st.rife, { name: 'rife_v4.26' });
+  console.log('OK fluidité : code RIFE de ComfyUI trouvé au-dessus du Python, modèle RIFE le plus récent');
 } finally { fs.rmSync(tmp, { recursive: true, force: true }); }

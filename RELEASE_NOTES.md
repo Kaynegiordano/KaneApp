@@ -1,3 +1,13 @@
+# 1.49.0 — Montage : vidéos fluides, détails stables
+
+- **Fluidité IA** : une vidéo à 16 ou 24 images par seconde rendue en 30 ou 60 (ou un ralenti) n'a plus d'images répétées. Dans **Rendre en tant que › Fluidité**, choisissez « IA : créer les images intermédiaires » : l'IA calcule le mouvement et crée les images manquantes, sans saccades. Elle utilise le modèle RIFE déjà présent dans le dossier des modèles ; rien n'est téléchargé.
+- **Détails stables** : avec l'agrandissement IA, la case « Stabiliser les détails » (cochée par défaut) évite que les détails inventés par le modèle scintillent d'une image à l'autre.
+- **Plus rapide** : l'agrandissement IA va 1,7 à 3 fois plus vite sur les plans de plus de 40 images. La première fois, la préparation du modèle prend jusqu'à une minute.
+- **Aperçu avant/après…** : à côté du choix du modèle IA, comparez sur une image du Programme l'agrandissement classique et celui du modèle, en glissant la séparation, à la taille réelle si vous voulez ; « Garder ce modèle » le reprend pour le rendu.
+- **10 bits** : en HEVC, AV1 et VP9, la case « 10 bits » (cochée par défaut) garde les dégradés lisses (ciel, fonds flous, ombres) au lieu de former des bandes.
+
+**Corrigé** : un projet rendu à une autre cadence que la sienne (24 i/s rendu en 60) pouvait montrer une image noire à un raccord.
+
 # 1.48.1 — Mémoire graphique rendue pour de bon
 
 - **Libérer maintenant** (jauge VRAM) et le déchargement automatique rendent maintenant toute la mémoire graphique du Studio : il restait environ 5,6 Go après le déchargement (cache de la carte, détecteurs de Kane Detailer, agrandisseurs), il n'en reste plus que le minimum (~0,2 Go en plus de Windows).

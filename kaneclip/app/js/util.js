@@ -209,6 +209,9 @@ KC.modal = ({ title, body, buttons = [{ label: 'OK', primary: true }], onClose, 
   box.append(h('div.modal-head', { text: title || '' }), h('div.modal-body', body), foot);
   back.appendChild(box);
   const key = e => {
+    // fenêtres empilées (aperçu au-dessus de « Rendre en tant que ») : seule celle du dessus répond au clavier
+    const top = back.parentElement && back.parentElement.lastElementChild;
+    if (top && top !== back && top.classList.contains('modal-back')) return;
     if (onKey && onKey(e) === true) { e.preventDefault(); e.stopPropagation(); return; }
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(escValue); }
     else if (e.key === 'Enter' && !(e.target && e.target.tagName === 'TEXTAREA')) {

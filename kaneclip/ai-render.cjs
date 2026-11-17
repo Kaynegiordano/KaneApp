@@ -1,15 +1,20 @@
-// Agrandissement IA au rendu de Montage : chaque plan vidéo agrandi passe d'abord, sur la plage exacte de sa source
-// utilisée par le rendu, par un modèle d'agrandissement du dossier des modèles (ESRGAN, RCAN…), avec le Python d'un
-// moteur de KaneApp (torch + spandrel, CUDA). ffmpeg décode → ai-render-upscale.py → ffmpeg encode, sans fichiers
-// d'images intermédiaires. Le résultat (H.264 RGB quasi sans perte) est gardé en cache pour les rendus suivants.
+// Traitement IA des plans au rendu de Montage : chaque plan vidéo concerné passe d'abord, sur la plage exacte de sa
+// source utilisée par le rendu, par ai-render-video.py avec le Python d'un moteur de KaneApp (torch + spandrel, CUDA) :
+//  - agrandissement par un modèle du dossier des modèles (ESRGAN, RCAN…), détails stabilisés d'une image à l'autre ;
+//  - fluidité : images intermédiaires créées par RIFE (code de ComfyUI, models\frame_interpolation) quand la
+//    source a moins d'images par seconde que le rendu (16 ou 24 i/s rendus en 30 ou 60, ralentis).
+// ffmpeg décode → Python → ffmpeg encode, sans fichiers d'images intermédiaires. Le résultat (H.264 RGB quasi sans
+// perte) est gardé en cache pour les rendus suivants.
 'use strict';
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 
-const VERSION = 2;   // à augmenter quand le traitement change : invalide le cache
+const VERSION = 3;   // à augmenter quand le traitement change : invalide le cache
 const MODEL_DIRS = ['ESRGAN', 'upscale_models', 'RealESRGAN', 'Upscalers'];
+const RIFE_CODE = path.join('comfy_extras', 'frame_interpolation_models', 'ifnet.py');
+const COMPILE_MIN = 40;   // images à agrandir à partir desquelles compiler le modèle (≈ 2,5× plus rapide, 7 à 40 s d'avance)
 const MODEL_EXT = /\.(pth|safetensors|pt)$/i;
 const CACHE_MAX = 40 * 1024 ** 3, CACHE_DAYS = 7;
 // Choix automatique : à facteur égal, les modèles réputés pour la vidéo et l'illustration d'abord
@@ -17,6 +22,8 @@ const PREFERRED = [/AnimeSharp/i, /UltraSharp/i, /Remacri/i, /Siax/i, /x4plus(?!
 
 // « 4x-UltraSharp », « 2x_AnimeSharp », « RealESRGAN_x4plus » ; le Python vérifie le facteur réel du modèle
 const scaleOf = name => { const m = name.match(/(?:^|[^a-z0-9])([1-8])x(?!\d)/i) || name.match(/x([1-8])(?!\d)/i); return m ? +m[1] : 4; };
+
+const fmtRate = r => String(Math.round(r * 100) / 100).replace('.', ',');
 
 function pickModel(models, factor) {
   if (!models.length) return null;
@@ -28,7 +35,7 @@ function pickModel(models, factor) {
 }
 
 module.exports = function aiRender({ app, send, tools, modelsDir = () => null, pythons = () => [], environment = () => process.env }) {
-  const script = path.join(__dirname.replace(/app\.asar(?=[\\/]|$)/, 'app.asar.unpacked'), 'ai-render-upscale.py');
+  const script = path.join(__dirname.replace(/app\.asar(?=[\\/]|$)/, 'app.asar.unpacked'), 'ai-render-video.py');
   const cacheDir = () => path.join(app.getPath('temp'), 'KaneClip', 'ia-rendu');
 
   const python = () => {
@@ -55,11 +62,31 @@ module.exports = function aiRender({ app, send, tools, modelsDir = () => null, p
     }
     return out.sort((a, b) => a.scale - b.scale || a.name.localeCompare(b.name));
   }
+  // RIFE : le code vient de ComfyUI (dossier au-dessus d'un des Python), le modèle du dossier frame_interpolation
+  function rifeInfo() {
+    let comfy = null;
+    for (const c of pythons()) {
+      let d = c && c.python ? path.dirname(c.python) : null;
+      for (let i = 0; d && i < 4 && !comfy; i++, d = path.dirname(d)) if (fs.existsSync(path.join(d, RIFE_CODE))) comfy = d;
+      if (comfy) break;
+    }
+    const root = modelsDir();
+    let model = null;
+    try {
+      const dir = path.join(root, 'frame_interpolation');
+      const names = fs.readdirSync(dir).filter(n => /rife/i.test(n) && /\.(safetensors|pth)$/i.test(n));
+      // la version la plus récente (rife_v4.26 avant rife47)
+      const ver = n => { const m = n.match(/(\d+)[._](\d+)/) || n.match(/rife(\d)(\d+)/i); return m ? +m[1] * 1000 + +m[2] : 0; };
+      names.sort((a, b) => ver(b) - ver(a));
+      if (names.length) model = { path: path.join(dir, names[0]), name: names[0].replace(/\.(safetensors|pth)$/i, '') };
+    } catch { /* pas de dossier */ }
+    return comfy && model ? { comfy, ...model } : null;
+  }
   function status() {
-    const py = python(), models = listModels();
+    const py = python(), models = listModels(), rife = py ? rifeInfo() : null;
     const reason = !py ? 'Aucun moteur de KaneApp avec torch et spandrel (ComfyUI ou Studio)'
       : !models.length ? 'Aucun modèle d\'agrandissement dans ' + path.join(modelsDir() || 'models', 'ESRGAN') : '';
-    return { ok: !reason, reason, engine: py && py.name, models };
+    return { ok: !reason, reason, engine: py && py.name, models, rife: rife ? { name: rife.name } : null };
   }
 
   function prune() {
@@ -78,13 +105,38 @@ module.exports = function aiRender({ app, send, tools, modelsDir = () => null, p
   const jobs = new Map();
   let seq = 0;
 
-  // items : [{ key, input, ss, sd, fps, inW, inH, factor, cm }] ; model : chemin ou 'auto'
+  // Plan de traitement d'un élément : modèle, taille, cadence, fichier du cache
+  function planItem(it, o, st, rife) {
+    const wantUp = it.up !== false && it.factor > 1.05;
+    const model = !wantUp ? null : o.model && o.model !== 'auto' ? st.models.find(m => m.path === o.model) || pickModel(st.models, it.factor) : pickModel(st.models, it.factor);
+    if (wantUp && !model) throw new Error(st.reason || 'Aucun modèle d\'agrandissement');
+    const f = model ? Math.min(it.factor, model.scale) : 1;
+    const width = model ? Math.max(2, Math.round(it.inW * f / 2) * 2) : it.inW, height = model ? Math.max(2, Math.round(it.inH * f / 2) * 2) : it.inH;
+    const smooth = !!(rife && it.rate && it.rate > it.fps * 1.001);
+    if (!model && !smooth) return null;
+    const rate = smooth ? it.rate : it.fps;
+    const frames = Math.max(1, Math.round(it.sd * rate));
+    const srcFrames = Math.max(1, Math.round(it.sd * it.fps));
+    const stabilize = !!(model && rife && o.stabilize);
+    let sig;
+    try {
+      const s = fs.statSync(it.input);
+      sig = [s.size, s.mtimeMs];
+      for (const x of [model && model.path, smooth && rife.path]) if (x) { const ms = fs.statSync(x); sig.push(ms.size, ms.mtimeMs); }
+    } catch { throw new Error('Fichier introuvable : ' + it.input); }
+    const hash = crypto.createHash('sha1').update(JSON.stringify([VERSION, it.input, it.ss.toFixed(5), it.sd.toFixed(5), it.fps, it.inW, it.inH, it.cm,
+      model && model.path, width, height, smooth && rife.path, rate, stabilize, sig])).digest('hex').slice(0, 24);
+    return { ...it, model, width, height, smooth, rate, frames, srcFrames, stabilize, rife: smooth || stabilize ? rife : null, file: path.join(cacheDir(), hash + '.mkv') };
+  }
+
+  // items : [{ key, input, ss, sd, fps, inW, inH, factor, cm, up, rate }] ; model : chemin ou 'auto' ; stabilize
   async function run(o, onStart) {
     const st = status();
-    if (!st.ok) return { ok: false, error: st.reason };
+    const py = python();
+    if (!py) return { ok: false, error: st.reason };
     const ff = tools.findFfmpeg();
     if (!ff) return { ok: false, error: 'ffmpeg introuvable' };
-    const py = python();
+    const rife = rifeInfo();
     const id = 'air' + (++seq);
     const job = { id, canceled: false, procs: new Set() };
     jobs.set(id, job);
@@ -95,30 +147,22 @@ module.exports = function aiRender({ app, send, tools, modelsDir = () => null, p
     const t0 = Date.now();
     try {
       const items = o.items || [];
-      const plan = items.map(it => {
-        const model = o.model && o.model !== 'auto' ? st.models.find(m => m.path === o.model) || pickModel(st.models, it.factor) : pickModel(st.models, it.factor);
-        const f = Math.min(it.factor, model.scale);
-        const width = Math.max(2, Math.round(it.inW * f / 2) * 2), height = Math.max(2, Math.round(it.inH * f / 2) * 2);
-        const frames = Math.max(1, Math.round(it.sd * it.fps));
-        let sig;
-        try { const s = fs.statSync(it.input), ms = fs.statSync(model.path); sig = [s.size, s.mtimeMs, ms.size, ms.mtimeMs]; } catch { throw new Error('Fichier introuvable : ' + it.input); }
-        const hash = crypto.createHash('sha1').update(JSON.stringify([VERSION, it.input, it.ss.toFixed(5), it.sd.toFixed(5), it.fps, it.inW, it.inH, it.cm, model.path, width, height, sig])).digest('hex').slice(0, 24);
-        return { ...it, model, width, height, frames, file: path.join(cacheDir(), hash + '.mkv') };
-      });
+      const plan = items.map(it => planItem(it, o, st, rife)).filter(Boolean);
       const total = plan.reduce((s, p) => s + p.frames, 0);
       let before = 0;
       for (let i = 0; i < plan.length; i++) {
         const p = plan[i];
         if (job.canceled) throw new Error('canceled');
+        const what = [p.model && p.model.name, p.smooth && `${fmtRate(p.fps)} → ${fmtRate(p.rate)} i/s`].filter(Boolean).join(' · ');
         const progress = (frame, extra) => send('ai-render-progress', { id, index: i, count: plan.length, frame, frames: p.frames, done: before + frame, total,
-          model: p.model.name, size: `${p.width}×${p.height}`, elapsed: (Date.now() - t0) / 1000, ...extra });
+          model: what, size: `${p.width}×${p.height}`, elapsed: (Date.now() - t0) / 1000, ...extra });
         if (fs.existsSync(p.file)) {
           const now = new Date(); try { fs.utimesSync(p.file, now, now); } catch { /* lecture seule */ }
           progress(p.frames, { cached: true });
         } else {
           await upscaleOne(job, ff, py, p, progress);
         }
-        results[p.key] = { path: p.file, width: p.width, height: p.height, model: p.model.name };
+        results[p.key] = { path: p.file, width: p.width, height: p.height, model: p.model && p.model.name, rate: p.rate, smooth: p.smooth };
         before += p.frames;
       }
       return { ok: true, results, elapsed: (Date.now() - t0) / 1000 };
@@ -130,16 +174,28 @@ module.exports = function aiRender({ app, send, tools, modelsDir = () => null, p
     }
   }
 
-  function upscaleOne(job, ff, py, p, progress) {
+  // Arguments du script Python pour un élément du plan
+  function scriptArgs(p, extra = []) {
+    const a = ['-I', script, '--in-size', `${p.inW}x${p.inH}`, '--out-size', `${p.width}x${p.height}`, '--src-fps', String(p.fps)];
+    if (p.model) a.push('--model', p.model.path);
+    if (p.model && p.srcFrames >= COMPILE_MIN) a.push('--compile');
+    if (p.rife) a.push('--rife', p.rife.path, '--comfy', p.rife.comfy);
+    if (p.smooth) a.push('--rate', String(p.rate), '--count', String(p.frames));
+    if (p.stabilize) a.push('--stabilize');
+    return [...a, ...extra];
+  }
+
+  // ffmpeg décode → Python → ffmpeg encode ; out : arguments de sortie de l'encodeur
+  function upscaleOne(job, ff, py, p, progress, opt = {}) {
     return new Promise((resolve, reject) => {
-      const part = p.file + '.part';
+      const part = opt.out || p.file + '.part';
       const fps = String(p.fps);
-      const dec = spawn(ff, ['-hide_banner', '-loglevel', 'error', '-nostdin', '-ss', p.ss.toFixed(5), '-t', p.sd.toFixed(5), '-i', p.input,
-        '-map', '0:v:0', '-vf', `scale=in_color_matrix=${p.cm}:flags=bicubic,format=rgb24`, '-fps_mode', 'cfr', '-r', fps, '-f', 'rawvideo', 'pipe:1'], { windowsHide: true });
+      const dec = spawn(ff, ['-hide_banner', '-loglevel', 'error', '-nostdin', '-ss', p.ss.toFixed(5), ...(opt.single ? [] : ['-t', p.sd.toFixed(5)]), '-i', p.input,
+        '-map', '0:v:0', '-vf', `scale=in_color_matrix=${p.cm}:flags=bicubic,format=rgb24`, ...(opt.single ? ['-frames:v', '1'] : ['-fps_mode', 'cfr', '-r', fps]), '-f', 'rawvideo', 'pipe:1'], { windowsHide: true });
       const env = { ...environment(py.id), PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1' };
-      const ai = spawn(py.python, ['-I', script, '--model', p.model.path, '--in-size', `${p.inW}x${p.inH}`, '--out-size', `${p.width}x${p.height}`], { windowsHide: true, env });
-      const enc = spawn(ff, ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', `${p.width}x${p.height}`, '-r', fps, '-i', 'pipe:0',
-        '-c:v', 'libx264rgb', '-preset', 'fast', '-crf', '6', '-f', 'matroska', part], { windowsHide: true });
+      const ai = spawn(py.python, scriptArgs(p, opt.single ? ['--count', '1'] : []), { windowsHide: true, env });
+      const enc = spawn(ff, ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', `${p.width}x${p.height}`, '-r', String(p.rate || fps), '-i', 'pipe:0',
+        ...(opt.single ? ['-frames:v', '1', '-c:v', 'png', part] : ['-c:v', 'libx264rgb', '-preset', 'fast', '-crf', '6', '-f', 'matroska', part])], { windowsHide: true });
       const procs = [dec, ai, enc];
       for (const x of procs) job.procs.add(x);
       for (const s of [dec.stdout, ai.stdin, ai.stdout, enc.stdin]) s.on('error', () => { /* tuyau fermé : l'erreur du processus suffit */ });
@@ -156,6 +212,7 @@ module.exports = function aiRender({ app, send, tools, modelsDir = () => null, p
           let m = null; try { m = JSON.parse(l); } catch { errs.ai = (errs.ai + l + '\n').slice(-2000); continue; }
           if (m.frame) progress(Math.min(m.frame, p.frames));
           if (m.tile) progress(0, { tile: m.tile });
+          if (m.compile === 'start') progress(0, { compiling: true });
           if (m.error) aiError = m.error;
         }
       });
@@ -163,24 +220,67 @@ module.exports = function aiRender({ app, send, tools, modelsDir = () => null, p
       Promise.all(codes).then(([cd, ca, ce]) => {
         for (const x of procs) job.procs.delete(x);
         if (job.canceled) { try { fs.unlinkSync(part); } catch { /* absent */ } return reject(new Error('canceled')); }
-        const fail = ca !== 0 ? 'Agrandissement IA : ' + (aiError || errs.ai.trim().split('\n').slice(-3).join(' ') || errs.spawn || 'échec')
+        const fail = ca !== 0 ? 'Traitement IA : ' + (aiError || errs.ai.trim().split('\n').slice(-3).join(' ') || errs.spawn || 'échec')
           : cd !== 0 ? 'Lecture de la vidéo : ' + errs.dec.trim().slice(-300)
-          : ce !== 0 ? 'Écriture du plan agrandi : ' + errs.enc.trim().slice(-300) : '';
+          : ce !== 0 ? 'Écriture du plan traité : ' + errs.enc.trim().slice(-300) : '';
         if (fail) { try { fs.unlinkSync(part); } catch { /* absent */ } return reject(new Error(fail)); }
-        try { fs.renameSync(part, p.file); } catch (e) { return reject(e); }
+        if (!opt.out) { try { fs.renameSync(part, p.file); } catch (e) { return reject(e); } }
         resolve();
       });
     });
   }
 
+  // Aperçu avant/après d'une image : { item, time (secondes dans la source), model } → deux PNG à la taille agrandie
+  let previewJob = null;
+  async function preview(o) {
+    const st = status();
+    if (!st.ok) return { ok: false, error: st.reason };
+    const ff = tools.findFfmpeg();
+    if (!ff) return { ok: false, error: 'ffmpeg introuvable' };
+    if (previewJob) cancel(previewJob.id);
+    const it = o.item;
+    const model = o.model && o.model !== 'auto' ? st.models.find(m => m.path === o.model) || pickModel(st.models, it.factor) : pickModel(st.models, it.factor);
+    const f = Math.min(Math.max(it.factor, 1), model.scale);
+    const p = { ...it, ss: Math.max(0, +o.time || 0), sd: 1, model, rife: null, smooth: false, stabilize: false, srcFrames: 1, frames: 1,
+      width: Math.max(2, Math.round(it.inW * f / 2) * 2), height: Math.max(2, Math.round(it.inH * f / 2) * 2) };
+    const dir = path.join(cacheDir(), 'apercu');
+    fs.mkdirSync(dir, { recursive: true });
+    for (const n of fs.readdirSync(dir)) { try { fs.unlinkSync(path.join(dir, n)); } catch { /* affiché */ } }
+    const stamp = Date.now().toString(36);
+    const before = path.join(dir, `avant-${stamp}.png`), after = path.join(dir, `apres-${stamp}.png`);
+    const id = 'aip' + (++seq);
+    const job = previewJob = { id, canceled: false, procs: new Set() };
+    jobs.set(id, job);
+    const t0 = Date.now();
+    try {
+      await new Promise((resolve, reject) => {
+        const x = spawn(ff, ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y', '-ss', p.ss.toFixed(5), '-i', p.input, '-map', '0:v:0', '-frames:v', '1',
+          '-vf', `scale=${p.width}:${p.height}:flags=lanczos:in_color_matrix=${p.cm},format=rgb24`, before], { windowsHide: true });
+        job.procs.add(x);
+        let err = ''; x.stderr.on('data', d => { err += d; });
+        x.on('error', reject);
+        x.on('close', c => { job.procs.delete(x); c === 0 ? resolve() : reject(new Error(job.canceled ? 'canceled' : 'Lecture de la vidéo : ' + err.trim().slice(-300))); });
+      });
+      await upscaleOne(job, ff, python(), p, () => {}, { single: true, out: after });
+      return { ok: true, before, after, width: p.width, height: p.height, model: model.name, scale: model.scale, elapsed: (Date.now() - t0) / 1000 };
+    } catch (err) {
+      if (job.canceled || String(err.message) === 'canceled') return { ok: false, canceled: true };
+      return { ok: false, error: String(err.message || err) };
+    } finally {
+      jobs.delete(id);
+      if (previewJob === job) previewJob = null;
+    }
+  }
+
   function cancel(id) {
+    if (id === 'preview') id = previewJob && previewJob.id;
     const j = jobs.get(id); if (!j) return false;
     j.canceled = true;
     for (const p of j.procs) { try { p.kill(); } catch { /* fini */ } }
     return true;
   }
 
-  return { status, run, cancel, cancelAll: () => { for (const id of jobs.keys()) cancel(id); }, pickModel, scaleOf, cacheDir };
+  return { status, run, preview, cancel, cancelAll: () => { for (const id of jobs.keys()) cancel(id); }, pickModel, scaleOf, cacheDir };
 };
 module.exports.pickModel = pickModel;
 module.exports.scaleOf = scaleOf;

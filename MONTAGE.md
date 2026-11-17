@@ -12,6 +12,7 @@ Quitter Montage interrompt la lecture du Programme et du moniteur Source.
 - **Ctrl+K** : rechercher une action sans tenir compte des accents, choisir avec les flèches et exécuter avec Entrée.
 - **Passages figés** (KaneApp 1.47.0) : Outils › Couper les passages figés…, au clic droit d'un plan vidéo ou avec Ctrl+K. Analyse les plans sélectionnés (sinon tous les plans vidéo), liste les plages où l'image ne bouge plus (début, milieu, fin) et les retire avec le son lié ; la suite des mêmes pistes se resserre, les autres pistes ne bougent pas. Plans exclus : images, lecture inversée, événement qui répète son média. L'analyse refuse les plans de plus de 3 600 images.
 - **Agrandissement IA** (KaneApp 1.48.0) : dans Rendre en tant que, Agrandissement › Méthode : IA. Les plans vidéo agrandis de plus de 5 % passent d'abord par un modèle du dossier des modèles (automatique : ×2 jusqu'au double, sinon ×4), avec le Python de ComfyUI ou du Studio ; les couleurs de la source sont conservées et les plans déjà agrandis sont repris du cache. Plans en boucle : méthode classique.
+- **Fluidité et détails stables** (KaneApp 1.49.0) : Rendre en tant que › Fluidité › IA crée les images manquantes (RIFE) des vidéos qui ont moins d'images par seconde que le rendu, ralentis compris. Avec l'agrandissement IA : « Stabiliser les détails » contre le scintillement, « Aperçu avant/après… » pour comparer les modèles sur une image. HEVC, AV1 et VP9 se rendent en 10 bits par défaut.
 - **FX activés / FX ignorés** : désactiver temporairement les effets de l'aperçu. L'export vidéo conserve les effets du projet. Le compteur en millisecondes mesure la composition ; il ne mesure pas la totalité du décodage et de l'affichage.
 
 ## Vérification
@@ -31,7 +32,7 @@ Avec Electron et FFmpeg, dans une vraie fenêtre KaneApp et un profil isolé :
 `npx electron tools/test-montage-figes.cjs` analyse et coupe une vidéo fabriquée, rend en H.264/AAC
 et contrôle le fichier. Il vérifie aussi, image par image, que 8 raccords à 24 i/s sont rendus
 sans perte ni doublon. `npx electron tools/test-montage-ia.cjs` rend en 1280×720 une vidéo 640×360
-agrandie par l'IA et contrôle chaque image, les couleurs et la reprise du cache (sauté sans moteur ni modèle).
+agrandie par l'IA et contrôle chaque image, les couleurs et la reprise du cache, puis l'aperçu avant/après, un rendu 60 i/s fluide et stabilisé en HEVC 10 bits et le même rendu sans IA (sauté sans moteur ni modèle).
 
 L'index est comparé à une recherche exhaustive sur 20 001 événements :
 chevauchements, longues séquences, recherche par piste et invalidations.

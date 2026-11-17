@@ -107,6 +107,90 @@ app.on('browser-window-created', (_e, win) => {
       assert.deepEqual(again.r, job.sources, 'mêmes fichiers agrandis'); assert.ok(again.s < 3, 'cache : ' + again.s);
       console.log(`OK deuxième rendu : plans repris du cache en ${again.s.toFixed(2)} s`);
       for (const s of srcs) { try { fs.unlinkSync(s.path); } catch { /* utilisé */ } }
+
+      // aperçu avant/après d'une image
+      const pv = await js(`(async () => { const it = KC.render.aiPlan({ width: 1280, height: 720, fps: 24, from: 0, to: KC.P.duration() }, { up: true })[0];
+        return KC.native.aiRenderPreview({ item: it, time: 0.5, model: 'auto' }); })()`);
+      assert.ok(pv.ok, 'aperçu : ' + (pv.error || ''));
+      for (const f of [pv.before, pv.after]) { const s = probe(f)[0]; assert.equal(+s.width, 1280); assert.equal(+s.height, 720); }
+      console.log(`OK aperçu avant/après : deux images 1280×720 (${pv.model}, ${pv.elapsed.toFixed(1)} s)`);
+
+      if (!st.rife) { console.log('SAUTÉ fluidité : pas de RIFE (modèle ou code de ComfyUI)'); return finish(0); }
+      // boîte de rendu : fluidité, stabilisation, 10 bits
+      await js('KC.cmd.render(); true');
+      const dlg2 = await wait(() => js(`(() => { const body = document.querySelector('#modals .modal-body'); if (!body) return null;
+        const s = [...body.querySelectorAll('select')];
+        const up = s.find(x => [...x.options].some(o => o.value === 'ai' && o.textContent.startsWith('IA —'))); if (!up) return null;
+        up.value = 'ai'; up.dispatchEvent(new Event('change'));
+        const sm = s.find(x => [...x.options].some(o => o.value === 'repeat'));
+        const tpl = s.find(x => [...x.options].some(o => o.value === '1080p60'));
+        tpl.value = '1080p60'; tpl.dispatchEvent(new Event('change'));
+        const chk = t => [...body.querySelectorAll('label.chk')].find(l => l.textContent.includes(t));
+        return { smooth: !!sm, stab: !!chk('Stabiliser') && !chk('Stabiliser').hidden, text: body.innerText.match(/\\d+ plans? \\(dès [^)]*\\)/)?.[0] }; })()`), 'options IA de la boîte de rendu');
+      assert.ok(dlg2.smooth, 'choix de la fluidité'); assert.ok(dlg2.stab, 'stabilisation proposée'); assert.equal(dlg2.text, '2 plans (dès 24 i/s, ralentis compris)');
+      await js(`[...document.querySelectorAll('#modals .modal-foot button')].find(b => b.textContent.includes('Annuler')).click(); true`);
+      console.log('OK boîte de rendu : fluidité IA (' + dlg2.text + '), stabilisation des détails');
+
+      // rendu 60 i/s : agrandissement stabilisé + images intermédiaires RIFE, HEVC 10 bits
+      const out60 = path.join(tmp, 'rendu-60.mkv');
+      const job60 = await js(`(async () => {
+        const R = KC.render;
+        const ten = R.videoCodecArgs('libx265', 'cq', 18, 12, true);
+        const o = { video: true, audio: false, width: 1280, height: 720, fps: 60, from: 0, to: KC.P.duration(), out: ${JSON.stringify(out60)},
+          vArgs: ten, pixfmt: R.TEN_BIT.libx265, smooth: 'ai', upscale: { method: 'ai', model: 'auto', fallback: 'lanczos', stabilize: true } };
+        const items = R.aiPlan(o);
+        const t0 = performance.now();
+        o.aiSources = await R.aiPrepare(o, items);
+        if (!o.aiSources) return { error: 'traitement IA refusé' };
+        const ai = (performance.now() - t0) / 1000;
+        const j = await R.run(o);
+        const done = new Promise(r => KC.native.onJobDone(d => r(d)));
+        const s = await KC.native.jobStart({ args: j.args, duration: j.duration, cwd: j.cwd });
+        if (!s.ok) return s;
+        const d = await done; await KC.native.removeDir(j.tmp);
+        return { ...d, items, sources: o.aiSources, ai, ten };
+      })()`);
+      assert.ok(job60.ok, 'rendu 60 i/s : ' + (job60.error || ''));
+      assert.ok(job60.ten.includes('yuv420p10le'));
+      assert.deepEqual(job60.items.map(it => [it.up, Math.round(it.rate)]), [[true, 60], [true, 60]]);
+      for (const s of Object.values(job60.sources)) { assert.equal(s.width, 1280); assert.ok(s.smooth); }
+      const v60 = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-count_frames', '-select_streams', 'v:0', '-show_entries', 'stream=nb_read_frames,width,height,pix_fmt', '-of', 'json', out60], { encoding: 'utf8' })).streams[0];
+      assert.equal(v60.pix_fmt, 'yuv420p10le', '10 bits'); assert.equal(+v60.width, 1280);
+      assert.equal(+v60.nb_read_frames, 90, 'images rendues à 60 i/s');
+      // chaque image rendue ressemble aux images source qui l'encadrent, et presque aucune n'est un doublon
+      const d60 = gray(out60), wrong60 = [];
+      let dups = 0;
+      for (let i = 0; i < d60.length; i++) {
+        const p = i * 24 / 60, ranked = src.map((s, k) => [fd.change(d60[i], s, 320, 180), k]).sort((a, b) => a[0] - b[0]);
+        if (Math.abs(ranked[0][1] - p) > 1) wrong60.push(i);
+        if (i && fd.change(d60[i], d60[i - 1], 320, 180) < 1e-3) dups++;
+      }
+      assert.deepEqual(wrong60, [], 'images hors de leur place');
+      assert.ok(dups <= 2, 'doublons : ' + dups);   // le raccord et la dernière image peuvent se répéter
+      console.log(`OK rendu 60 i/s HEVC 10 bits : 90 images, agrandies, stabilisées et intercalées par RIFE (${job60.ai.toFixed(1)} s), ${dups} doublon(s)`);
+      for (const s of Object.values(job60.sources)) { try { fs.unlinkSync(s.path); } catch { /* utilisé */ } }
+
+      // même rendu à 60 i/s sans IA : la coupe à 13/24 s tombe entre deux images du rendu, aucune ne doit rester vide
+      const outC = path.join(tmp, 'rendu-60-classique.mp4');
+      const jobC = await js(`(async () => {
+        const o = { video: true, audio: false, width: 1280, height: 720, fps: 60, from: 0, to: KC.P.duration(), out: ${JSON.stringify(outC)},
+          vArgs: ['-c:v', 'libx264', '-crf', '14', '-pix_fmt', 'yuv420p'], upscale: { method: 'lanczos' } };
+        const j = await KC.render.run(o);
+        const done = new Promise(r => KC.native.onJobDone(d => r(d)));
+        const s = await KC.native.jobStart({ args: j.args, duration: j.duration, cwd: j.cwd });
+        if (!s.ok) return s;
+        const d = await done; await KC.native.removeDir(j.tmp); return d; })()`);
+      assert.ok(jobC.ok, 'rendu classique 60 i/s : ' + (jobC.error || ''));
+      const dC = gray(outC), wrongC = [];
+      for (let i = 0; i < dC.length; i++) {
+        // après une coupe hors de la grille du rendu, le plan démarre à l'image du rendu la plus proche : il peut
+        // montrer son contenu avec une demi-image de rendu de retard (8 ms à 60 i/s), jamais une image vide
+        const p = i * 24 / 60, late = (i - 0.5) * 24 / 60;
+        const ranked = src.map((s, k) => [fd.change(dC[i], s, 320, 180), k]).sort((a, b) => a[0] - b[0]);
+        if (ranked[0][0] > ranked[1][0] * 0.5 || ![Math.floor(p + 1e-6), Math.floor(late + 1e-6)].includes(ranked[0][1])) wrongC.push(i);
+      }
+      assert.equal(dC.length, 90); assert.deepEqual(wrongC, [], 'images classiques à 60 i/s');
+      console.log('OK rendu classique 24 → 60 i/s : chaque image répète l\'image source du moment, sans image vide au raccord');
       finish(0);
     } catch (error) { console.error(error); finish(1); }
   });

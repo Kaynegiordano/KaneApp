@@ -40,7 +40,7 @@ function exposeKaneClip() {
     keyInterval: inv('keyint'), encoders: inv('encoders'), freezeAnalyze: inv('freeze-analyze'),
     aiStatus: inv('ai-status'), aiInstall: inv('ai-install'), aiStart: inv('ai-start'), aiCancel: inv('ai-cancel'),
     onAiInstallProgress: on('ai-install-progress'), onAiProgress: on('ai-progress'), onAiDone: on('ai-done'),
-    aiRenderStatus: inv('ai-render-status'), aiRenderRun: inv('ai-render-run'), aiRenderCancel: inv('ai-render-cancel'), onAiRenderProgress: on('ai-render-progress'),
+    aiRenderStatus: inv('ai-render-status'), aiRenderRun: inv('ai-render-run'), aiRenderPreview: inv('ai-render-preview'), aiRenderCancel: inv('ai-render-cancel'), onAiRenderProgress: on('ai-render-progress'),
     cacheSize: inv('cache-size'), cacheClear: inv('cache-clear'),
     autosaveWrite: inv('autosave-write'), autosaveRead: inv('autosave-read'), autosaveClear: inv('autosave-clear'),
     listFonts: inv('list-fonts'), onJobProgress: on('job-progress'), onJobDone: on('job-done'),
