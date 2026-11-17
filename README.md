@@ -45,6 +45,19 @@ dix tailles de 16 à 256 pixels ; le symbole reste transparent et indépendant d
   rendu 60 i/s agrandi, stabilisé et intercalé en HEVC 10 bits (90 images à leur place, sans doublon) et le même rendu
   sans IA (aucune image vide au raccord).
 
+### Studio IA : mémoire graphique rendue (1.48.1)
+
+- **Libérer maintenant** et le déchargement automatique appellent `unload-checkpoint`, qui vide maintenant aussi le cache
+  des agrandisseurs (ESRGAN), les détecteurs et sessions ONNX de Kane Detailer (`register_release` /
+  `release_extras` du moteur), puis `gc.collect()` avant `soft_empty_cache()`. Mesuré : 7,2 → 1,6 Go au pilote.
+- **Un autre programme a besoin de la carte** : toutes les 15 s, `main.js` compare `nvidia-smi` à ce que le moteur croit
+  occuper (`/kane-multidiffusion/v1/memory`, `engine`). Si le Studio n'a rien fait depuis une minute et que la carte est
+  pleine et prise par un autre, ou que le pilote compte moins que le moteur (Windows a déjà déplacé le Studio en RAM),
+  le Studio est déchargé et un message le signale (`gpu-memory.cjs` `studioShouldYield`). Mesuré : 8,9 Go → 96 Mo.
+- VAE d'ANIMA : estimation de mémoire mesurée (0,29× celle de ComfyUI) et passage en tuiles avant de déborder en RAM
+  (`backend/patcher/vae.py` du moteur).
+- Nécessite le moteur du Studio à jour (fork `perso-anima`, 738edfe2). Tests : `node tools/test-gpu-memory.cjs`.
+
 ### Montage : agrandissement IA au rendu (1.48.0)
 
 - **Rendre en tant que › Agrandissement › Méthode : IA** (proposée si un moteur a torch et spandrel, et si le dossier
