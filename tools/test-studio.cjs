@@ -623,6 +623,21 @@ async function scenario() {
   type(pta, '  (red hair, blue eyes:1.2),, smile ,smile, <lora:test:0.7>  painted\nBREAK , smile');
   document.querySelector('.fx-ptools button[title^="Nettoyer"]').click(); await new Promise(r => setTimeout(r, 30));
   assert(KS.prefs.fx.t2i.prompt === '(red hair, blue eyes:1.2), smile, <lora:test:0.7> painted\nBREAK, smile', 'Nettoyer garde les groupes entre parenthèses, les LoRA et les lignes');
+  // Surprends-moi : une mise en scène au hasard à la fin de l'invite ; ce que l'invite décrit déjà est gardé
+  type(pta, '1girl, blonde hair, from above');
+  const surpriseBtn = document.querySelector('.fx-ptools button[title^="Surprends-moi"]');
+  surpriseBtn.click(); await new Promise(r => setTimeout(r, 30));
+  const s1 = KS.prefs.fx.t2i.prompt, tail1 = s1.slice('1girl, blonde hair, from above, '.length);
+  assert(s1.startsWith('1girl, blonde hair, from above, ') && tail1.length > 10, 'Surprends-moi ajoute à la fin de l’invite : ' + s1);
+  assert(!/from below|dutch angle|close-up|wide shot|fisheye|pov|cowboy shot|from behind|from side/.test(tail1), 'Surprends-moi garde le cadrage déjà écrit : ' + tail1);
+  surpriseBtn.click(); await new Promise(r => setTimeout(r, 30));
+  const s2 = KS.prefs.fx.t2i.prompt, tail2 = s2.slice('1girl, blonde hair, from above, '.length);
+  assert(s2.startsWith('1girl, blonde hair, from above, ') && tail2 !== tail1 && !s2.includes(tail1), 'un nouveau clic remplace le tirage précédent : ' + s2);
+  assert(!tail1.split(', ').some(t => tail2.split(', ').includes(t)), 'le nouveau tirage ne reprend aucun tag du précédent');
+  type(pta, '');
+  surpriseBtn.click(); await new Promise(r => setTimeout(r, 30));
+  assert(KS.prefs.fx.t2i.prompt.split(', ').length >= 4 && !KS.prefs.fx.t2i.prompt.startsWith(','), 'Surprends-moi sur une invite vide : quatre catégories');
+  console.log('OK Surprends-moi : ' + KS.prefs.fx.t2i.prompt);
   KS.prefs.fx.promptHistory = [];
   type(pta, 'history one'); await KS.cmd.studioGenerate();
   type(pta, 'history two'); await KS.cmd.studioGenerate();

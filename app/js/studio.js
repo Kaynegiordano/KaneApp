@@ -563,6 +563,7 @@
         ibtn('history', 'Historique des invites : reprendre une invite déjà utilisée, avec recherche', () => historyDialog(c)),
         c.findBtn,
         ibtn('eraser-magic', 'Nettoyer l\'invite : doublons, virgules et espaces en trop (Ctrl+Z pour annuler)', () => cleanPrompts(c)),
+        ibtn('sparkles', SURPRISE_TIP, () => surprisePrompt(c)),
         more);
     }
     const tools = h('div.fx-ptools',
@@ -570,6 +571,7 @@
       ibtn('history', 'Historique des invites : reprendre une invite déjà utilisée, avec recherche', () => historyDialog(c)),
       c.findBtn,
       ibtn('eraser-magic', 'Nettoyer l\'invite : doublons, virgules et espaces en trop (Ctrl+Z pour annuler)', () => cleanPrompts(c)),
+      ibtn('sparkles', SURPRISE_TIP, () => surprisePrompt(c)),
       ibtn('palette', 'Appliquer les styles choisis à l\'invite', () => applyStyles(c)),
       ibtn('trash', 'Effacer l\'invite et l\'invite négative', () => { for (const t of [P.ta, Q.ta]) { t.value = ''; t.dispatchEvent(new Event('input')); } }));
     if (compact) return h('div.fx-toprow.fx-compact', c.find.bar, P.box, c.chips,
@@ -855,6 +857,48 @@
       if (!document.execCommand('insertText', false, r.text)) { ta.value = r.text; ta.dispatchEvent(new Event('input')); }
     }
     KS.toast(!changed ? 'Invite déjà propre' : removed ? `Invite nettoyée : ${removed} doublon${removed > 1 ? 's' : ''} retiré${removed > 1 ? 's' : ''} (Ctrl+Z pour annuler)` : 'Invite nettoyée (Ctrl+Z pour annuler)', 'ok', 2600);
+  }
+  // ✨ Surprends-moi : une mise en scène tirée au hasard, ajoutée à la fin de l'invite. Un nouveau clic remplace le tirage
+  // précédent ; une catégorie que l'invite décrit déjà (un de ses tags y figure) est laissée tranquille.
+  const SURPRISE_TIP = 'Surprends-moi : ajoute à l’invite un cadrage, une lumière, un lieu et une ambiance tirés au hasard (cliquer encore pour changer, Ctrl+Z pour annuler)';
+  const SURPRISE = [
+    ['from above', 'vu d’en haut'], ['from below', 'en contre-plongée'], ['from behind, looking back', 'de dos, regard par-dessus l’épaule'], ['dutch angle', 'cadre penché'],
+    ['close-up', 'gros plan'], ['wide shot', 'plan large'], ['from side, profile', 'de profil'], ['fisheye', 'très grand angle'], ['pov', 'vue subjective'], ['cowboy shot', 'plan américain'],
+  ].map(t => ['cadrage', ...t]).concat([
+    ['golden hour', 'heure dorée'], ['backlighting', 'contre-jour'], ['rim light', 'liseré de lumière'], ['moonlight', 'clair de lune'], ['neon lights', 'néons'],
+    ['candlelight', 'lueur de bougie'], ['dappled sunlight', 'soleil à travers les feuilles'], ['sunbeam', 'rayons de soleil'], ['chiaroscuro', 'clair-obscur'], ['lens flare', 'reflets d’objectif'],
+  ].map(t => ['lumière', ...t]), [
+    ['rooftop, cityscape', 'sur un toit, la ville au loin'], ['bamboo forest', 'forêt de bambous'], ['library', 'bibliothèque'], ['train interior', 'dans un train'], ['flower field', 'champ de fleurs'],
+    ['rainy street', 'rue sous la pluie'], ['beach, ocean', 'plage'], ['greenhouse', 'serre'], ['snowy mountain', 'montagne enneigée'], ['aquarium', 'aquarium'], ['night market', 'marché de nuit'], ['ruins, overgrown', 'ruines envahies de verdure'],
+  ].map(t => ['lieu', ...t]), [
+    ['falling petals', 'pétales qui tombent'], ['wind, floating hair', 'vent dans les cheveux'], ['rain', 'pluie'], ['fog', 'brume'], ['fireflies', 'lucioles'],
+    ['bubbles', 'bulles'], ['starry sky', 'ciel étoilé'], ['autumn leaves', 'feuilles d’automne'], ['snowing', 'neige'], ['light particles', 'particules de lumière'],
+  ].map(t => ['ambiance', ...t]));
+  function surprise(text, last, rnd = Math.random) {
+    let base = String(text || '').trimEnd();
+    if (last && base.endsWith(last)) base = base.slice(0, -last.length).trimEnd();
+    base = base.replace(/,+$/, '').trimEnd();
+    const low = base.toLowerCase(), has = tag => tag.split(', ').some(t => new RegExp('(^|[^a-z])' + t.replace(/[-]/g, '[- ]') + '([^a-z]|$)').test(low));
+    const tags = [], labels = [];
+    for (const kind of ['cadrage', 'lumière', 'lieu', 'ambiance']) {
+      const all = SURPRISE.filter(t => t[0] === kind);
+      if (all.some(t => has(t[1]))) continue;
+      const pool = all.filter(t => !(last || '').split(', ').includes(t[1].split(', ')[0]));
+      const pick = pool[Math.floor(rnd() * pool.length)];
+      tags.push(pick[1]); labels.push(pick[2]);
+    }
+    const added = tags.join(', ');
+    return { text: !added ? base : base ? base + ', ' + added : added, added, labels };
+  }
+  function surprisePrompt(c) {
+    const ta = c.promptTa; if (!ta) return;
+    const r = surprise(ta.value, c.surprise);
+    if (!r.added) return KS.toast('L’invite décrit déjà le cadrage, la lumière, le lieu et l’ambiance : rien à ajouter', 'info', 3000);
+    c.surprise = r.added;
+    ta.focus({ preventScroll: true }); ta.select();
+    if (!document.execCommand('insertText', false, r.text)) { ta.value = r.text; ta.dispatchEvent(new Event('input')); }
+    ta.setSelectionRange(r.text.length - r.added.length, r.text.length);
+    KS.toast('Surprise : ' + r.labels.join(' · ') + ' (cliquer encore pour changer)', 'ok', 4000);
   }
   // 🕘 Historique : les 60 dernières invites envoyées à Forge (txt2img et img2img), avec recherche
   const HISTORY_MAX = 60;

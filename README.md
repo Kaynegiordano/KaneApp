@@ -20,6 +20,14 @@ et les trois copies ICO utilisées par la fenêtre, les raccourcis et l'installa
 dix tailles de 16 à 256 pixels ; le symbole reste transparent et indépendant du thème de l'interface.
 
 ## Outils récents
+### Studio IA : Surprends-moi (1.50.0)
+
+- Bouton `sparkles` dans les outils de l'invite (Studio et tiroir de l'Édition) : `surprise(text, last)` de `studio.js` tire
+  un tag par catégorie (cadrage, lumière, lieu, ambiance ; table `SURPRISE`, tags Danbooru + libellé français) et l'ajoute
+  à la fin de l'invite par `insertText` (Ctrl+Z natif). Le tirage précédent (`c.surprise`) est remplacé s'il termine encore
+  l'invite ; une catégorie dont un tag figure déjà dans l'invite est sautée ; aucun tag du tirage précédent n'est repris.
+- Test : `npx electron tools/test-studio.cjs` (ajout, catégorie respectée, remplacement, invite vide).
+
 ### Montage : fluidité IA, détails stables, aperçu, 10 bits (1.49.0)
 
 - **Fluidité** (Rendre en tant que › Fluidité › Images manquantes : IA) : un plan vidéo qui a moins d'images par seconde
@@ -771,3 +779,4 @@ Maintenir Alt + bouton droit dans la zone de travail : glisser horizontalement p
 - **1.45.2** : visages épargnés par KaneDraw sur ANIMA (moteur KaneDraw 2.2.1) ; zone de Kane Detailer en échec réessayée puis signalée (Kane Detailer 5.5.1).
 - **1.49.0** : Montage : fluidité IA (RIFE), détails stabilisés, modèle compilé, aperçu avant/après, rendu 10 bits ; image vide corrigée aux raccords hors de la grille du rendu.
 - **1.48.1** : « Libérer » rend toute la mémoire graphique du Studio (moteur : extensions et cache libérés, ordre gc → vidage) ; Studio inactif déchargé dès qu’un autre programme a besoin de la carte (mesure du pilote comparée au moteur, `gpu-memory.cjs`).
+- **1.50.0** : Studio IA : « Surprends-moi », mise en scène au hasard ajoutée à l’invite (cadrage, lumière, lieu, ambiance).

@@ -1,3 +1,9 @@
+# 1.50.0 — Studio IA : Surprends-moi
+
+- **Surprends-moi** (bouton à étoiles sous l'invite, à côté de Nettoyer) : ajoute à la fin de l'invite une mise en scène tirée au hasard, un cadrage, une lumière, un lieu et une ambiance (par exemple : de dos, contre-jour, forêt de bambous, lucioles). Votre personnage, vos LoRA et le reste de l'invite ne changent pas.
+- Cliquer encore remplace le tirage par un autre, sans jamais reprendre les mêmes idées deux fois de suite. Ctrl+Z annule.
+- Ce que l'invite décrit déjà est respecté : si vous avez écrit un cadrage ou une lumière, cette catégorie n'est pas tirée.
+
 # 1.49.0 — Montage : vidéos fluides, détails stables
 
 - **Fluidité IA** : une vidéo à 16 ou 24 images par seconde rendue en 30 ou 60 (ou un ralenti) n'a plus d'images répétées. Dans **Rendre en tant que › Fluidité**, choisissez « IA : créer les images intermédiaires » : l'IA calcule le mouvement et crée les images manquantes, sans saccades. Elle utilise le modèle RIFE déjà présent dans le dossier des modèles ; rien n'est téléchargé.
