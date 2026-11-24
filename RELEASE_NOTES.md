@@ -1,3 +1,8 @@
+# 1.50.1 — Moteur du Studio à jour tout seul
+
+- **Le moteur du Studio se met à jour à son démarrage** : KaneApp récupère les correctifs du moteur (KaneDraw, Kane Detailer…) sur tous vos PC, sans réinstaller KaneOS. Il le fait seulement si c'est sans risque (pas de modification locale touchée, pas de nouveaux paquets Python) ; hors ligne, le moteur démarre sur sa version présente.
+- Arrive avec : **KaneDraw 2.2.2**, yeux et visages nets (l'ébauche recevait trop peu de bruit neuf pendant la composition, ce qui brouillait les yeux).
+
 # 1.50.0 — Studio IA : Surprends-moi
 
 - **Surprends-moi** (bouton à étoiles sous l'invite, à côté de Nettoyer) : ajoute à la fin de l'invite une mise en scène tirée au hasard, un cadrage, une lumière, un lieu et une ambiance (par exemple : de dos, contre-jour, forêt de bambous, lucioles). Votre personnage, vos LoRA et le reste de l'invite ne changent pas.

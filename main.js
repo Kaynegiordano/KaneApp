@@ -859,6 +859,11 @@ async function engineStart(profileId) {
   engine.log = []; engine.error = ''; engine.state = 'starting'; engine.ours = true; engine.startedAt = Date.now();
   vram.lastWork = Date.now(); vram.unloaded = false;
   engine.url = 'http://127.0.0.1:' + ENGINE_PORT;
+  // correctifs du moteur (fork perso-anima) : avance rapide avant chaque démarrage, comme ComfyUI ; jamais bloquant
+  const token = engine.startedAt;
+  engineEmit();
+  await require('./studio-update.cjs').updateStudio(d.runtime, line => { engineLog(line); engineEmit(); });
+  if (engine.state !== 'starting' || engine.startedAt !== token) return engineStatus();   // arrêté (ou relancé) pendant la mise à jour
   ensureEnginePatches(d.runtime);
   engineLog('> ' + args);
   const child = require('child_process').spawn(py, ['launch.py'], {

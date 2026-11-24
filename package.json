@@ -1,7 +1,7 @@
 {
   "name": "kaneapp",
   "productName": "KaneApp",
-  "version": "1.50.0",
+  "version": "1.50.1",
   "description": "KaneApp — éditeur d'images, Studio IA, Animation Wallpaper Engine, Vidéo IA et Montage",
   "main": "main.js",
   "private": true,
@@ -47,6 +47,7 @@
       "services.cjs",
       "local-process.cjs",
       "studio-runtime.cjs",
+      "studio-update.cjs",
       "managed-runtimes.cjs",
       "runtime-migration-host.cjs",
       "runtime-migrate.py",
