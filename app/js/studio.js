@@ -24,7 +24,7 @@
   const COMMON = () => ({
     prompt: '', negative_prompt: '', styles: [], sampler_name: 'SEEDS 3', scheduler: 'Beta57', steps: 22, width: 1024, height: 1024, n_iter: 1, batch_size: 1,
     cfg_scale: 4, distilled_cfg_scale: 3, seed: -1, seedExtra: false, subseed: -1, subseed_strength: 0, seed_resize_from_w: 0, seed_resize_from_h: 0,
-    kd: { enabled: false, skip: false, parts: ['vetements', 'poitrine', 'cheveux', 'mains', 'visage', 'yeux'], forces: {}, keep: 0.8, resolution: 1024, detail: 0, upscale: 1, showZones: true, tries: 2, repair: true, grain: 0.5, glow: true, age: true, autotag: true, soft: true, wd: true, small: true },
+    kd: { enabled: false, skip: false, parts: ['vetements', 'poitrine', 'cheveux', 'mains', 'visage', 'yeux'], forces: {}, keep: 0.8, resolution: 1024, detail: 0, upscale: 1, showZones: true, tries: 2, repair: true, grain: 0.5, glow: true, age: true, autotag: true, soft: true, wd: true, small: true, redraw: true },
     noom: { unet: false, vae: false }, script: 'None', scriptArgs: {}, open: {},
   });
   const DEF = {
@@ -1143,7 +1143,9 @@
           ...(info.version >= 5 ? [
             check('Invite de zone d’après ce qu’on y voit', st.kd, 'autotag', 'WD14 reconnaît ce que contient chaque zone (objet tenu, couleur des yeux, ongles…) et l’ajoute à son invite : le repeint ne change plus la couleur des yeux et ne fait plus disparaître l’objet tenu', rp),
             check('Raccords invisibles', st.kd, 'soft', 'Inpainting doux dans chaque zone : le bord du masque est repeint progressivement, sans couture', rp),
-            ...(info.build && +info.build >= 5.4 ? [check('Petits visages en deux temps', st.kd, 'small', 'Un petit visage est d’abord agrandi par l’upscaler (net), puis repeint : il gagne du vrai détail au lieu d’une tache', rp)] : []),
+            // parseFloat : « 5.5.1 » donnait NaN avec +, et la case disparaissait
+            ...(parseFloat(info.build) >= 5.4 ? [check('Petits visages en deux temps', st.kd, 'small', 'Un petit visage est d’abord agrandi par l’upscaler (net), puis repeint : il gagne du vrai détail au lieu d’une tache', rp)] : []),
+            ...(parseFloat(info.build) >= 5.6 ? [check('Redessin guidé des petits visages', st.kd, 'redraw', 'Un visage ou des yeux petits sont repeints plus fort (jusqu’à 0,45) pour vraiment redessiner yeux et bouche, en gardant la forme du visage, le regard et le teint de l’original ; les gros plans gardent ta force', rp)] : []),
             check('Juge WD14', st.kd, 'wd', 'Le juge tient aussi compte de la netteté, des erreurs d’anatomie et de l’identité vues par WD14', rp)] : [])] : []),
         check('Montrer les zones repeintes après la génération', st.kd, 'showZones', 'Ajoute à côté du résultat l’image des zones vraiment repeintes (masque et zone de travail)'),
         h('div.note', { text: 'Passe du plus large au plus fin. Clic droit sur un résultat : « Voir les zones » (ce qui sera repeint) ou « Détailler » sur une image déjà faite.' }));
@@ -1732,7 +1734,7 @@
     const prompt = info ? info.slice(0, neg >= 0 ? neg : steps >= 0 ? steps : info.length).trim() : await english(st.prompt);
     const negative = info && neg >= 0 ? info.slice(neg + 17, steps > neg ? steps : info.length).trim() : await english(st.negative_prompt);
     return { st, info, payload: { forces: { ...st.kd.forces }, keep: +st.kd.keep, resolution: +st.kd.resolution, detail: +st.kd.detail || 0, upscale: +st.kd.upscale || 1, tries: +st.kd.tries || 1,
-      repair: !!st.kd.repair, grain: +st.kd.grain || 0, glow: !!st.kd.glow, age: !!st.kd.age, autotag: st.kd.autotag !== false, soft: st.kd.soft !== false, wd: st.kd.wd !== false, small: st.kd.small !== false,
+      repair: !!st.kd.repair, grain: +st.kd.grain || 0, glow: !!st.kd.glow, age: !!st.kd.age, autotag: st.kd.autotag !== false, soft: st.kd.soft !== false, wd: st.kd.wd !== false, small: st.kd.small !== false, redraw: st.kd.redraw !== false,
       prompt, negative_prompt: negative, seed: -1, sampler_name: st.sampler_name, scheduler: st.scheduler, steps: +st.steps, cfg_scale: +st.cfg_scale, distilled_cfg_scale: +st.distilled_cfg_scale } };
   }
   // résultat d'un passage Kane Detailer : nouvelle image en tête du lot, avant / après possible
@@ -1840,7 +1842,7 @@
     const handsLine = h('div.kd-hands');
     const rows = it.kdReport.map(z => {
       const chosen = z.result === 'échec' ? z.error || '' : z.chosen ? 'essai ' + z.chosen + ' sur ' + z.tries : 'original gardé (' + z.tries + ' essais)';
-      const facts = [KD_RESULT[z.result] || z.result, 'force ' + String(z.force).replace('.', ','), chosen, z.seconds != null ? String(z.seconds).replace('.', ',') + ' s' : '', z.small ? 'petit visage en deux temps' : ''].filter(Boolean).join(' · ');
+      const facts = [KD_RESULT[z.result] || z.result, 'force ' + String(z.force).replace('.', ','), chosen, z.seconds != null ? String(z.seconds).replace('.', ',') + ' s' : '', z.small ? 'petit visage en deux temps' : '', z.redraw ? 'redessiné, force selon la taille' : ''].filter(Boolean).join(' · ');
       const btns = h('div.kd-zbtns', tbtn('Refaire', () => { modal.close(); redoZone(key, it, { part: z.part, box: z.box }); }, '', 'Repeint cette zone seule avec une nouvelle graine (les autres zones ne bougent pas)'));
       if (z.part === 'mains') btns.append(
         tbtn('Ratée', () => markHand(it, z, 'ratee', handsLine), '', 'Cette main est ratée : exemple pour le juge des mains appris'),
@@ -2197,7 +2199,7 @@
       hr_scheduler: st.hr_scheduler && st.hr_scheduler !== 'Use same scheduler' ? st.hr_scheduler : undefined,
       hr_prompt: await english(st.hr_prompt), hr_negative_prompt: await english(st.hr_negative_prompt),
     });
-    if (st.kd.enabled && st.kd.parts.length && cat && cat.kdInfo) p.alwayson_scripts['Kane Detailer'] = { args: [{ enabled: true, parts: st.kd.parts, forces: { ...st.kd.forces }, skip: k === 'i2i' && !!st.kd.skip, keep: +st.kd.keep, resolution: +st.kd.resolution, detail: +st.kd.detail || 0, upscale: +st.kd.upscale || 1, tries: +st.kd.tries || 1, repair: !!st.kd.repair, grain: +st.kd.grain || 0, glow: !!st.kd.glow, age: !!st.kd.age, autotag: st.kd.autotag !== false, soft: st.kd.soft !== false, wd: st.kd.wd !== false, small: st.kd.small !== false }] };
+    if (st.kd.enabled && st.kd.parts.length && cat && cat.kdInfo) p.alwayson_scripts['Kane Detailer'] = { args: [{ enabled: true, parts: st.kd.parts, forces: { ...st.kd.forces }, skip: k === 'i2i' && !!st.kd.skip, keep: +st.kd.keep, resolution: +st.kd.resolution, detail: +st.kd.detail || 0, upscale: +st.kd.upscale || 1, tries: +st.kd.tries || 1, repair: !!st.kd.repair, grain: +st.kd.grain || 0, glow: !!st.kd.glow, age: !!st.kd.age, autotag: st.kd.autotag !== false, soft: st.kd.soft !== false, wd: st.kd.wd !== false, small: st.kd.small !== false, redraw: st.kd.redraw !== false }] };
     if (k === 't2i' && st.sampler_name === 'KaneDraw' && cat && cat.kdrawInfo) {
       const s = st.kdraw;
       p.alwayson_scripts.KaneDraw = { args: [{ spots: +s.spots, masses: +s.masses, guidance: +s.guidance, faces: !!s.faces, seed2: +s.seed2, fusion: +s.fusion,
